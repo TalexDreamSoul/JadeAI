@@ -282,7 +282,7 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
   const [deleteToConfirm, setDeleteToConfirm] = useState<string | null>(null);
 
   const getAuthHeaders = () => {
-    const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+    const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
     return {
       'Content-Type': 'application/json',
       ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),

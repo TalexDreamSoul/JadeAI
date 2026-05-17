@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
+import { generateText, Output } from 'ai';
 import type { ModelMessage } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import type { ParsedResume } from '@/lib/ai/parse-schema';
+import { DEFAULT_TEMPLATE } from '@/lib/constants';
 
 const ACCEPTED_TYPES = [
   'application/pdf',
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const template = (formData.get('template') as string) || 'classic';
+    const template = (formData.get('template') as string) || DEFAULT_TEMPLATE;
     const language = (formData.get('language') as string) || 'zh';
 
     if (!file) {
@@ -112,7 +113,8 @@ export async function POST(request: NextRequest) {
       maxOutputTokens: 16384,
       system: SYSTEM_PROMPT,
       messages,
-      providerOptions: getJsonProviderOptions(aiConfig),
+      providerOptions: getProviderOptions(aiConfig),
+      output: Output.json(),
     });
 
     console.log('[parse] finishReason=%s, length=%d', result.finishReason, result.text.length);

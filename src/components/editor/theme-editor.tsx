@@ -32,7 +32,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useResumeStore } from '@/stores/resume-store';
-import { TEMPLATES } from '@/lib/constants';
+import { RECOMMENDED_TEMPLATES, TEMPLATES } from '@/lib/constants';
 import { templateLabelsMap } from '@/lib/template-labels';
 import { TemplateThumbnail } from '@/components/dashboard/template-thumbnail';
 import { cn } from '@/lib/utils';
@@ -353,6 +353,11 @@ export function ThemeEditor({ onClose }: ThemeEditorProps) {
                         template={tpl}
                         className="mx-auto h-[56px] w-[40px] shadow-sm ring-1 ring-zinc-200/50"
                       />
+                      {RECOMMENDED_TEMPLATES.has(tpl) && (
+                        <div className="absolute left-0.5 top-0.5 rounded-full bg-brand px-1 py-0.5 text-[8px] font-semibold leading-none text-white">
+                          {tRoot('templates.recommended')}
+                        </div>
+                      )}
                       {isSelected && (
                         <div className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-white shadow-sm">
                           <Check className="h-2.5 w-2.5" />

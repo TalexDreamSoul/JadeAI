@@ -12,11 +12,11 @@ export default function LoginPage() {
       {/* Logo */}
       <div className="mb-6">
         <Image
-          src="/logo-icon.svg"
-          alt="JadeAI"
+          src="/logo.png"
+          alt="TouchResume"
           width={48}
           height={48}
-          className="drop-shadow-sm"
+          className="rounded-xl drop-shadow-sm"
         />
       </div>
 

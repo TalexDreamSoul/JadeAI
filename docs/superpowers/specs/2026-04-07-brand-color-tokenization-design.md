@@ -6,7 +6,7 @@
 
 ## Background
 
-JadeAI 当前以 Tailwind 硬编码 `pink-500 / pink-600 / pink-100 …` 作为事实上的品牌色，分散在 **61 个文件 + `globals.css`** 中（Header 下划线、CTA 按钮、AI 气泡、Loading、Tour、Landing 渐变等）。后果：
+TouchResume 当前以 Tailwind 硬编码 `pink-500 / pink-600 / pink-100 …` 作为事实上的品牌色，分散在 **61 个文件 + `globals.css`** 中（Header 下划线、CTA 按钮、AI 气泡、Loading、Tour、Landing 渐变等）。后果：
 
 1. **Dark 模式视觉违和** —— 截图证据：dark zinc 背景上的亮粉 `#ec4899` 按钮刺眼，违反 `color-dark-mode`（dark 模式应使用降饱和/提亮度的 tonal variant，而非沿用 light 主色）。
 2. **无法整体切换品牌色** —— 用户希望提供 BOSS 直聘风格（青绿 `#00C897`）配色方案，但当前架构没有任何 brand token，没法切换。
@@ -117,7 +117,7 @@ L1 与 L2 **完全解耦**：用户在 App 切到 BOSS 品牌不会自动改简�
 ### Brand 切换器 UI
 
 - 在 Settings 区域（暂定 Header 用户菜单 → "Appearance"）增加一个紧凑切换器：`Jade ⚪ / Boss ⚪`
-- 持久化：`localStorage.setItem('jadeai-brand', 'jade'|'boss')`
+- 持久化：`localStorage.setItem('touchresume-brand', 'jade'|'boss')`
 - 应用方式：在 `theme-provider.tsx` 同层增加 `BrandProvider`，挂载时给 `<html>` 添加 `data-brand="jade"`（boss 是默认，无需属性）
 - SSR 不闪烁：在 `app/layout.tsx` 内联 `<script>` 提前从 localStorage 读取并设置 `data-brand`（参照 next-themes 防闪策略）
 

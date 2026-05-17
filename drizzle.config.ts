@@ -5,6 +5,6 @@ export default defineConfig({
   out: './drizzle/migrations',
   dialect: 'sqlite',
   dbCredentials: {
-    url: process.env.SQLITE_PATH || './data/jade.db',
+    url: process.env.SQLITE_PATH || './data/touchresume.db',
   },
 });

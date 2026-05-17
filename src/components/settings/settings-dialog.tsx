@@ -27,7 +27,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUIStore } from '@/stores/ui-store';
-import { useSettingsStore, getAIHeaders, type AIProvider } from '@/stores/settings-store';
+import { useSettingsStore, getAIHeaders, type AIProvider, type OpenAIEndpoint } from '@/stores/settings-store';
 import { useTourStore } from '@/stores/tour-store';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { locales, localeNames } from '@/i18n/config';
@@ -48,16 +48,24 @@ export function SettingsDialog() {
   const { theme: currentTheme, setTheme } = useTheme();
   const { activeModal, closeModal, settingsTab, setSettingsTab } = useUIStore();
   const {
+    aiMode,
     aiProvider,
     aiApiKey,
     aiBaseURL,
     aiModel,
+    openAIEndpoint,
+    serverAIConfigured,
+    serverAIProvider,
+    serverAIModel,
+    serverOpenAIEndpoint,
     autoSave,
     autoSaveInterval,
+    setAIMode,
     setAIProvider,
     setAIApiKey,
     setAIBaseURL,
     setAIModel,
+    setOpenAIEndpoint,
     setAutoSave,
     setAutoSaveInterval,
     hydrate,
@@ -99,17 +107,16 @@ export function SettingsDialog() {
     }
   }, []);
 
-  // Re-fetch models when apiKey or baseURL changes
-  const prevKeyRef = useRef(aiApiKey);
-  const prevUrlRef = useRef(aiBaseURL);
+  // Re-fetch models when effective AI config changes
+  const prevConfigRef = useRef(`${aiMode}:${aiProvider}:${aiApiKey}:${aiBaseURL}:${openAIEndpoint}:${serverAIProvider}:${serverAIModel}:${serverOpenAIEndpoint}`);
   useEffect(() => {
-    if (prevKeyRef.current !== aiApiKey || prevUrlRef.current !== aiBaseURL) {
-      prevKeyRef.current = aiApiKey;
-      prevUrlRef.current = aiBaseURL;
+    const nextConfig = `${aiMode}:${aiProvider}:${aiApiKey}:${aiBaseURL}:${openAIEndpoint}:${serverAIProvider}:${serverAIModel}:${serverOpenAIEndpoint}`;
+    if (prevConfigRef.current !== nextConfig) {
+      prevConfigRef.current = nextConfig;
       setModelsFetched(false);
       setFetchedModels([]);
     }
-  }, [aiApiKey, aiBaseURL]);
+  }, [aiMode, aiProvider, aiApiKey, aiBaseURL, openAIEndpoint, serverAIProvider, serverAIModel, serverOpenAIEndpoint]);
 
   useEffect(() => {
     if (modelOpen && !modelsFetched && !modelsFetching) {
@@ -129,6 +136,7 @@ export function SettingsDialog() {
   const filteredModels = fetchedModels.filter((m) =>
     m.toLowerCase().includes(modelSearch.toLowerCase())
   );
+  const customAI = aiMode === 'custom';
 
   const handleLocaleChange = (newLocale: string) => {
     router.replace(pathname, { locale: newLocale });
@@ -168,6 +176,50 @@ export function SettingsDialog() {
 
           {/* AI Configuration Tab */}
           <TabsContent value="ai" className="px-6 pb-6 pt-4 space-y-5">
+            {/* AI Mode */}
+            <div className="space-y-2">
+              <Label>{t('ai.mode')}</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAIMode('server')}
+                  disabled={!serverAIConfigured}
+                  className={cn(
+                    'cursor-pointer rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                    aiMode === 'server'
+                      ? 'border-brand bg-brand-muted text-brand'
+                      : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-700'
+                  )}
+                >
+                  <div className="text-sm font-medium">{t('ai.modeServer')}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {serverAIConfigured
+                      ? t('ai.serverConfigured', {
+                          provider: serverAIProvider,
+                          model: serverAIModel,
+                          endpoint: serverAIProvider === 'openai' ? ` / ${serverOpenAIEndpoint}` : '',
+                        })
+                      : t('ai.serverNotConfigured')}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAIMode('custom')}
+                  className={cn(
+                    'cursor-pointer rounded-lg border p-3 text-left transition-colors',
+                    customAI
+                      ? 'border-brand bg-brand-muted text-brand'
+                      : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-700'
+                  )}
+                >
+                  <div className="text-sm font-medium">{t('ai.modeCustom')}</div>
+                  <div className="mt-1 text-xs text-zinc-500">{t('ai.modeCustomHint')}</div>
+                </button>
+              </div>
+            </div>
+
+            {customAI ? (
+              <>
             {/* Provider */}
             <div className="space-y-2">
               <Label>{t('ai.provider')}</Label>
@@ -184,6 +236,22 @@ export function SettingsDialog() {
                 </SelectContent>
               </Select>
             </div>
+
+            {aiProvider === 'openai' && (
+              <div className="space-y-2">
+                <Label>{t('ai.openAIEndpoint')}</Label>
+                <Select value={openAIEndpoint} onValueChange={(v) => setOpenAIEndpoint(v as OpenAIEndpoint)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="chat">{t('ai.openAIEndpointChat')}</SelectItem>
+                    <SelectItem value="responses">{t('ai.openAIEndpointResponses')}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-zinc-400">{t('ai.openAIEndpointHint')}</p>
+              </div>
+            )}
 
             {/* API Key */}
             <div className="space-y-2">
@@ -295,6 +363,18 @@ export function SettingsDialog() {
                 </PopoverContent>
               </Popover>
             </div>
+              </>
+            ) : (
+              <div className="rounded-lg border border-brand/20 bg-brand-muted p-3 text-sm text-brand">
+                {serverAIConfigured
+                  ? t('ai.serverModeDescription', {
+                      provider: serverAIProvider,
+                      model: serverAIModel,
+                      endpoint: serverAIProvider === 'openai' ? ` / ${serverOpenAIEndpoint}` : '',
+                    })
+                  : t('ai.serverNotConfigured')}
+              </div>
+            )}
           </TabsContent>
 
           {/* Appearance Tab */}

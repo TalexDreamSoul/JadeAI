@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 function storageKey(tourId: string) {
-  return `jade_tour_${tourId}_completed`;
+  return `touchresume_tour_${tourId}_completed`;
 }
 
 interface TourStore {

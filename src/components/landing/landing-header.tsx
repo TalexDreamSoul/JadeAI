@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/sheet';
 import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
 
-const GITHUB_REPO = 'twwch/JadeAI';
+const GITHUB_REPO = 'twwch/TouchResume';
 
 function useGitHubStars() {
   const [stars, setStars] = useState<number | null>(null);
@@ -63,7 +63,7 @@ export function LandingHeader() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="JadeAI" width={120} height={36} priority />
+            <Image src="/logo.png" alt="TouchResume" width={36} height={36} priority className="h-9 w-9 rounded-lg" />
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {[
@@ -121,7 +121,7 @@ export function LandingHeader() {
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <div className="flex h-full flex-col">
                 <div className="flex h-14 items-center border-b border-zinc-100 px-5 dark:border-zinc-900">
-                  <Image src="/logo.svg" alt="JadeAI" width={104} height={32} />
+                  <Image src="/logo.png" alt="TouchResume" width={32} height={32} className="h-8 w-8 rounded-lg" />
                 </div>
                 <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
                   {[

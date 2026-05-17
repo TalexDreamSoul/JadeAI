@@ -24,7 +24,7 @@ export default function InterviewRoomPage({ params }: { params: Promise<{ id: st
   const { setSession, setStatus } = useInterviewStore();
 
   useEffect(() => {
-    const fp = localStorage.getItem('jade_fingerprint');
+    const fp = localStorage.getItem('touchresume_fingerprint');
     fetch(`/api/interview/${id}`, {
       headers: fp ? { 'x-fingerprint': fp } : {},
     })

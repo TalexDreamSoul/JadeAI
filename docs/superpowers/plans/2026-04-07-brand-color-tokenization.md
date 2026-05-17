@@ -231,7 +231,7 @@ git commit -m "feat(theme): add brand-constants for export/PDF render contexts"
 
 Run:
 ```bash
-grep -rl "pink-\|fuchsia-\|rose-500\|from-rose\|to-rose" /Users/chenhao/codes/myself/JadeAI/src/components /Users/chenhao/codes/myself/JadeAI/src/app --include="*.tsx" | grep -v "preview/templates/gradient" | grep -v "preview/templates/infographic"
+grep -rl "pink-\|fuchsia-\|rose-500\|from-rose\|to-rose" /Users/chenhao/codes/myself/TouchResume/src/components /Users/chenhao/codes/myself/TouchResume/src/app --include="*.tsx" | grep -v "preview/templates/gradient" | grep -v "preview/templates/infographic"
 ```
 
 Expected: 列出 ~55 个文件路径
@@ -246,7 +246,7 @@ Expected: 列出 ~55 个文件路径
 
 Run:
 ```bash
-grep -rn "pink-\|fuchsia-\|to-rose-500\|from-rose-500" /Users/chenhao/codes/myself/JadeAI/src/components /Users/chenhao/codes/myself/JadeAI/src/app --include="*.tsx" | grep -v "preview/templates/gradient" | grep -v "preview/templates/infographic"
+grep -rn "pink-\|fuchsia-\|to-rose-500\|from-rose-500" /Users/chenhao/codes/myself/TouchResume/src/components /Users/chenhao/codes/myself/TouchResume/src/app --include="*.tsx" | grep -v "preview/templates/gradient" | grep -v "preview/templates/infographic"
 ```
 
 Expected: 无输出（或仅剩 lib/interview/interviewers.ts 之类常量文件，本任务不处理）
@@ -283,7 +283,7 @@ git commit -m "refactor(theme): replace hardcoded pink-* with brand tokens acros
 
 Run:
 ```bash
-grep -n "ec4899\|db2777\|f472b6\|pink" /Users/chenhao/codes/myself/JadeAI/src/app/api/resume/[id]/export/templates/infographic.ts /Users/chenhao/codes/myself/JadeAI/src/app/api/resume/[id]/export/templates/gradient.ts /Users/chenhao/codes/myself/JadeAI/src/app/api/resume/[id]/export/docx.ts /Users/chenhao/codes/myself/JadeAI/src/app/api/interview/[id]/report/export/html.ts
+grep -n "ec4899\|db2777\|f472b6\|pink" /Users/chenhao/codes/myself/TouchResume/src/app/api/resume/[id]/export/templates/infographic.ts /Users/chenhao/codes/myself/TouchResume/src/app/api/resume/[id]/export/templates/gradient.ts /Users/chenhao/codes/myself/TouchResume/src/app/api/resume/[id]/export/docx.ts /Users/chenhao/codes/myself/TouchResume/src/app/api/interview/[id]/report/export/html.ts
 ```
 
 Expected: 列出每个文件中具体的 hex/类名
@@ -312,7 +312,7 @@ Expected: 0 errors
 
 Run:
 ```bash
-grep -n "ec4899\|db2777\|f472b6" /Users/chenhao/codes/myself/JadeAI/src/app/api/resume/[id]/export/templates/infographic.ts /Users/chenhao/codes/myself/JadeAI/src/app/api/resume/[id]/export/templates/gradient.ts /Users/chenhao/codes/myself/JadeAI/src/app/api/resume/[id]/export/docx.ts /Users/chenhao/codes/myself/JadeAI/src/app/api/interview/[id]/report/export/html.ts
+grep -n "ec4899\|db2777\|f472b6" /Users/chenhao/codes/myself/TouchResume/src/app/api/resume/[id]/export/templates/infographic.ts /Users/chenhao/codes/myself/TouchResume/src/app/api/resume/[id]/export/templates/gradient.ts /Users/chenhao/codes/myself/TouchResume/src/app/api/resume/[id]/export/docx.ts /Users/chenhao/codes/myself/TouchResume/src/app/api/interview/[id]/report/export/html.ts
 ```
 
 Expected: 无输出
@@ -336,7 +336,7 @@ git commit -m "refactor(export): use brand-constants in PDF/HTML/DOCX export pip
 
 - [ ] **Step 1: 检视当前实现**
 
-Run: `grep -n "pink\|#ec4899\|#db2777\|#f472b6" /Users/chenhao/codes/myself/JadeAI/src/components/preview/templates/gradient.tsx /Users/chenhao/codes/myself/JadeAI/src/components/preview/templates/infographic.tsx`
+Run: `grep -n "pink\|#ec4899\|#db2777\|#f472b6" /Users/chenhao/codes/myself/TouchResume/src/components/preview/templates/gradient.tsx /Users/chenhao/codes/myself/TouchResume/src/components/preview/templates/infographic.tsx`
 
 判断每处 pink 是：
 - (a) 默认 fallback 颜色（应改为 `BRAND_COLORS.brand`）
@@ -437,7 +437,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 export type Brand = 'boss' | 'jade';
 
-const STORAGE_KEY = 'jadeai-brand';
+const STORAGE_KEY = 'touchresume-brand';
 
 interface BrandContextValue {
   brand: Brand;
@@ -493,7 +493,7 @@ export function useBrand() {
 ```tsx
 <script
   dangerouslySetInnerHTML={{
-    __html: `(function(){try{var b=localStorage.getItem('jadeai-brand');if(b==='jade'){document.documentElement.setAttribute('data-brand','jade');}}catch(e){}})();`,
+    __html: `(function(){try{var b=localStorage.getItem('touchresume-brand');if(b==='jade'){document.documentElement.setAttribute('data-brand','jade');}}catch(e){}})();`,
   }}
 />
 ```
@@ -525,9 +525,9 @@ Expected: 0 errors
 
 Run: `pnpm dev`。在浏览器 DevTools console 执行：
 ```js
-localStorage.setItem('jadeai-brand','jade'); location.reload();
+localStorage.setItem('touchresume-brand','jade'); location.reload();
 ```
-Expected: 刷新后整站为 emerald 绿色，无闪烁。再执行 `localStorage.removeItem('jadeai-brand'); location.reload();` 恢复 BOSS 默认。
+Expected: 刷新后整站为 emerald 绿色，无闪烁。再执行 `localStorage.removeItem('touchresume-brand'); location.reload();` 恢复 BOSS 默认。
 
 - [ ] **Step 6: Commit**
 
@@ -546,7 +546,7 @@ git commit -m "feat(theme): add BrandProvider with SSR-safe inline init script"
 
 - [ ] **Step 1: 定位用户头像菜单**
 
-Run: `grep -rln "DropdownMenu\|UserMenu\|avatar" /Users/chenhao/codes/myself/JadeAI/src/components/layout`
+Run: `grep -rln "DropdownMenu\|UserMenu\|avatar" /Users/chenhao/codes/myself/TouchResume/src/components/layout`
 
 从结果中找出实际渲染头像下拉菜单的文件（例如 `header.tsx` 或 `user-menu.tsx`）。
 
@@ -643,7 +643,7 @@ git commit -m "feat(theme): add BrandSwitcher in user menu (BOSS / Jade)"
 
 Run:
 ```bash
-grep -rn "pink-\|fuchsia-\|#ec4899\|#db2777\|#f472b6" /Users/chenhao/codes/myself/JadeAI/src
+grep -rn "pink-\|fuchsia-\|#ec4899\|#db2777\|#f472b6" /Users/chenhao/codes/myself/TouchResume/src
 ```
 
 Expected: 仅剩 `preview/templates/gradient.tsx` 和 `preview/templates/infographic.tsx` 中带 `// intentional` 注释的故意保留行；以及 `lib/interview/interviewers.ts` 中如有头像/装饰常量则保留。其他位置归零。

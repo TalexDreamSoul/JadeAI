@@ -98,7 +98,7 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
     setCurrentRoundIndex(index);
 
     // Fetch messages for this round
-    const fp = localStorage.getItem('jade_fingerprint');
+    const fp = localStorage.getItem('touchresume_fingerprint');
     try {
       const res = await fetch(`/api/interview/${sessionId}`, {
         headers: fp ? { 'x-fingerprint': fp } : {},

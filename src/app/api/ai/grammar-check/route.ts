@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { generateText, Output } from 'ai';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
@@ -86,7 +86,8 @@ export async function POST(request: NextRequest) {
       maxOutputTokens: 8192,
       system: GRAMMAR_CHECK_PROMPT,
       prompt: `Analyze the following resume sections. Respond with JSON only.\n\n${JSON.stringify(sectionsData, null, 2)}`,
-      providerOptions: getJsonProviderOptions(aiConfig),
+      providerOptions: getProviderOptions(aiConfig),
+      output: Output.json(),
     });
 
     console.log('[grammar-check] raw response:\n', result.text);

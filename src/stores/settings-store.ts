@@ -1,13 +1,22 @@
 import { create } from 'zustand';
 
 export type AIProvider = 'openai' | 'anthropic' | 'gemini';
+export type AIMode = 'server' | 'custom';
+export type OpenAIEndpoint = 'chat' | 'responses';
 
 interface SettingsStore {
   // AI settings
+  aiMode: AIMode;
   aiProvider: AIProvider;
-  aiApiKey: string; // stored locally only, never sent to server
+  aiApiKey: string; // stored locally only, never persisted to the app database
   aiBaseURL: string;
   aiModel: string;
+  openAIEndpoint: OpenAIEndpoint;
+  serverAIConfigured: boolean;
+  serverAIProvider: AIProvider;
+  serverAIModel: string;
+  serverOpenAIEndpoint: OpenAIEndpoint;
+  serverImageAIConfigured: boolean;
   // Editor settings
   autoSave: boolean;
   autoSaveInterval: number; // in milliseconds
@@ -17,22 +26,25 @@ interface SettingsStore {
   _syncing: boolean;
 
   // Actions
+  setAIMode: (mode: AIMode) => void;
   setAIProvider: (provider: AIProvider) => void;
   setAIApiKey: (key: string) => void;
   setAIBaseURL: (url: string) => void;
   setAIModel: (model: string) => void;
+  setOpenAIEndpoint: (endpoint: OpenAIEndpoint) => void;
   setAutoSave: (enabled: boolean) => void;
   setAutoSaveInterval: (interval: number) => void;
   hydrate: () => void;
 }
 
-const API_KEY_STORAGE_KEY = 'jade_api_key';
-const PROVIDER_CONFIGS_KEY = 'jade_provider_configs';
+const API_KEY_STORAGE_KEY = 'touchresume_api_key';
+const PROVIDER_CONFIGS_KEY = 'touchresume_provider_configs';
 
 interface ProviderConfig {
   baseURL: string;
   model: string;
   apiKey: string;
+  openAIEndpoint?: OpenAIEndpoint;
 }
 
 const PROVIDER_DEFAULTS: Record<AIProvider, ProviderConfig> = {
@@ -40,6 +52,21 @@ const PROVIDER_DEFAULTS: Record<AIProvider, ProviderConfig> = {
   anthropic: { baseURL: 'https://api.anthropic.com', model: 'claude-sonnet-4-20250514', apiKey: '' },
   gemini: { baseURL: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-2.0-flash', apiKey: '' },
 };
+
+function normalizeProvider(value: unknown): AIProvider | undefined {
+  if (value === 'anthropic' || value === 'gemini' || value === 'openai') return value;
+  if (value === 'custom' || value === 'azure') return 'openai';
+  return undefined;
+}
+
+function normalizeMode(value: unknown, serverAIConfigured: boolean): AIMode {
+  if (value === 'server' || value === 'custom') return value;
+  return serverAIConfigured ? 'server' : 'custom';
+}
+
+function normalizeOpenAIEndpoint(value: unknown): OpenAIEndpoint {
+  return value === 'responses' ? 'responses' : 'chat';
+}
 
 function loadProviderConfigs(): Partial<Record<AIProvider, ProviderConfig>> {
   if (typeof window === 'undefined') return {};
@@ -56,7 +83,7 @@ function saveProviderConfigs(configs: Partial<Record<AIProvider, ProviderConfig>
 
 function getFingerprint(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('jade_fingerprint');
+  return localStorage.getItem('touchresume_fingerprint');
 }
 
 function getHeaders(): Record<string, string> {
@@ -78,9 +105,11 @@ function syncToServer(state: SettingsStore) {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify({
+          aiMode: state.aiMode,
           aiProvider: state.aiProvider,
           aiBaseURL: state.aiBaseURL,
           aiModel: state.aiModel,
+          openAIEndpoint: state.openAIEndpoint,
           autoSave: state.autoSave,
           autoSaveInterval: state.autoSaveInterval,
         }),
@@ -97,6 +126,7 @@ function syncProviderConfig(state: SettingsStore) {
     baseURL: state.aiBaseURL,
     model: state.aiModel,
     apiKey: state.aiApiKey,
+    ...(state.aiProvider === 'openai' ? { openAIEndpoint: state.openAIEndpoint } : {}),
   };
   saveProviderConfigs(configs);
 }
@@ -121,32 +151,62 @@ function loadApiKeyLocally(): string {
   }
 }
 
+export function hasUsableAIConfig(): boolean {
+  const { aiMode, aiApiKey, serverAIConfigured } = useSettingsStore.getState();
+  return aiMode === 'server' ? serverAIConfigured : !!aiApiKey;
+}
+
 export function getAIHeaders(): Record<string, string> {
-  const { aiProvider, aiApiKey, aiBaseURL, aiModel } = useSettingsStore.getState();
-  const headers: Record<string, string> = {};
+  const { aiMode, aiProvider, aiApiKey, aiBaseURL, aiModel, openAIEndpoint } = useSettingsStore.getState();
+  const headers: Record<string, string> = { 'x-ai-mode': aiMode };
+
+  // In unified mode the API key/base URL/model are read from server env vars.
+  // Never send personal credentials when the user selected unified AI.
+  if (aiMode === 'server') {
+    return headers;
+  }
+
   if (aiProvider) headers['x-provider'] = aiProvider;
   if (aiApiKey) headers['x-api-key'] = aiApiKey;
   if (aiBaseURL) headers['x-base-url'] = aiBaseURL;
   if (aiModel) headers['x-model'] = aiModel;
+  if (aiProvider === 'openai') headers['x-openai-endpoint'] = openAIEndpoint;
   return headers;
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
+  aiMode: 'server',
   aiProvider: 'openai',
   aiApiKey: '',
   aiBaseURL: 'https://api.openai.com/v1',
   aiModel: 'gpt-4o',
+  openAIEndpoint: 'chat',
+  serverAIConfigured: false,
+  serverAIProvider: 'openai',
+  serverAIModel: 'gpt-4o',
+  serverOpenAIEndpoint: 'chat',
+  serverImageAIConfigured: false,
   autoSave: true,
   autoSaveInterval: 500,
   _hydrated: false,
   _syncing: false,
 
+  setAIMode: (mode) => {
+    set({ aiMode: mode });
+    syncToServer(get());
+  },
+
   setAIProvider: (provider) => {
-    const { aiProvider: prev, aiBaseURL, aiModel, aiApiKey } = get();
+    const { aiProvider: prev, aiBaseURL, aiModel, aiApiKey, openAIEndpoint } = get();
 
     // Save current provider's config before switching
     const configs = loadProviderConfigs();
-    configs[prev] = { baseURL: aiBaseURL, model: aiModel, apiKey: aiApiKey };
+    configs[prev] = {
+      baseURL: aiBaseURL,
+      model: aiModel,
+      apiKey: aiApiKey,
+      ...(prev === 'openai' ? { openAIEndpoint } : {}),
+    };
     saveProviderConfigs(configs);
 
     // Restore target provider's cached config, or use defaults
@@ -159,6 +219,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       aiBaseURL: restored.baseURL,
       aiModel: restored.model,
       aiApiKey: restored.apiKey,
+      openAIEndpoint: normalizeOpenAIEndpoint(restored.openAIEndpoint),
     });
     saveApiKeyLocally(restored.apiKey);
     syncToServer(get());
@@ -178,6 +239,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   setAIModel: (model) => {
     set({ aiModel: model });
+    syncToServer(get());
+    syncProviderConfig(get());
+  },
+
+  setOpenAIEndpoint: (endpoint) => {
+    set({ openAIEndpoint: endpoint });
     syncToServer(get());
     syncProviderConfig(get());
   },
@@ -204,12 +271,20 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const res = await fetch('/api/user/settings', { headers: getHeaders() });
       if (res.ok) {
         const data = await res.json();
-        // Backward compat: map legacy 'custom' provider to 'openai'
-        const provider = (data.aiProvider === 'custom' || data.aiProvider === 'azure') ? 'openai' : data.aiProvider;
+        const serverAIConfigured = !!data.serverAIConfigured;
+        const provider = normalizeProvider(data.aiProvider);
+        const serverProvider = normalizeProvider(data.serverAIProvider) || 'openai';
         set({
+          aiMode: normalizeMode(data.aiMode, serverAIConfigured),
           ...(provider && { aiProvider: provider }),
           ...(data.aiBaseURL && { aiBaseURL: data.aiBaseURL }),
           ...(data.aiModel && { aiModel: data.aiModel }),
+          openAIEndpoint: normalizeOpenAIEndpoint(data.openAIEndpoint),
+          serverAIConfigured,
+          serverAIProvider: serverProvider,
+          serverAIModel: typeof data.serverAIModel === 'string' ? data.serverAIModel : PROVIDER_DEFAULTS[serverProvider].model,
+          serverOpenAIEndpoint: normalizeOpenAIEndpoint(data.serverOpenAIEndpoint),
+          serverImageAIConfigured: !!data.serverImageAIConfigured,
           ...(typeof data.autoSave === 'boolean' && { autoSave: data.autoSave }),
           ...(typeof data.autoSaveInterval === 'number' && { autoSaveInterval: data.autoSaveInterval }),
           _hydrated: true,
@@ -220,7 +295,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       }
     } catch { /* fall through */ }
 
-    set({ _hydrated: true });
+    set({ aiMode: 'custom', _hydrated: true });
   },
 }));
 

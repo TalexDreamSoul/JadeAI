@@ -84,6 +84,7 @@ const TEMPLATE_STYLES: Record<string, TemplateStyle> = {
   sidebar:      { headerBg: '#1e40af', accent: '#3b82f6', itemBorder: false, layout: 'sidebar-left', sidebarWidth: 35, sidebarBg: '#1e40af', sidebarTextColor: 'FFFFFF', sidebarLabelColor: 'B3D4FC', sidebarSections: ['skills', 'languages', 'certifications', 'custom'], headerInSidebar: true },
 
   // ── Light header (no bg) + bottom-border (default for light) ──
+  'touch-pure': { accent: '#2563eb', headingStyle: 'bottom-border', itemBorder: false },
   classic:      { accent: '#d4d4d8', headingStyle: 'bottom-border', itemBorder: false },
   academic:     { accent: '#27272a', headingStyle: 'bottom-border', itemBorder: false },
   ats:          { accent: '#000000', headingStyle: 'bottom-border', itemBorder: false },

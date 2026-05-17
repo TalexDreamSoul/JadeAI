@@ -5,7 +5,7 @@ import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResumeStore } from '@/stores/resume-store';
-import { useSettingsStore, getAIHeaders } from '@/stores/settings-store';
+import { getAIHeaders, hasUsableAIConfig } from '@/stores/settings-store';
 import { generateId } from '@/lib/utils';
 
 interface UseAIChatOptions {
@@ -33,7 +33,9 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
         // headers must be a function — useChat never updates the transport ref,
         // so a static object would freeze stale values from before store hydration.
         headers: () => {
-          const fp = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+          const fp = typeof window !== 'undefined'
+            ? localStorage.getItem('touchresume_fingerprint')
+            : null;
           return { ...(fp ? { 'x-fingerprint': fp } : {}), ...getAIHeaders() };
         },
       }),
@@ -57,7 +59,9 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
       // Cancel any pending autosave to prevent overwriting server data
       if (store._saveTimeout) clearTimeout(store._saveTimeout);
 
-      const fp = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+      const fp = typeof window !== 'undefined'
+        ? localStorage.getItem('touchresume_fingerprint')
+        : null;
       const res = await fetch(`/api/resume/${resumeId}`, {
         headers: fp ? { 'x-fingerprint': fp } : {},
       });
@@ -108,8 +112,8 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
     e.preventDefault();
     if (!input.trim()) return;
 
-    // Check if API key is configured
-    if (!useSettingsStore.getState().aiApiKey) {
+    // Check if an AI configuration is usable (unified server AI or user's custom AI)
+    if (!hasUsableAIConfig()) {
       const userMsg: UIMessage = {
         id: generateId(),
         role: 'user',

@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TEMPLATES } from '@/lib/constants';
+import { RECOMMENDED_TEMPLATES, TEMPLATES } from '@/lib/constants';
 import { useResume } from '@/hooks/use-resume';
 import { Link, useRouter } from '@/i18n/routing';
 import { useFingerprint } from '@/hooks/use-fingerprint';
@@ -281,10 +281,15 @@ export default function TemplatesPage() {
               className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white transition-shadow hover:shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
             >
               {/* Template name */}
-              <div className="border-b border-zinc-100 px-4 py-3 text-center dark:border-zinc-800">
+              <div className="flex items-center justify-center gap-2 border-b border-zinc-100 px-4 py-3 text-center dark:border-zinc-800">
                 <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                   {label}
                 </h3>
+                {RECOMMENDED_TEMPLATES.has(template) && (
+                  <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">
+                    {t('templates.recommended')}
+                  </span>
+                )}
               </div>
 
               {/* Scaled preview */}

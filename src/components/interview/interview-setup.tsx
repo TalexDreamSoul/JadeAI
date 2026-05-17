@@ -27,7 +27,7 @@ export function InterviewSetup() {
     setIsCreating(true);
 
     try {
-      const fp = localStorage.getItem('jade_fingerprint');
+      const fp = localStorage.getItem('touchresume_fingerprint');
       const res = await fetch('/api/interview', {
         method: 'POST',
         headers: {

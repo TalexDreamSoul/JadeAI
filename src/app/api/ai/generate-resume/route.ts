@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { generateText, Output } from 'ai';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { generateResumeInputSchema, type GenerateResumeOutput } from '@/lib/ai/generate-resume-schema';
+import { DEFAULT_TEMPLATE } from '@/lib/constants';
 
 const SECTION_TITLES: Record<string, Record<string, string>> = {
   zh: {
@@ -106,7 +107,8 @@ The structure must be:
 - projects: { items: [{ name, url?, startDate?, endDate?, description, technologies: string[], highlights: string[] }] }
 
 Respond with JSON only.`,
-      providerOptions: getJsonProviderOptions(aiConfig),
+      providerOptions: getProviderOptions(aiConfig),
+      output: Output.json(),
     });
 
     const generatedData: GenerateResumeOutput = extractJson(result.text, generateResumeOutputSchema) as GenerateResumeOutput;
@@ -119,7 +121,7 @@ Respond with JSON only.`,
     const newResume = await resumeRepository.create({
       userId: user.id,
       title: resumeTitle,
-      template: template || 'classic',
+      template: template || DEFAULT_TEMPLATE,
       language: lang,
     });
 

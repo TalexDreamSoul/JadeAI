@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { dbMessagesToUIMessages } from '@/lib/ai/utils';
 
 function getHeaders(): Record<string, string> {
-  const fp = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+  const fp = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
   return fp ? { 'x-fingerprint': fp, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 }
 

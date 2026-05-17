@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { DEFAULT_SECTIONS } from '@/lib/constants';
+import { DEFAULT_SECTIONS, DEFAULT_TEMPLATE } from '@/lib/constants';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const resume = await resumeRepository.create({
       userId: user.id,
       title: title || '未命名简历',
-      template: template || 'classic',
+      template: template || DEFAULT_TEMPLATE,
       language: language || 'zh',
       ...(themeConfig ? { themeConfig } : {}),
     });

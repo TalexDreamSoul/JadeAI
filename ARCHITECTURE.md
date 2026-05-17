@@ -1,8 +1,8 @@
-# JadeAI - 架构设计文档
+# TouchResume - 架构设计文档
 
 ## 1. 项目概述
 
-**JadeAI** 是一款 AI 驱动的智能简历生成器，用户可通过拖拉拽方式可视化创建简历，通过 AI 对话优化简历内容，支持 PDF 导出、多份简历管理、多语言界面（中文/英文）。基于 Next.js 全栈框架开发。
+**TouchResume** 是一款 AI 驱动的智能简历生成器，用户可通过拖拉拽方式可视化创建简历，通过 AI 对话优化简历内容，支持 PDF 导出、多份简历管理、多语言界面（中文/英文）。基于 Next.js 全栈框架开发。
 
 ### 1.1 核心功能
 
@@ -609,7 +609,7 @@ URL 结构:
 ```json
 {
   "common": {
-    "appName": "JadeAI",
+    "appName": "TouchResume",
     "save": "保存",
     "cancel": "取消",
     "delete": "删除",
@@ -736,7 +736,7 @@ URL 结构:
 ```json
 {
   "common": {
-    "appName": "JadeAI",
+    "appName": "TouchResume",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -1314,7 +1314,7 @@ export { adapter };
   "items": [
     {
       "id": "uuid",
-      "name": "JadeAI",
+      "name": "TouchResume",
       "url": "https://github.com/...",
       "startDate": "2024-01",
       "endDate": "2024-06",
@@ -1744,7 +1744,7 @@ resume-store.updateSection(sectionId, newData)
 # .env.example
 
 # ===== 应用 =====
-APP_NAME=JadeAI
+APP_NAME=TouchResume
 
 # ===== 认证 =====
 AUTH_ENABLED=true           # 设为 'false' 使用浏览器指纹模式
@@ -1758,7 +1758,7 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 DB_TYPE=postgresql                       # 'postgresql' 或 'sqlite'
 
 # PostgreSQL（DB_TYPE=postgresql 时使用）
-DATABASE_URL=postgresql://user:password@localhost:5432/jadeai
+DATABASE_URL=postgresql://user:password@localhost:5432/touchresume
 
 # SQLite（DB_TYPE=sqlite 时使用）
 SQLITE_PATH=./data/jade.db

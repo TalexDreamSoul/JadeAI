@@ -26,7 +26,9 @@ interface AIChatContentProps {
 }
 
 function getHeaders(): Record<string, string> {
-  const fp = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+  const fp = typeof window !== 'undefined'
+    ? localStorage.getItem('touchresume_fingerprint')
+    : null;
   return fp ? { 'x-fingerprint': fp, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 }
 
@@ -59,18 +61,21 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
 
   const { historicalMessages, hasMore, isLoadingMore, loadInitial, loadMore, reset: resetPagination } = useMessagePagination();
 
+  const settingsMode = useSettingsStore((s) => s.aiMode);
   const settingsModel = useSettingsStore((s) => s.aiModel);
   const settingsProvider = useSettingsStore((s) => s.aiProvider);
   const settingsBaseURL = useSettingsStore((s) => s.aiBaseURL);
   const settingsApiKey = useSettingsStore((s) => s.aiApiKey);
+  const serverModel = useSettingsStore((s) => s.serverAIModel);
+  const serverProvider = useSettingsStore((s) => s.serverAIProvider);
   const hydrated = useSettingsStore((s) => s._hydrated);
 
   // Sync selectedModel when settings hydrate or user changes default model
   useEffect(() => {
-    if (hydrated && settingsModel) {
-      setSelectedModel(settingsModel);
-    }
-  }, [hydrated, settingsModel]);
+    if (!hydrated) return;
+    const model = settingsMode === 'server' ? serverModel : settingsModel;
+    if (model) setSelectedModel(model);
+  }, [hydrated, settingsMode, settingsModel, serverModel]);
 
   // Fetch models from API — re-fetch when provider/key/baseURL/model changes
   useEffect(() => {
@@ -79,19 +84,21 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
       .then((res) => res.json())
       .then((data: { models: { id: string }[] }) => {
         const ids = data.models.map((m) => m.id);
-        // Ensure user's configured model is always in the list
-        if (settingsModel && !ids.includes(settingsModel)) {
-          ids.unshift(settingsModel);
+        const effectiveModel = settingsMode === 'server' ? serverModel : settingsModel;
+        // Ensure configured model is always in the list
+        if (effectiveModel && !ids.includes(effectiveModel)) {
+          ids.unshift(effectiveModel);
         }
         setModels(ids);
       })
       .catch(() => {
-        // Even on error, show user's configured model
-        if (settingsModel) {
-          setModels([settingsModel]);
+        // Even on error, show configured model
+        const effectiveModel = settingsMode === 'server' ? serverModel : settingsModel;
+        if (effectiveModel) {
+          setModels([effectiveModel]);
         }
       });
-  }, [hydrated, settingsProvider, settingsBaseURL, settingsApiKey, settingsModel]);
+  }, [hydrated, settingsMode, settingsProvider, settingsBaseURL, settingsApiKey, settingsModel, serverProvider, serverModel]);
 
   // Fetch sessions on mount
   useEffect(() => {

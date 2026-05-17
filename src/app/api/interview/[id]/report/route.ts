@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { getModel, extractAIConfig, AIConfigError, getJsonProviderOptions } from '@/lib/ai/provider';
+import { generateText, Output } from 'ai';
+import { getModel, extractAIConfig, AIConfigError, getProviderOptions } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { interviewReportSchema } from '@/lib/ai/interview-report-schema';
@@ -158,7 +158,8 @@ The JSON MUST use EXACTLY these top-level keys (camelCase, English, no translati
 
 DO NOT use alternative names like "comprehensiveScore", "capabilityScores", "direction", "feedback" instead of "overallFeedback", etc. Field names must match EXACTLY. All fields are REQUIRED.`,
       prompt: reportPrompt,
-      providerOptions: getJsonProviderOptions(aiConfig),
+      providerOptions: getProviderOptions(aiConfig),
+      output: Output.json(),
     });
 
     const report = extractJson(text, interviewReportSchema);

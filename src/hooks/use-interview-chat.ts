@@ -32,7 +32,9 @@ export function useInterviewChat({ sessionId, roundId, selectedModel }: UseInter
           locale,
         }),
         headers: () => {
-          const fp = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+          const fp = typeof window !== 'undefined'
+            ? localStorage.getItem('touchresume_fingerprint')
+            : null;
           return { ...(fp ? { 'x-fingerprint': fp } : {}), ...getAIHeaders() };
         },
       }),

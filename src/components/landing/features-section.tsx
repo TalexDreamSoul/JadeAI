@@ -191,7 +191,7 @@ function DemoSharing() {
       >
         <Share2 className="h-4 w-4 shrink-0 text-zinc-400" />
         <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-          jadeai.app/share/a3f8k2...
+          touchresume.app/share/a3f8k2...
         </span>
         <span
           className="ml-auto shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-600 dark:bg-green-950 dark:text-green-400"

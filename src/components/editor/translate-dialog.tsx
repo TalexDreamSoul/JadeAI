@@ -103,7 +103,7 @@ export function TranslateDialog({ open, onOpenChange, resumeId }: TranslateDialo
     abortRef.current = controller;
 
     try {
-      const fingerprint = localStorage.getItem('jade_fingerprint');
+      const fingerprint = localStorage.getItem('touchresume_fingerprint');
       const res = await fetch('/api/ai/translate', {
         method: 'POST',
         headers: {

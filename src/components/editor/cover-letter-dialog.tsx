@@ -47,7 +47,7 @@ export function CoverLetterDialog({ open, onOpenChange, resumeId }: CoverLetterD
     setError('');
 
     try {
-      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
       const res = await fetch('/api/ai/cover-letter', {
         method: 'POST',
         headers: {

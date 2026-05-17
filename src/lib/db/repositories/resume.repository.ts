@@ -1,6 +1,7 @@
 import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '../index';
 import { resumes, resumeSections } from '../schema';
+import { DEFAULT_TEMPLATE } from '@/lib/constants';
 
 export const resumeRepository = {
   async findAllByUserId(userId: string) {
@@ -20,7 +21,7 @@ export const resumeRepository = {
       id,
       userId: data.userId,
       title: data.title || '未命名简历',
-      template: data.template || 'classic',
+      template: data.template || DEFAULT_TEMPLATE,
       language: data.language || 'zh',
     });
     return this.findById(id);

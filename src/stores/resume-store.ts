@@ -167,7 +167,7 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
     set({ isSaving: true });
     try {
       const fingerprint = typeof window !== 'undefined'
-        ? localStorage.getItem('jade_fingerprint')
+        ? localStorage.getItem('touchresume_fingerprint')
         : null;
 
       await fetch(`/api/resume/${currentResume.id}`, {

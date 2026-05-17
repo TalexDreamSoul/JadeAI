@@ -17,7 +17,7 @@ export default function PreviewPage({ params }: { params: Promise<{ id: string }
   const [resume, setResume] = useState<Resume | null>(null);
 
   useEffect(() => {
-    const fingerprint = localStorage.getItem('jade_fingerprint');
+    const fingerprint = localStorage.getItem('touchresume_fingerprint');
     fetch(`/api/resume/${id}`, {
       headers: fingerprint ? { 'x-fingerprint': fingerprint } : {},
     })

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages } from 'ai';
-import { getModel, extractAIConfig, AIConfigError } from '@/lib/ai/provider';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
@@ -73,6 +73,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       model,
       system: systemPrompt,
       messages: modelMessages,
+      providerOptions: getProviderOptions(aiConfig),
       onFinish: async ({ text }) => {
         if (!text) return;
 

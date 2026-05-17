@@ -1,12 +1,12 @@
 # 微信支付接入调研
 
-> 目标：在 JadeAI 中接入微信支付，支持会员/积分购买。本文聚焦：**你需要去微信那边准备什么 + 技术选型**。
+> 目标：在 TouchResume 中接入微信支付，支持会员/积分购买。本文聚焦：**你需要去微信那边准备什么 + 技术选型**。
 
 ---
 
 ## 1. 微信支付的产品形态（选对场景）
 
-| 场景 | 产品名 | 适用 | JadeAI 需要？ |
+| 场景 | 产品名 | 适用 | TouchResume 需要？ |
 |---|---|---|---|
 | **PC 网站扫码付款** ✅ | **Native 支付** | Web 站点，后端生成二维码让用户扫 | **首选** |
 | H5 网页跳转 | H5 支付 | 手机浏览器（非微信内）调起微信 App | 移动端 Web 可加 |
@@ -15,7 +15,7 @@
 | 小程序支付 | 小程序支付 | 微信小程序 | 暂不需要 |
 | 刷卡/付款码 | 付款码支付 | 线下扫枪 | 不需要 |
 
-> **JadeAI 桌面端首选 Native（扫码支付）**，未来做移动端 Web 再补 H5 支付。两者可以共用同一个商户号。
+> **TouchResume 桌面端首选 Native（扫码支付）**，未来做移动端 Web 再补 H5 支付。两者可以共用同一个商户号。
 
 ---
 
@@ -67,7 +67,7 @@
 
 ### 2.5 域名与回调
 
-- **支付结果通知 URL**：必须是 **HTTPS** 公网可访问，例如 `https://jadeai.app/api/payment/wechat/notify`
+- **支付结果通知 URL**：必须是 **HTTPS** 公网可访问，例如 `https://touchresume.app/api/payment/wechat/notify`
 - 域名需要能备案（大陆服务器）或境外可访问
 - 微信会 POST 加密回调，必须 **5 秒内返回 `{"code":"SUCCESS","message":"成功"}`**，否则最多重试 15 次
 
@@ -84,9 +84,9 @@
    Headers: Authorization: WECHATPAY2-SHA256-RSA2048 ...(商户私钥签名)
    Body: {
      appid, mchid,
-     description: "JadeAI Pro 会员-月",
+     description: "TouchResume Pro 会员-月",
      out_trade_no: "本地订单号(唯一)",
-     notify_url: "https://jadeai.app/api/payment/wechat/notify",
+     notify_url: "https://touchresume.app/api/payment/wechat/notify",
      amount: { total: 3000, currency: "CNY" }   // 单位：分
    }
    ← 返回 { code_url: "weixin://wxpay/bizpayurl?pr=..." }
@@ -121,7 +121,7 @@
 
 ---
 
-## 5. JadeAI 代码侧要做的事（预告）
+## 5. TouchResume 代码侧要做的事（预告）
 
 - **SDK 选型**：
   - 官方 Node：[`wechatpay-node-v3`](https://github.com/klover2/wechatpay-node-v3-ts)（社区维护，TS 友好，推荐）

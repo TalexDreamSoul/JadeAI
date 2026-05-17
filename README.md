@@ -1,6 +1,6 @@
 <div align="center">
 
-# JadeAI
+# TouchResume
 
 **AI-Powered Smart Resume Builder**
 
@@ -10,7 +10,7 @@ Build professional resumes with drag-and-drop editing, real-time AI optimization
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)](https://www.typescriptlang.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ed)](https://hub.docker.com/r/twwch/jadeai)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ed)](https://hub.docker.com/r/twwch/touchresume)
 
 [中文文档](./README.zh-CN.md)
 
@@ -195,15 +195,15 @@ openssl rand -base64 32
 
 docker run -d -p 3000:3000 \
   -e AUTH_SECRET=<your-generated-secret> \
-  -v jadeai-data:/app/data \
-  twwch/jadeai:latest
+  -v touchresume-data:/app/data \
+  twwch/touchresume:latest
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Database auto-migrates and seeds on first start.
 
 > **`AUTH_SECRET`** is required for session encryption. Generate one with `openssl rand -base64 32`.
 
-> **AI Configuration:** No server-side AI env vars needed. Each user configures their own API Key, Base URL, and Model in **Settings > AI** within the app.
+> **AI Configuration:** You can configure a unified server-side AI provider via `AI_PROVIDER`, `AI_OPENAI_ENDPOINT`, `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`. Users can choose **Unified Config** or enter their own custom key in **Settings > AI**.
 
 <details>
 <summary>With PostgreSQL</summary>
@@ -212,8 +212,8 @@ Open [http://localhost:3000](http://localhost:3000). Database auto-migrates and 
 docker run -d -p 3000:3000 \
   -e AUTH_SECRET=<your-generated-secret> \
   -e DB_TYPE=postgresql \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/jadeai \
-  twwch/jadeai:latest
+  -e DATABASE_URL=postgresql://user:pass@host:5432/touchresume \
+  twwch/touchresume:latest
 ```
 
 </details>
@@ -227,8 +227,8 @@ docker run -d -p 3000:3000 \
   -e AUTH_SECRET=your-secret \
   -e GOOGLE_CLIENT_ID=xxx \
   -e GOOGLE_CLIENT_SECRET=xxx \
-  -v jadeai-data:/app/data \
-  twwch/jadeai:latest
+  -v touchresume-data:/app/data \
+  twwch/touchresume:latest
 ```
 
 </details>
@@ -243,8 +243,8 @@ docker run -d -p 3000:3000 \
 #### Installation
 
 ```bash
-git clone https://github.com/twwch/JadeAI.git
-cd JadeAI
+git clone https://github.com/twwch/TouchResume.git
+cd TouchResume
 
 pnpm install
 cp .env.example .env.local
@@ -262,7 +262,7 @@ DB_TYPE=sqlite
 AUTH_ENABLED=false
 ```
 
-> **AI Configuration:** No server-side env vars needed. Each user configures their own API Key, Base URL, and Model in **Settings > AI** within the app.
+> **AI Configuration:** Optionally configure unified server-side AI env vars. Users can choose the unified config or their own API Key, Base URL, and Model in **Settings > AI**.
 
 See `.env.example` for all available options (Google OAuth, PostgreSQL, etc.).
 
@@ -289,11 +289,19 @@ Open [http://localhost:3000](http://localhost:3000).
 | `AUTH_SECRET` | Yes | — | Secret key for session encryption |
 | `DB_TYPE` | No | `sqlite` | Database type: `sqlite` or `postgresql` |
 | `DATABASE_URL` | When PostgreSQL | — | PostgreSQL connection string |
-| `SQLITE_PATH` | No | `./data/jade.db` | SQLite database file path |
+| `SQLITE_PATH` | No | `./data/touchresume.db` | SQLite database file path |
+| `AI_PROVIDER` | No | `openai` | Unified AI provider: `openai`, `anthropic`, or `gemini` |
+| `AI_OPENAI_ENDPOINT` | No | `chat` | OpenAI endpoint mode: `chat` or `responses` (only when `AI_PROVIDER=openai`) |
+| `AI_API_KEY` | No | — | Unified server-side AI API key. If set, users can use Unified Config. |
+| `AI_BASE_URL` | No | Provider default | Unified AI base URL / OpenAI-compatible endpoint |
+| `AI_MODEL` | No | Provider default | Unified AI model |
+| `IMAGE_AI_API_KEY` | No | — | Unified Gemini image API key for LinkedIn/professional photo generation |
+| `IMAGE_AI_BASE_URL` | No | Google Gemini API | Unified image AI base URL |
+| `IMAGE_AI_MODEL` | No | `gemini-3.1-flash-image-preview` | Unified image AI model |
 | `AUTH_ENABLED` | No | `false` | Enable Google OAuth (`true`) or use fingerprint mode (`false`) |
 | `GOOGLE_CLIENT_ID` | When OAuth | — | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | When OAuth | — | Google OAuth client secret |
-| `APP_NAME` | No | `JadeAI` | Application display name |
+| `APP_NAME` | No | `TouchResume` | Application display name |
 | `DEFAULT_LOCALE` | No | `zh` | Default language: `zh` or `en` |
 
 ## Scripts
@@ -353,7 +361,7 @@ src/
 
 ## Templates
 
-JadeAI includes **50 professionally designed resume templates** covering a wide range of styles and industries:
+TouchResume includes **50 professionally designed resume templates** covering a wide range of styles and industries:
 
 <details>
 <summary>View all 50 templates</summary>
@@ -449,7 +457,7 @@ Contributions are welcome! Here's how to get started:
 <details>
 <summary><b>How does AI configuration work?</b></summary>
 
-JadeAI does not require server-side AI API keys. Each user configures their own AI provider (OpenAI, Anthropic, or custom endpoint), API key, and model in **Settings > AI** within the app. API keys are stored in the browser's local storage and are never sent to the server for storage.
+TouchResume supports two modes. Admins can configure a unified server-side AI provider with `AI_PROVIDER`, `AI_OPENAI_ENDPOINT`, `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`; users may select **Unified Config** in **Settings > AI** without entering a personal key. Users can also select **Custom Config** and provide their own provider, API key, base URL, and model. Personal API keys are stored locally in the browser and are not persisted to the app database.
 
 </details>
 
@@ -463,7 +471,7 @@ Yes. Set the `DB_TYPE` environment variable to `sqlite` or `postgresql`. SQLite 
 <details>
 <summary><b>How does authentication work without OAuth?</b></summary>
 
-When `AUTH_ENABLED=false` (default), JadeAI uses browser fingerprinting via FingerprintJS. A unique fingerprint ID is generated for each browser and used as the user identifier. No login screen is shown — users can start building resumes immediately.
+When `AUTH_ENABLED=false` (default), TouchResume uses browser fingerprinting via FingerprintJS. A unique fingerprint ID is generated for each browser and used as the user identifier. No login screen is shown — users can start building resumes immediately.
 
 </details>
 
@@ -478,11 +486,11 @@ PDF export uses Puppeteer Core with @sparticuz/chromium. Each of the 50 template
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=LingyiChen-AI%2FJadeAI&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=LingyiChen-AI%2FTouchResume&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/JadeAI&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/JadeAI&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=LingyiChen-AI/JadeAI&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
  </picture>
 </a>
 

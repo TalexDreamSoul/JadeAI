@@ -7,10 +7,10 @@ import { ResumePreview } from '@/components/preview/resume-preview';
 import type { Resume } from '@/types/resume';
 
 const FEATURED_TEMPLATES = [
+  { id: 'touch-pure', labelKey: 'dashboard.templateTouchPure' },
   { id: 'modern', labelKey: 'dashboard.templateModern' },
   { id: 'creative', labelKey: 'dashboard.templateCreative' },
   { id: 'two-column', labelKey: 'dashboard.templateTwoColumn' },
-  { id: 'elegant', labelKey: 'dashboard.templateElegant' },
 ] as const;
 
 // Stable date to avoid SSR/client hydration mismatch

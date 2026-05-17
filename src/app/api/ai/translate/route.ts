@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
-import { generateText, type LanguageModel } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError, type AIConfig } from '@/lib/ai/provider';
+import { generateText, Output, type LanguageModel } from 'ai';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError, type AIConfig } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { translateInputSchema } from '@/lib/ai/translate-schema';
@@ -61,7 +61,8 @@ async function translateSection(
     maxOutputTokens: 4096,
     system: getSectionTranslatePrompt(targetLanguage),
     prompt: `Translate this resume section. Return JSON with keys: sectionId, title, content.\n\n${JSON.stringify(section)}`,
-    providerOptions: getJsonProviderOptions(aiConfig),
+    providerOptions: getProviderOptions(aiConfig),
+    output: Output.json(),
   });
 
   return extractJson(result.text, singleSectionSchema);

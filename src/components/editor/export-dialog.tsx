@@ -73,7 +73,7 @@ export function ExportDialog({ open, onOpenChange, resumeId }: ExportDialogProps
       // Save first if dirty
       if (isDirty) await save();
 
-      const fingerprint = localStorage.getItem('jade_fingerprint');
+      const fingerprint = localStorage.getItem('touchresume_fingerprint');
       const queryFormat = selectedFormat === 'pdf-one-page' ? 'pdf' : selectedFormat;
       const fitParam = selectedFormat === 'pdf-one-page' ? '&fitOnePage=true' : '';
       const res = await fetch(`/api/resume/${resumeId}/export?format=${queryFormat}${fitParam}`, {

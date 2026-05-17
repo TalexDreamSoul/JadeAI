@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Full-site responsive mobile adaptation for JadeAI with zero desktop regressions. Below md (768px) is mobile.
+**Goal:** Full-site responsive mobile adaptation for TouchResume with zero desktop regressions. Below md (768px) is mobile.
 
 **Architecture:** Pure responsive approach — same components adapt via Tailwind breakpoints and a `useIsMobile()` hook for JS-driven logic. Editor switches from 3-column to tab-based layout on mobile. Dialogs become bottom Sheets. All touch targets >= 44px.
 
@@ -960,7 +960,7 @@ Add `pb-20 sm:pb-0` to the main content container to prevent bottom bar from ove
 
 - [ ] **Step 2: Share page — same pattern**
 
-In `share/[token]/page.tsx`, add similar bottom bar with "View on JadeAI" action if not already accessible.
+In `share/[token]/page.tsx`, add similar bottom bar with "View on TouchResume" action if not already accessible.
 
 - [ ] **Step 3: Enable pinch-to-zoom on preview containers**
 

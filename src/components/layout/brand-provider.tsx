@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 export type Brand = 'mint' | 'blue' | 'pink';
 
-const STORAGE_KEY = 'jadeai-brand';
+const STORAGE_KEY = 'touchresume-brand';
 const VALID_BRANDS: Brand[] = ['mint', 'blue', 'pink'];
 
 // Migrate legacy values (pre-rename) to current ids.

@@ -1,4 +1,4 @@
-export const APP_NAME = 'JadeAI';
+export const APP_NAME = 'TouchResume';
 
 export const SECTION_TYPES = [
   'personal_info',
@@ -26,6 +26,7 @@ export const DEFAULT_SECTIONS: { type: SectionType; titleZh: string; titleEn: st
 ];
 
 export const TEMPLATES = [
+  'touch-pure',
   'classic', 'modern', 'minimal', 'professional', 'two-column', 'creative', 'ats', 'academic', 'elegant', 'executive',
   'developer', 'designer', 'startup', 'formal', 'infographic', 'compact', 'euro', 'clean', 'bold', 'timeline',
   // Batch 1: Industry/Professional
@@ -42,6 +43,9 @@ export const TEMPLATES = [
   'sidebar', 'card', 'zigzag', 'ribbon', 'mosaic',
 ] as const;
 export type Template = (typeof TEMPLATES)[number];
+
+export const DEFAULT_TEMPLATE: Template = 'touch-pure';
+export const RECOMMENDED_TEMPLATES: ReadonlySet<string> = new Set([DEFAULT_TEMPLATE]);
 
 /** Templates with full-bleed background headers — no outer padding needed */
 export const BACKGROUND_TEMPLATES: ReadonlySet<string> = new Set([

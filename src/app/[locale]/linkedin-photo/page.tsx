@@ -34,9 +34,10 @@ import {
 import { Link } from '@/i18n/routing';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings-store';
 import type { Resume } from '@/types/resume';
 
-const API_KEY_STORAGE_KEY = 'jade_nanobanana_api_key';
+const API_KEY_STORAGE_KEY = 'touchresume_image_ai_api_key';
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const ASPECT_RATIOS = [
@@ -49,7 +50,7 @@ const ASPECT_RATIOS = [
 function getHeaders() {
   const fingerprint =
     typeof window !== 'undefined'
-      ? localStorage.getItem('jade_fingerprint')
+      ? localStorage.getItem('touchresume_fingerprint')
       : null;
   return {
     'Content-Type': 'application/json',
@@ -125,7 +126,10 @@ function resizeDataUrl(
 export default function LinkedInPhotoPage() {
   const t = useTranslations('linkedinPhoto');
 
-  // API Key
+  const serverImageAIConfigured = useSettingsStore((s) => s.serverImageAIConfigured);
+  const settingsHydrated = useSettingsStore((s) => s._hydrated);
+
+  // API Key (optional when unified image AI is configured)
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
 
@@ -298,7 +302,7 @@ export default function LinkedInPhotoPage() {
 
   // Generate
   const handleGenerate = async () => {
-    if (!apiKey.trim()) {
+    if (!serverImageAIConfigured && !apiKey.trim()) {
       toast.error(t('errorNoApiKey'));
       return;
     }
@@ -319,7 +323,7 @@ export default function LinkedInPhotoPage() {
           prompt,
           requirements: requirements.trim(),
           aspectRatio,
-          apiKey: apiKey.trim(),
+          apiKey: apiKey.trim() || undefined,
         }),
       });
 
@@ -458,7 +462,9 @@ export default function LinkedInPhotoPage() {
                 </button>
               </div>
             </div>
-            <p className="mt-1.5 text-xs text-zinc-400">{t('apiKeyHint')}</p>
+            <p className="mt-1.5 text-xs text-zinc-400">
+              {serverImageAIConfigured ? t('apiKeyHintUnified') : t('apiKeyHint')}
+            </p>
           </div>
 
           {/* Image Upload / Camera */}
@@ -685,7 +691,7 @@ export default function LinkedInPhotoPage() {
           {/* Generate Button */}
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || !apiKey.trim() || !uploadedImage}
+            disabled={isGenerating || !settingsHydrated || (!serverImageAIConfigured && !apiKey.trim()) || !uploadedImage}
             className="w-full cursor-pointer gap-2 bg-brand py-6 text-base font-medium hover:bg-brand-hover disabled:opacity-50"
           >
             {isGenerating ? (

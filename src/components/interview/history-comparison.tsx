@@ -23,7 +23,7 @@ export function HistoryComparison({ currentReport }: HistoryComparisonProps) {
   const [stats, setStats] = useState<HistoryStats | null>(null);
 
   useEffect(() => {
-    const fp = localStorage.getItem('jade_fingerprint');
+    const fp = localStorage.getItem('touchresume_fingerprint');
     fetch('/api/interview/history/stats', {
       headers: fp ? { 'x-fingerprint': fp } : {},
     })

@@ -8,7 +8,7 @@ export function usePdfExport() {
   const exportPdf = useCallback(async (resumeId: string, title?: string) => {
     setIsExporting(true);
     try {
-      const fingerprint = localStorage.getItem('jade_fingerprint');
+      const fingerprint = localStorage.getItem('touchresume_fingerprint');
       const res = await fetch(`/api/resume/${resumeId}/export?format=pdf`, {
         headers: {
           ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),

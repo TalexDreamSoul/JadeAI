@@ -69,7 +69,7 @@ export function HeroSection() {
               <TemplateThumbnail template="modern" className="h-full w-full" />
             </div>
             <div className="animate-float-delayed h-56 w-40 overflow-hidden rounded-xl border border-brand-muted shadow-2xl shadow-brand-muted/30 dark:border-brand-muted dark:shadow-brand/30 sm:h-64 sm:w-48 lg:h-72 lg:w-52">
-              <TemplateThumbnail template="classic" className="h-full w-full" />
+              <TemplateThumbnail template="touch-pure" className="h-full w-full" />
             </div>
             <div
               className="animate-float h-48 w-36 rotate-6 overflow-hidden rounded-xl border border-zinc-200 shadow-2xl shadow-zinc-200/50 dark:border-zinc-700 dark:shadow-zinc-900/50 sm:h-56 sm:w-40 lg:h-64 lg:w-48"

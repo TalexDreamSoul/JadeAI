@@ -4,6 +4,19 @@ import { users, resumes } from '../schema';
 import { resumeRepository } from './resume.repository';
 import { createSampleResume } from '../sample-resume';
 
+function normalizeSettings(settings: unknown): Record<string, unknown> {
+  if (!settings) return {};
+  if (typeof settings === 'string') {
+    try {
+      const parsed = JSON.parse(settings);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof settings === 'object' && !Array.isArray(settings) ? settings as Record<string, unknown> : {};
+}
+
 export const userRepository = {
   async findById(id: string) {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -59,7 +72,7 @@ export const userRepository = {
 
   async getSettings(id: string) {
     const result = await db.select({ settings: users.settings }).from(users).where(eq(users.id, id)).limit(1);
-    return (result[0]?.settings || {}) as Record<string, unknown>;
+    return normalizeSettings(result[0]?.settings);
   },
 
   async updateSettings(id: string, settings: Record<string, unknown>) {

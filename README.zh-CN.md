@@ -1,6 +1,6 @@
 <div align="center">
 
-# JadeAI
+# TouchResume
 
 **AI 驱动的智能简历生成器**
 
@@ -10,7 +10,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)](https://www.typescriptlang.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ed)](https://hub.docker.com/r/twwch/jadeai)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ed)](https://hub.docker.com/r/twwch/touchresume)
 
 [English](./README.md)
 
@@ -204,15 +204,15 @@ openssl rand -base64 32
 
 docker run -d -p 3000:3000 \
   -e AUTH_SECRET=<你生成的密钥> \
-  -v jadeai-data:/app/data \
-  twwch/jadeai:latest
+  -v touchresume-data:/app/data \
+  twwch/touchresume:latest
 ```
 
 打开 [http://localhost:3000](http://localhost:3000)。首次启动自动完成数据库迁移和数据初始化。
 
 > **`AUTH_SECRET`** 为必填项，用于会话加密。通过 `openssl rand -base64 32` 生成。
 
-> **AI 配置：** 无需服务端 AI 环境变量。每位用户在应用内的 **设置 > AI** 中自行配置 API Key、Base URL 和模型。
+> **AI 配置：** 可以通过 `AI_PROVIDER`、`AI_OPENAI_ENDPOINT`、`AI_API_KEY`、`AI_BASE_URL`、`AI_MODEL` 配置统一的服务端 AI。用户可在 **设置 > AI** 中选择“统一配置”或填写自己的自定义配置。
 
 <details>
 <summary>使用 PostgreSQL</summary>
@@ -221,8 +221,8 @@ docker run -d -p 3000:3000 \
 docker run -d -p 3000:3000 \
   -e AUTH_SECRET=<你生成的密钥> \
   -e DB_TYPE=postgresql \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/jadeai \
-  twwch/jadeai:latest
+  -e DATABASE_URL=postgresql://user:pass@host:5432/touchresume \
+  twwch/touchresume:latest
 ```
 
 </details>
@@ -236,8 +236,8 @@ docker run -d -p 3000:3000 \
   -e AUTH_SECRET=your-secret \
   -e GOOGLE_CLIENT_ID=xxx \
   -e GOOGLE_CLIENT_SECRET=xxx \
-  -v jadeai-data:/app/data \
-  twwch/jadeai:latest
+  -v touchresume-data:/app/data \
+  twwch/touchresume:latest
 ```
 
 </details>
@@ -252,8 +252,8 @@ docker run -d -p 3000:3000 \
 #### 安装
 
 ```bash
-git clone https://github.com/twwch/JadeAI.git
-cd JadeAI
+git clone https://github.com/twwch/TouchResume.git
+cd TouchResume
 
 pnpm install
 cp .env.example .env.local
@@ -271,7 +271,7 @@ DB_TYPE=sqlite
 AUTH_ENABLED=false
 ```
 
-> **AI 配置：** 无需服务端环境变量。每位用户在应用内的 **设置 > AI** 中自行配置 API Key、Base URL 和模型。
+> **AI 配置：** 可选配置统一的服务端 AI 环境变量。用户可在 **设置 > AI** 中选择统一配置，或自行配置 API Key、Base URL 和模型。
 
 查看 `.env.example` 了解所有可用选项（Google OAuth、PostgreSQL 等）。
 
@@ -298,11 +298,19 @@ pnpm dev
 | `AUTH_SECRET` | 是 | — | 会话加密密钥 |
 | `DB_TYPE` | 否 | `sqlite` | 数据库类型：`sqlite` 或 `postgresql` |
 | `DATABASE_URL` | PostgreSQL 时 | — | PostgreSQL 连接字符串 |
-| `SQLITE_PATH` | 否 | `./data/jade.db` | SQLite 数据库文件路径 |
+| `SQLITE_PATH` | 否 | `./data/touchresume.db` | SQLite 数据库文件路径 |
+| `AI_PROVIDER` | 否 | `openai` | 统一 AI 服务商：`openai`、`anthropic` 或 `gemini` |
+| `AI_OPENAI_ENDPOINT` | 否 | `chat` | OpenAI 接口模式：`chat` 或 `responses`（仅 `AI_PROVIDER=openai` 时） |
+| `AI_API_KEY` | 否 | — | 统一服务端 AI API Key；配置后用户可使用统一配置 |
+| `AI_BASE_URL` | 否 | 服务商默认 | 统一 AI API 地址 / OpenAI 兼容端点 |
+| `AI_MODEL` | 否 | 服务商默认 | 统一 AI 模型 |
+| `IMAGE_AI_API_KEY` | 否 | — | 领英/职业照生成使用的统一 Gemini 图片 API Key |
+| `IMAGE_AI_BASE_URL` | 否 | Google Gemini API | 统一图片 AI API 地址 |
+| `IMAGE_AI_MODEL` | 否 | `gemini-3.1-flash-image-preview` | 统一图片 AI 模型 |
 | `AUTH_ENABLED` | 否 | `false` | 启用 Google OAuth（`true`）或使用指纹模式（`false`） |
 | `GOOGLE_CLIENT_ID` | OAuth 时 | — | Google OAuth 客户端 ID |
 | `GOOGLE_CLIENT_SECRET` | OAuth 时 | — | Google OAuth 客户端密钥 |
-| `APP_NAME` | 否 | `JadeAI` | 应用显示名称 |
+| `APP_NAME` | 否 | `TouchResume` | 应用显示名称 |
 | `DEFAULT_LOCALE` | 否 | `zh` | 默认语言：`zh` 或 `en` |
 
 ## 常用命令
@@ -362,7 +370,7 @@ src/
 
 ## 模板列表
 
-JadeAI 内置 **50 套专业设计模板**，覆盖多种风格和行业需求：
+TouchResume 内置 **50 套专业设计模板**，覆盖多种风格和行业需求：
 
 <details>
 <summary>查看全部 50 套模板</summary>
@@ -458,7 +466,7 @@ JadeAI 内置 **50 套专业设计模板**，覆盖多种风格和行业需求�
 <details>
 <summary><b>AI 配置是如何工作的？</b></summary>
 
-JadeAI 不需要在服务端配置 AI API 密钥。每位用户在应用内的 **设置 > AI** 中自行配置 AI 供应商（OpenAI、Anthropic 或自定义端点）、API Key 和模型。API 密钥仅存储在浏览器的 localStorage 中，不会发送到服务端存储。
+TouchResume 支持两种模式。管理员可以通过 `AI_PROVIDER`、`AI_OPENAI_ENDPOINT`、`AI_API_KEY`、`AI_BASE_URL`、`AI_MODEL` 配置统一服务端 AI；用户在 **设置 > AI** 中选择“统一配置”后无需填写个人 Key。用户也可以选择“自定义配置”，自行填写服务商、API Key、Base URL 和模型。个人 API Key 仅保存在浏览器本地，不会写入应用数据库。
 
 </details>
 
@@ -472,7 +480,7 @@ JadeAI 不需要在服务端配置 AI API 密钥。每位用户在应用内的 *
 <details>
 <summary><b>不使用 OAuth 时认证如何工作？</b></summary>
 
-当 `AUTH_ENABLED=false`（默认）时，JadeAI 使用 FingerprintJS 进行浏览器指纹识别。系统为每个浏览器生成唯一的指纹 ID 作为用户标识。无需登录界面 — 用户可以直接开始创建简历。
+当 `AUTH_ENABLED=false`（默认）时，TouchResume 使用 FingerprintJS 进行浏览器指纹识别。系统为每个浏览器生成唯一的指纹 ID 作为用户标识。无需登录界面 — 用户可以直接开始创建简历。
 
 </details>
 
@@ -485,11 +493,11 @@ PDF 导出使用 Puppeteer Core + @sparticuz/chromium。50 套模板各有独立
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=LingyiChen-AI%2FJadeAI&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=LingyiChen-AI%2FTouchResume&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/JadeAI&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/JadeAI&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=LingyiChen-AI/JadeAI&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
  </picture>
 </a>
 

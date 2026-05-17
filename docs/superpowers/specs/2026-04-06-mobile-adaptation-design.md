@@ -2,7 +2,7 @@
 
 ## Overview
 
-Full-site responsive mobile adaptation for JadeAI. Pure responsive approach using Tailwind CSS breakpoints — same components adapt based on screen size. Desktop experience remains unchanged.
+Full-site responsive mobile adaptation for TouchResume. Pure responsive approach using Tailwind CSS breakpoints — same components adapt based on screen size. Desktop experience remains unchanged.
 
 **Breakpoint:** `md (768px)` — below this is mobile.
 **Approach:** Responsive CSS + minimal JS logic via `useMediaQuery` hook.

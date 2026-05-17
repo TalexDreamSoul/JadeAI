@@ -10,6 +10,38 @@ interface TemplateThumbnailProps {
   className?: string;
 }
 
+function TouchPureThumb() {
+  return (
+    <div className="flex h-full flex-col p-2.5">
+      <div className="mb-2 border-b border-zinc-200 pb-1.5">
+        <div className="mb-1 h-0.5 w-4 rounded-full bg-[#2563eb]" />
+        <div className="h-1.5 w-12 rounded-full bg-zinc-800" />
+        <div className="mt-0.5 h-1 w-8 rounded-full bg-[#2563eb]" />
+        <div className="mt-1 flex flex-wrap gap-0.5">
+          <div className="h-0.5 w-5 rounded-full bg-zinc-300" />
+          <div className="h-0.5 w-4 rounded-full bg-zinc-300" />
+          <div className="h-0.5 w-6 rounded-full bg-zinc-300" />
+        </div>
+      </div>
+      <div className="flex-1 space-y-1.5">
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <div className="mb-0.5 flex items-center gap-1">
+              <div className="h-1 w-1 rounded-full bg-[#2563eb]" />
+              <div className="h-0.5 w-8 rounded-full bg-[#2563eb]" />
+              <div className="h-px flex-1 bg-zinc-200" />
+            </div>
+            <div className="space-y-0.5 pl-2">
+              <div className="h-0.5 w-full rounded-full bg-zinc-200" />
+              <div className="h-0.5 w-4/5 rounded-full bg-zinc-200" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ClassicThumb() {
   return (
     <div className="flex h-full flex-col p-2.5">
@@ -1387,6 +1419,7 @@ function MosaicThumb() {
 }
 
 const thumbnails: Record<string, React.FC> = {
+  'touch-pure': TouchPureThumb,
   classic: ClassicThumb,
   modern: ModernThumb,
   minimal: MinimalThumb,

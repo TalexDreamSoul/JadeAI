@@ -37,7 +37,7 @@ export const resumes = pgTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull(),
   title: text('title').notNull().default('未命名简历'),
-  template: text('template').notNull().default('classic'),
+  template: text('template').notNull().default('touch-pure'),
   themeConfig: text('theme_config').default('{}'),
   isDefault: integer('is_default').notNull().default(0),
   language: text('language').notNull().default('zh'),

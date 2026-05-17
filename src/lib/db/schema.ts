@@ -30,7 +30,7 @@ export const resumes = sqliteTable('resumes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id),
   title: text('title').notNull().default('未命名简历'),
-  template: text('template').notNull().default('classic'),
+  template: text('template').notNull().default('touch-pure'),
   themeConfig: text('theme_config', { mode: 'json' }).default('{}'),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
   language: text('language').notNull().default('zh'),

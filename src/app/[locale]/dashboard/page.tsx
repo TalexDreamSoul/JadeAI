@@ -40,7 +40,7 @@ const DASHBOARD_TOUR_STEPS: TourStepConfig[] = [
   { target: 'dash-templates', placement: 'bottom', i18nKey: 'dashTemplates' },
 ];
 
-const VIEW_PREF_KEY = 'jade_dashboard_view';
+const VIEW_PREF_KEY = 'touchresume_dashboard_view';
 
 function getInitialView(): ViewMode {
   if (typeof window === 'undefined') return 'grid';

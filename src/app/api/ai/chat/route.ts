@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
-import { getModel, extractAIConfig, AIConfigError } from '@/lib/ai/provider';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { chatRepository } from '@/lib/db/repositories/chat.repository';
@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       messages: truncatedMessages,
       tools,
       stopWhen: tools ? stepCountIs(25) : undefined,
+      providerOptions: getProviderOptions(aiConfig),
       onFinish: async ({ text, steps }) => {
         if (!sessionId) return;
 

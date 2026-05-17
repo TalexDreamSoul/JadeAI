@@ -21,7 +21,7 @@ export function ResumeSelector({ value, onChange }: ResumeSelectorProps) {
   const [resumes, setResumes] = useState<Resume[]>([]);
 
   useEffect(() => {
-    const fp = localStorage.getItem('jade_fingerprint');
+    const fp = localStorage.getItem('touchresume_fingerprint');
     fetch('/api/resume', {
       headers: fp ? { 'x-fingerprint': fp } : {},
     })

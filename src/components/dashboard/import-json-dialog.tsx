@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { DEFAULT_TEMPLATE } from '@/lib/constants';
 import { useRouter } from '@/i18n/routing';
 import {
   Dialog,
@@ -28,7 +29,7 @@ interface ImportJsonDialogProps {
 type ImportState = 'idle' | 'importing' | 'success' | 'error';
 
 function getHeaders() {
-  const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+  const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
   return {
     'Content-Type': 'application/json',
     ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
@@ -106,7 +107,7 @@ export function ImportJsonDialog({ open, onOpenChange }: ImportJsonDialogProps) 
         headers: getHeaders(),
         body: JSON.stringify({
           title: data.title || 'Imported Resume',
-          template: data.template || 'classic',
+          template: data.template || DEFAULT_TEMPLATE,
           themeConfig: data.themeConfig,
           sections: data.sections,
         }),

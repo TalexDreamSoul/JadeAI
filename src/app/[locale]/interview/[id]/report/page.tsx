@@ -16,7 +16,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     if (!hydrated) return;
 
-    const fp = localStorage.getItem('jade_fingerprint');
+    const fp = localStorage.getItem('touchresume_fingerprint');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(fp ? { 'x-fingerprint': fp } : {}),

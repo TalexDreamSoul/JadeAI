@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerImageAIConfig } from '@/lib/ai/server-config';
 
 export const maxDuration = 60;
-
-const GEMINI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
 
 export async function POST(request: NextRequest) {
   try {
     const { image, prompt, requirements, aspectRatio, apiKey } = await request.json();
+    const serverImageAI = getServerImageAIConfig();
+    const effectiveApiKey = (typeof apiKey === 'string' && apiKey.trim()) || serverImageAI.apiKey;
 
-    if (!apiKey || typeof apiKey !== 'string') {
+    if (!effectiveApiKey) {
       return NextResponse.json(
         { error: 'API Key is required' },
         { status: 400 }
@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
 
     // Gemini REST API accepts both camelCase and snake_case in requests,
     // but we use camelCase to match the canonical proto-JSON format.
-    const res = await fetch(`${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
+    const endpoint = `${serverImageAI.baseURL.replace(/\/$/, '')}/models/${serverImageAI.model}:generateContent`;
+    const res = await fetch(`${endpoint}?key=${encodeURIComponent(effectiveApiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

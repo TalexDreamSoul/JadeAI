@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "JadeAI",
+    "appName": "TouchResume",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -42,6 +42,7 @@
     "sortNameDesc": "Name Z-A",
     "viewGrid": "Grid view",
     "viewList": "List view",
+    "templateTouchPure": "TouchPure",
     "templateClassic": "Classic",
     "templateModern": "Modern",
     "templateMinimal": "Minimal",
@@ -95,6 +96,7 @@
     "templateZigzag": "Zigzag",
     "templateRibbon": "Ribbon",
     "templateMosaic": "Mosaic",
+    "templateRecommended": "Recommended",
     "upload": {
       "fromTemplate": "From Template",
       "fromFile": "Upload File",
@@ -209,9 +211,18 @@
       "clear": "Clear",
       "dateDisplay": "{month} {year}",
       "months": {
-        "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
-        "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
-        "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec"
+        "01": "Jan",
+        "02": "Feb",
+        "03": "Mar",
+        "04": "Apr",
+        "05": "May",
+        "06": "Jun",
+        "07": "Jul",
+        "08": "Aug",
+        "09": "Sep",
+        "10": "Oct",
+        "11": "Nov",
+        "12": "Dec"
       }
     }
   },
@@ -238,9 +249,9 @@
     "loadMore": "Load more",
     "loadingMore": "Loading...",
     "bubbleTooltip": "Chat with AI Assistant",
-    "apiKeyMissing": "API Key Not Configured",
-    "apiKeyMissingHint": "Please configure your AI API Key in Settings before using AI features.",
-    "apiKeyMissingBubble": "API Key not configured. Go to Settings.",
+    "apiKeyMissing": "AI Not Configured",
+    "apiKeyMissingHint": "Select an available unified AI config in Settings, or configure your own AI API Key.",
+    "apiKeyMissingBubble": "AI not configured. Go to Settings to select unified or custom config.",
     "goToSettings": "Go to Settings"
   },
   "pdf": {
@@ -261,11 +272,22 @@
       "provider": "Model Protocol",
       "apiKey": "API Key",
       "apiKeyPlaceholder": "Enter your API Key...",
-      "apiKeyHint": "Your API Key is stored locally and sent directly to the model provider per request.",
+      "apiKeyHint": "API Key is stored locally in your browser and is only sent to the backend when Custom Config is selected.",
       "baseURL": "Base URL",
       "model": "Default Model",
       "modelPlaceholder": "Enter model name...",
-      "noModelsFound": "No models found. Enter a model name manually below."
+      "noModelsFound": "No models found. Enter a model name manually below.",
+      "mode": "AI Mode",
+      "modeServer": "Unified Config",
+      "modeCustom": "Custom Config",
+      "modeCustomHint": "Use your own API key and model settings",
+      "serverConfigured": "Configured: {provider} / {model}{endpoint}",
+      "serverNotConfigured": "Unified AI is not configured by the admin. Use custom config instead.",
+      "serverModeDescription": "Using admin unified config: {provider} / {model}{endpoint}. Your personal API key will not be sent.",
+      "openAIEndpoint": "OpenAI Endpoint",
+      "openAIEndpointChat": "Chat Completions (/v1/chat/completions)",
+      "openAIEndpointResponses": "Responses API (/v1/responses)",
+      "openAIEndpointHint": "Use Responses API for newer official OpenAI models. Keep Chat for OpenAI-compatible services that do not support it."
     },
     "appearance": {
       "title": "Appearance",
@@ -487,7 +509,7 @@
     "description": "Import a previously exported JSON file to replace current content",
     "dashboardDescription": "Import a previously exported JSON file to create a new resume",
     "selectFile": "Click to select or drag a .json file here",
-    "dragHint": "Supports .json files exported from JadeAI",
+    "dragHint": "Supports .json files exported from TouchResume",
     "importing": "Importing...",
     "success": "Import successful!",
     "error": "Import failed. Please try again.",
@@ -542,6 +564,7 @@
     "preview": "Preview",
     "useTemplate": "Use This Template",
     "creating": "Creating...",
+    "recommended": "Recommended",
     "nav": "Templates"
   },
   "tour": {
@@ -684,7 +707,7 @@
     },
     "cta": {
       "title": "Ready to Build Your Best Resume?",
-      "subtitle": "Join thousands of job seekers who have landed interviews with JadeAI. No sign-up required.",
+      "subtitle": "Join thousands of job seekers who have landed interviews with TouchResume. No sign-up required.",
       "button": "Create Your Resume Now"
     },
     "footer": {
@@ -708,15 +731,15 @@
         "terms": "Terms of Service",
         "cookies": "Cookie Policy"
       },
-      "copyright": "© {year} JadeAI. All rights reserved."
+      "copyright": "© {year} TouchResume. All rights reserved."
     }
   },
   "linkedinPhoto": {
     "title": "AI LinkedIn Photo",
     "subtitle": "Upload a selfie, generate a professional LinkedIn headshot",
-    "apiKey": "Gemini API Key",
+    "apiKey": "Gemini API Key (optional)",
     "apiKeyPlaceholder": "Enter your Gemini API Key...",
-    "apiKeyHint": "API Key is stored locally in your browser, never uploaded to any server.",
+    "apiKeyHint": "Required only when unified image AI is not configured. Stored locally in your browser.",
     "showKey": "Show",
     "hideKey": "Hide",
     "uploadTitle": "Upload Selfie",
@@ -751,12 +774,13 @@
     "selectResumePlaceholder": "Select a resume",
     "noResumes": "No resumes",
     "imageSize": "Output Size",
-    "errorNoApiKey": "Please enter your Gemini API Key first",
+    "errorNoApiKey": "Enter a Gemini API Key first, or ask the admin to configure unified image AI",
     "errorNoImage": "Please upload a selfie first",
     "errorGenerate": "Generation failed, please try again",
     "errorInvalidKey": "Invalid API Key, please check and try again",
     "errorSafety": "Image did not pass content safety review, please try a different photo",
-    "back": "Back to Dashboard"
+    "back": "Back to Dashboard",
+    "apiKeyHintUnified": "Unified image AI is enabled. You may still enter your own Gemini API Key to override this generation."
   },
   "publicView": {
     "title": "Shared Resume",
@@ -765,7 +789,7 @@
     "submit": "View Resume",
     "invalidPassword": "Invalid password. Please try again.",
     "notFound": "This resume is not available or has been removed.",
-    "viewOnJadeAI": "View on JadeAI"
+    "viewOnTouchResume": "View on TouchResume"
   },
   "interview": {
     "nav": "Mock Interview",

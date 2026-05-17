@@ -1,7 +1,7 @@
-import { tool, generateText } from 'ai';
+import { tool, generateText, Output } from 'ai';
 import { z } from 'zod/v4';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
-import { getModel, getJsonProviderOptions, type AIConfig } from '@/lib/ai/provider';
+import { getModel, getProviderOptions, type AIConfig } from '@/lib/ai/provider';
 import { jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 
@@ -214,7 +214,8 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
           system: `You are an expert resume analyst. Analyze the match between the resume and job description. Be specific and actionable.
 CRITICAL: You are a JSON API. Your entire response must be a single valid JSON object starting with { and ending with }. Do NOT use markdown syntax. Do NOT wrap in code fences.`,
           prompt: `## Resume Data\n${resumeContext}\n\n## Job Description\n${jobDescription}\n\nReturn a JSON object with: overallScore (0-100), keywordMatches (string[]), missingKeywords (string[]), suggestions ([{section, current, suggested}]), atsScore (0-100), summary (string).`,
-          providerOptions: getJsonProviderOptions(aiConfig),
+          providerOptions: getProviderOptions(aiConfig),
+          output: Output.json(),
         });
 
         const analysis = extractJson(result.text, jdAnalysisOutputSchema);
@@ -264,7 +265,8 @@ Rules:
 - Keep all IDs, URLs, emails, phone numbers unchanged
 - CRITICAL: Return a single valid JSON object with keys: sectionId, title, content. No markdown, no code fences.`,
             prompt: `Translate this resume section. Return JSON with keys: sectionId, title, content.\n\n${JSON.stringify(section)}`,
-            providerOptions: getJsonProviderOptions(aiConfig),
+            providerOptions: getProviderOptions(aiConfig),
+            output: Output.json(),
           });
 
           return extractJson(result.text, singleSectionSchema);

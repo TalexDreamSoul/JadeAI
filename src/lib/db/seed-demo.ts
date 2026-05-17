@@ -18,7 +18,7 @@ export async function seedDemoUser(db: any) {
     id: resumeId,
     userId,
     title: '示例简历 - 陈思远',
-    template: 'modern',
+    template: 'touch-pure',
     language: 'zh',
   });
 
@@ -148,8 +148,8 @@ export async function seedDemoUser(db: any) {
         items: [
           {
             id: crypto.randomUUID(),
-            name: 'JadeAI 简历助手',
-            url: 'https://github.com/example/jadeai',
+            name: 'TouchResume 简历助手',
+            url: 'https://github.com/example/touchresume',
             startDate: '2024-10',
             endDate: '2025-02',
             description: '基于 AI 的智能简历生成与优化工具，支持多模板、实时预览和 AI 对话式编辑。',

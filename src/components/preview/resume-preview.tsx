@@ -3,6 +3,7 @@
 import { useId } from 'react';
 import type { Resume, ThemeConfig } from '@/types/resume';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
+import { TouchPureTemplate } from './templates/touch-pure';
 import { ClassicTemplate } from './templates/classic';
 import { ModernTemplate } from './templates/modern';
 import { MinimalTemplate } from './templates/minimal';
@@ -65,6 +66,7 @@ interface ResumePreviewProps {
 }
 
 const templateMap: Record<string, React.ComponentType<{ resume: Resume }>> = {
+  'touch-pure': TouchPureTemplate,
   classic: ClassicTemplate,
   modern: ModernTemplate,
   minimal: MinimalTemplate,

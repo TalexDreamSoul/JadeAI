@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { TEMPLATES } from '@/lib/constants';
+import { DEFAULT_TEMPLATE, RECOMMENDED_TEMPLATES, TEMPLATES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { getAIHeaders } from '@/stores/settings-store';
 import { Upload, FileText, Image, X, Loader2, Check } from 'lucide-react';
@@ -34,7 +34,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('template');
   const [title, setTitle] = useState('');
-  const [template, setTemplate] = useState<string>('classic');
+  const [template, setTemplate] = useState<string>(DEFAULT_TEMPLATE);
   const [isCreating, setIsCreating] = useState(false);
 
   // Upload state
@@ -77,7 +77,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
     setParseError('');
 
     try {
-      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
       const formData = new FormData();
       formData.append('file', file);
       formData.append('template', template);
@@ -106,7 +106,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
   const resetAndClose = () => {
     onClose();
     setTitle('');
-    setTemplate('classic');
+    setTemplate(DEFAULT_TEMPLATE);
     setTab('template');
     setFile(null);
     setParseError('');
@@ -203,6 +203,11 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
                               template={tpl}
                               className="mx-auto h-[100px] w-[71px] shadow-sm ring-1 ring-zinc-200/50"
                             />
+                            {RECOMMENDED_TEMPLATES.has(tpl) && (
+                              <div className="absolute left-1 top-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white shadow-sm">
+                                {t('templates.recommended')}
+                              </div>
+                            )}
                             {/* Selected check */}
                             {isSelected && (
                               <div className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white shadow-sm">
@@ -316,6 +321,11 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
                               template={tpl}
                               className="mx-auto h-[100px] w-[71px] shadow-sm ring-1 ring-zinc-200/50"
                             />
+                            {RECOMMENDED_TEMPLATES.has(tpl) && (
+                              <div className="absolute left-1 top-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white shadow-sm">
+                                {t('templates.recommended')}
+                              </div>
+                            )}
                             {isSelected && (
                               <div className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white shadow-sm">
                                 <Check className="h-3 w-3" />

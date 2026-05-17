@@ -4,6 +4,7 @@
  * resume-list-item, templates page, and theme-editor.
  */
 export const templateLabelsMap: Record<string, string> = {
+  'touch-pure': 'dashboard.templateTouchPure',
   classic: 'dashboard.templateClassic',
   modern: 'dashboard.templateModern',
   minimal: 'dashboard.templateMinimal',

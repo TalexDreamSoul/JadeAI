@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { getModel, extractAIConfig, getJsonProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { generateText, Output } from 'ai';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
       maxOutputTokens: 8192,
       system: JD_ANALYSIS_PROMPT,
       prompt: `Resume:\n${resumeContext}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
-      providerOptions: getJsonProviderOptions(aiConfig),
+      providerOptions: getProviderOptions(aiConfig),
+      output: Output.json(),
     });
 
     const analysisData = extractJson(result.text, jdAnalysisOutputSchema);

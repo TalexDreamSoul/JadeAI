@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LanguageSelect } from '@/components/ui/language-select';
-import { TEMPLATES } from '@/lib/constants';
+import { DEFAULT_TEMPLATE, RECOMMENDED_TEMPLATES, TEMPLATES } from '@/lib/constants';
 import { TemplateThumbnail } from './template-thumbnail';
 import { templateLabelsMap } from '@/lib/template-labels';
 import { getAIHeaders } from '@/stores/settings-store';
@@ -40,7 +40,7 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
   const [skills, setSkills] = useState('');
   const [industry, setIndustry] = useState('');
   const [experience, setExperience] = useState('');
-  const [template, setTemplate] = useState('classic');
+  const [template, setTemplate] = useState<string>(DEFAULT_TEMPLATE);
   const [language, setLanguage] = useState(locale);
   const [state, setState] = useState<GenerateState>('form');
   const [error, setError] = useState('');
@@ -52,7 +52,7 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
     setError('');
 
     try {
-      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('jade_fingerprint') : null;
+      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
       const res = await fetch('/api/ai/generate-resume', {
         method: 'POST',
         headers: {
@@ -109,7 +109,7 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
       setSkills('');
       setIndustry('');
       setExperience('');
-      setTemplate('classic');
+      setTemplate(DEFAULT_TEMPLATE);
       setLanguage(locale);
       setError('');
       setResult(null);
@@ -214,7 +214,12 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
                         <SelectItem key={tpl} value={tpl}>
                           <span className="flex items-center gap-2">
                             <TemplateThumbnail template={tpl} className="h-8 w-6 shrink-0 rounded-sm ring-1 ring-zinc-200/50" />
-                            {tGlobal(templateLabelsMap[tpl])}
+                            <span>{tGlobal(templateLabelsMap[tpl])}</span>
+                            {RECOMMENDED_TEMPLATES.has(tpl) && (
+                              <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                                {tGlobal('templates.recommended')}
+                              </span>
+                            )}
                           </span>
                         </SelectItem>
                       ))}

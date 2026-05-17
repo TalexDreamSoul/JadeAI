@@ -2,6 +2,7 @@ import { esc, buildExportThemeCSS, DEFAULT_THEME, type ResumeWithSections } from
 import { EXPORT_TAILWIND_CSS } from '@/lib/pdf/export-tailwind-css';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import { generateQrSvg } from '@/lib/qrcode';
+import { buildTouchPureHtml } from './templates/touch-pure';
 import { buildClassicHtml } from './templates/classic';
 import { buildModernHtml } from './templates/modern';
 import { buildMinimalHtml } from './templates/minimal';
@@ -76,6 +77,7 @@ const SIDEBAR_DARK_TEMPLATES: Record<string, { bg: string; width: string }> = {
 };
 
 const TEMPLATE_BUILDERS: Record<string, (r: ResumeWithSections) => string> = {
+  'touch-pure': buildTouchPureHtml,
   classic: buildClassicHtml,
   modern: buildModernHtml,
   minimal: buildMinimalHtml,

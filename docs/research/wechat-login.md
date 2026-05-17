@@ -1,6 +1,6 @@
 # 微信登录接入调研
 
-> 目标：在 JadeAI 中支持"可配置的微信登录"。管理员配置后，登录页自动展示微信入口；已配置多种方式时并列展示（Google 直跳 OAuth，微信弹出扫码页）。本文件聚焦：**你需要去微信那边准备什么**。
+> 目标：在 TouchResume 中支持"可配置的微信登录"。管理员配置后，登录页自动展示微信入口；已配置多种方式时并列展示（Google 直跳 OAuth，微信弹出扫码页）。本文件聚焦：**你需要去微信那边准备什么**。
 
 ---
 
@@ -10,12 +10,12 @@
 
 | 场景 | 平台 | 产品名 | 适用 |
 |---|---|---|---|
-| **PC 网站扫码登录** ✅ | [open.weixin.qq.com](https://open.weixin.qq.com) | **网站应用** (Website App) | JadeAI 这种 Web 站点，**首选** |
+| **PC 网站扫码登录** ✅ | [open.weixin.qq.com](https://open.weixin.qq.com) | **网站应用** (Website App) | TouchResume 这种 Web 站点，**首选** |
 | 移动 App 唤起微信 | open.weixin.qq.com | 移动应用 | iOS/Android 原生 App |
 | 微信内 H5 静默授权 | mp.weixin.qq.com | 公众号网页授权 | 只在微信浏览器里打开的 H5 |
 | 小程序登录 | mp.weixin.qq.com | 小程序 | 微信小程序 |
 
-> **JadeAI 需要的是第一种：微信开放平台 → 网站应用**。产出 `AppID + AppSecret`，OAuth2 协议，标准授权码模式，可以在桌面浏览器弹出/嵌入二维码。
+> **TouchResume 需要的是第一种：微信开放平台 → 网站应用**。产出 `AppID + AppSecret`，OAuth2 协议，标准授权码模式，可以在桌面浏览器弹出/嵌入二维码。
 
 ---
 
@@ -34,7 +34,7 @@
 认证通过后，在开放平台 → 管理中心 → 网站应用 → 创建应用：
 - **应用名称 / 图标 / 简介**
 - **官网地址**：必须是已备案的域名（中国大陆服务器需 ICP 备案；境外服务器可以用境外域名，但微信审核偏好备案域名）
-- **授权回调域**：填一个主域名，例如 `jadeai.app`，微信只校验"域名"不校验完整 URL。回调路径由我们自己定（如 `/api/auth/callback/wechat`）
+- **授权回调域**：填一个主域名，例如 `touchresume.app`，微信只校验"域名"不校验完整 URL。回调路径由我们自己定（如 `/api/auth/callback/wechat`）
 - 审核：7 个工作日左右
 - 审核通过后拿到：
   - `AppID`（公开）
@@ -53,14 +53,14 @@
 1. 前端点击"微信登录"
    → 跳 https://open.weixin.qq.com/connect/qrconnect
        ?appid=APPID
-       &redirect_uri=URLENCODE(https://jadeai.app/api/auth/callback/wechat)
+       &redirect_uri=URLENCODE(https://touchresume.app/api/auth/callback/wechat)
        &response_type=code
        &scope=snsapi_login          ← 网站应用固定这个 scope
        &state=RANDOM_CSRF_TOKEN
        #wechat_redirect
 
 2. 用户扫码确认 → 微信回跳
-   → https://jadeai.app/api/auth/callback/wechat?code=CODE&state=...
+   → https://touchresume.app/api/auth/callback/wechat?code=CODE&state=...
 
 3. 后端用 code 换 access_token
    GET https://api.weixin.qq.com/sns/oauth2/access_token
@@ -92,7 +92,7 @@
 
 ---
 
-## 5. JadeAI 代码侧要做的事（预告，不在本次调研范围内）
+## 5. TouchResume 代码侧要做的事（预告，不在本次调研范围内）
 
 - `src/lib/config.ts` 增加 `auth.wechat.{enabled, appId, appSecret}`
 - 登录页 provider 列表从 config 读取，动态渲染按钮
