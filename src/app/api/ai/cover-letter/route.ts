@@ -3,6 +3,8 @@ import { generateText } from 'ai';
 import { getModel, extractAIConfig, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { isLocalResumeId } from '@/lib/local-resumes';
+import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { coverLetterInputSchema } from '@/lib/ai/cover-letter-schema';
 
 interface CoverLetterOutput {
@@ -67,9 +69,6 @@ export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const body = await request.json();
     const parsed = coverLetterInputSchema.safeParse(body);
@@ -82,18 +81,29 @@ export async function POST(request: NextRequest) {
 
     const { resumeId, jobDescription, tone, language } = parsed.data;
     const lang = language || 'zh';
+    const localResume = isLocalResumeId(resumeId) ? normalizeResumeSnapshot((body as Record<string, unknown>).resume, resumeId) : null;
 
-    // Fetch the resume and verify ownership
-    const resume = await resumeRepository.findById(resumeId);
+    let resume: AIResumeSnapshot | NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>> | null = localResume;
+    if (!resume) {
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const cloudResume = await resumeRepository.findById(resumeId);
+      if (!cloudResume) {
+        return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+      }
+      if (cloudResume.userId !== user.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      resume = cloudResume;
+    }
+
     if (!resume) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
     }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const resumeContext = JSON.stringify(resume.sections);
-    const aiConfig = extractAIConfig(request);
+    const resumeContext = getResumeSectionsContext(resume);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig);
 
     const result = await generateText({

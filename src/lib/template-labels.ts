@@ -5,6 +5,13 @@
  */
 export const templateLabelsMap: Record<string, string> = {
   'touch-pure': 'dashboard.templateTouchPure',
+  'touch-simple': 'dashboard.templateTouchSimple',
+  'touch-flat': 'dashboard.templateTouchFlat',
+  'touch-line': 'dashboard.templateTouchLine',
+  'touch-compact': 'dashboard.templateTouchCompact',
+  'touch-card': 'dashboard.templateTouchCard',
+  'touch-grid': 'dashboard.templateTouchGrid',
+  'touch-focus': 'dashboard.templateTouchFocus',
   classic: 'dashboard.templateClassic',
   modern: 'dashboard.templateModern',
   minimal: 'dashboard.templateMinimal',
@@ -62,3 +69,88 @@ export const templateLabelsMap: Record<string, string> = {
   ribbon: 'dashboard.templateRibbon',
   mosaic: 'dashboard.templateMosaic',
 };
+
+const templateFallbackLabelsMap: Record<string, string> = {
+  'touch-pure': 'TouchPure',
+  'touch-simple': 'TouchSimple',
+  'touch-flat': 'TouchFlat',
+  'touch-line': 'TouchLine',
+  'touch-compact': 'TouchCompact',
+  'touch-card': 'TouchCard',
+  'touch-grid': 'TouchGrid',
+  'touch-focus': 'TouchFocus',
+  classic: 'Classic',
+  modern: 'Modern',
+  minimal: 'Minimal',
+  professional: 'Professional',
+  'two-column': 'Two-Column',
+  creative: 'Creative',
+  ats: 'ATS',
+  academic: 'Academic',
+  elegant: 'Elegant',
+  executive: 'Executive',
+  developer: 'Developer',
+  designer: 'Designer',
+  startup: 'Startup',
+  formal: 'Formal',
+  infographic: 'Infographic',
+  compact: 'Compact',
+  euro: 'Euro CV',
+  clean: 'Clean',
+  bold: 'Bold',
+  timeline: 'Timeline',
+  nordic: 'Nordic',
+  corporate: 'Corporate',
+  consultant: 'Consultant',
+  finance: 'Finance',
+  medical: 'Medical',
+  gradient: 'Gradient',
+  metro: 'Metro',
+  material: 'Material',
+  coder: 'Coder',
+  blocks: 'Blocks',
+  magazine: 'Magazine',
+  artistic: 'Artistic',
+  retro: 'Retro',
+  neon: 'Neon',
+  watercolor: 'Watercolor',
+  swiss: 'Swiss',
+  japanese: 'Japanese',
+  berlin: 'Berlin',
+  luxe: 'Luxe',
+  rose: 'Rose',
+  architect: 'Architect',
+  legal: 'Legal',
+  teacher: 'Teacher',
+  scientist: 'Scientist',
+  engineer: 'Engineer',
+  sidebar: 'Sidebar',
+  card: 'Card',
+  zigzag: 'Zigzag',
+  ribbon: 'Ribbon',
+  mosaic: 'Mosaic',
+};
+
+type TemplateTranslator = ((key: string) => string) & {
+  has?: (key: string) => boolean;
+};
+
+function humanizeTemplateId(template: string): string {
+  return template
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function getTemplateFallbackLabel(template: string): string {
+  return templateFallbackLabelsMap[template] || humanizeTemplateId(template);
+}
+
+export function getTemplateLabel(template: string, t: TemplateTranslator): string {
+  const key = templateLabelsMap[template];
+  if (key && (typeof t.has !== 'function' || t.has(key))) {
+    return t(key);
+  }
+  return getTemplateFallbackLabel(template);
+}

@@ -61,7 +61,7 @@ export function CleanTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-5" data-section>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
             <h2 className="mb-2 text-sm font-bold uppercase tracking-wider" style={{ color: BLUE }}>{section.title}</h2>
             <CleanSectionContent section={section} resume={resume} />
           </div>

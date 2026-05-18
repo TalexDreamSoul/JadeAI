@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { ArrowRight } from 'lucide-react';
 import { ResumePreview } from '@/components/preview/resume-preview';
+import { getTemplateLabel } from '@/lib/template-labels';
 import type { Resume } from '@/types/resume';
 
 const FEATURED_TEMPLATES = [
@@ -136,17 +137,17 @@ export function TemplateShowcaseSection() {
           className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 snap-x snap-mandatory sm:hidden [&::-webkit-scrollbar]:hidden"
           style={{ scrollbarWidth: 'none' }}
         >
-          {FEATURED_TEMPLATES.map(({ id, labelKey }) => (
+          {FEATURED_TEMPLATES.map(({ id }) => (
             <div key={id} className="w-[280px] flex-shrink-0 snap-center">
-              <TemplateCard template={id} label={tGlobal(labelKey)} />
+              <TemplateCard template={id} label={getTemplateLabel(id, tGlobal)} />
             </div>
           ))}
         </div>
 
         {/* Desktop grid */}
         <div className="hidden gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4">
-          {FEATURED_TEMPLATES.map(({ id, labelKey }) => (
-            <TemplateCard key={id} template={id} label={tGlobal(labelKey)} />
+          {FEATURED_TEMPLATES.map(({ id }) => (
+            <TemplateCard key={id} template={id} label={getTemplateLabel(id, tGlobal)} />
           ))}
         </div>
 

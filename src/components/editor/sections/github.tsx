@@ -2,12 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, X, RefreshCw, Star, Code2, Loader2 } from 'lucide-react';
+import { Plus, X, RefreshCw, Star, Code2, Loader2, WandSparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { EditableText } from '../fields/editable-text';
 import { EditableRichText } from '../fields/editable-rich-text';
 import { generateId } from '@/lib/utils';
+import { getAIHeaders } from '@/stores/settings-store';
 import type { ResumeSection, GitHubContent, GitHubRepoItem } from '@/types/resume';
 
 const GITHUB_REPO_RE = /github\.com\/[^/]+\/[^/]+/;
@@ -22,6 +23,7 @@ export function GitHubSection({ section, onUpdate }: Props) {
   const content = section.content as GitHubContent;
   const items = content.items || [];
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  const [summaryIds, setSummaryIds] = useState<Set<string>>(new Set());
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // Keep a ref to always access the latest items, avoiding stale closures in setTimeout
   const itemsRef = useRef(items);
@@ -36,13 +38,13 @@ export function GitHubSection({ section, onUpdate }: Props) {
       language: '',
       description: '',
     };
-    onUpdate({ items: [...items, newItem] } as any);
+    onUpdate({ items: [...items, newItem] });
   };
 
   const updateItem = (index: number, data: Partial<GitHubRepoItem>) => {
     const latest = itemsRef.current;
     const updated = latest.map((item, i) => (i === index ? { ...item, ...data } : item));
-    onUpdate({ items: updated } as any);
+    onUpdate({ items: updated });
   };
 
   const removeItem = (index: number) => {
@@ -50,7 +52,7 @@ export function GitHubSection({ section, onUpdate }: Props) {
     const timer = debounceTimers.current.get(item.id);
     if (timer) clearTimeout(timer);
     debounceTimers.current.delete(item.id);
-    onUpdate({ items: items.filter((_, i) => i !== index) } as any);
+    onUpdate({ items: items.filter((_, i) => i !== index) });
   };
 
   const fetchRepo = async (index: number, url: string) => {
@@ -71,6 +73,41 @@ export function GitHubSection({ section, onUpdate }: Props) {
       }
     } finally {
       setLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
+  const summarizeRepo = async (index: number) => {
+    const item = itemsRef.current[index];
+    if (!item) return;
+    setSummaryIds((prev) => new Set(prev).add(item.id));
+    try {
+      const res = await fetch('/api/github/repo/summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAIHeaders(),
+        },
+        body: JSON.stringify({
+          repo: item,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        updateItem(index, {
+          name: data.name || item.name,
+          language: data.technologies?.[0] || item.language,
+          description: [
+            data.description,
+            ...(Array.isArray(data.highlights) ? data.highlights.map((h: string) => `- ${h}`) : []),
+          ].filter(Boolean).join('\n'),
+        });
+      }
+    } finally {
+      setSummaryIds((prev) => {
         const next = new Set(prev);
         next.delete(item.id);
         return next;
@@ -155,6 +192,15 @@ export function GitHubSection({ section, onUpdate }: Props) {
                   disabled={loadingIds.has(item.id)}
                 >
                   <RefreshCw className={`h-3 w-3 ${loadingIds.has(item.id) ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-0.5 text-zinc-400 hover:text-brand"
+                  onClick={() => summarizeRepo(index)}
+                  disabled={summaryIds.has(item.id)}
+                  title={t('generateProjectIntro')}
+                >
+                  <WandSparkles className={`h-3 w-3 ${summaryIds.has(item.id) ? 'animate-pulse' : ''}`} />
                 </button>
               </div>
             )}

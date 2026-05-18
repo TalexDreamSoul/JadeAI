@@ -27,12 +27,19 @@ export class SQLiteAdapter implements DatabaseAdapter {
 
   async initialize(): Promise<void> {
     try {
-      const row = this.sqlite.prepare('SELECT count(*) as count FROM users').get() as any;
+      const columns = this.sqlite.prepare('PRAGMA table_info(users)').all() as Array<{ name?: string }>;
+      if (columns.length > 0 && !columns.some((column) => column.name === 'ai_credits')) {
+        this.sqlite.prepare('ALTER TABLE users ADD COLUMN ai_credits integer NOT NULL DEFAULT 20').run();
+      }
+
+      const row = this.sqlite.prepare('SELECT count(*) as count FROM users').get() as { count?: number } | undefined;
       if (row?.count === 0) {
         const { seedDemoUser } = await import('../seed-demo');
         await seedDemoUser(this.db);
         console.log('[DB] SQLite auto-seed complete');
       }
+      const { ensureAdminUser } = await import('../seed-admin');
+      await ensureAdminUser(this.db);
     } catch (e) {
       console.error('[DB] SQLite auto-seed failed:', e);
     }

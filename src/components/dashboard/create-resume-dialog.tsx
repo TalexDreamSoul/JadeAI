@@ -13,16 +13,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_TEMPLATE, RECOMMENDED_TEMPLATES, TEMPLATES } from '@/lib/constants';
+import type { LocalResumeInput } from '@/lib/local-resumes';
+import type { Resume } from '@/types/resume';
 import { cn } from '@/lib/utils';
 import { getAIHeaders } from '@/stores/settings-store';
 import { Upload, FileText, Image, X, Loader2, Check } from 'lucide-react';
 import { TemplateThumbnail } from './template-thumbnail';
-import { templateLabelsMap } from '@/lib/template-labels';
+import { getTemplateLabel } from '@/lib/template-labels';
 
 interface CreateResumeDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (data: { title?: string; template?: string; language?: string }) => Promise<any>;
+  onCreate: (data: LocalResumeInput) => Promise<Resume | null>;
 }
 
 type Tab = 'template' | 'upload';
@@ -57,7 +59,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
     }
   };
 
-  const handleFileSelect = (selectedFile: File) => {
+  const handleFileSelect = useCallback((selectedFile: File) => {
     setParseError('');
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
     if (!validTypes.includes(selectedFile.type)) {
@@ -69,7 +71,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
       return;
     }
     setFile(selectedFile);
-  };
+  }, [t]);
 
   const handleUploadParse = async () => {
     if (!file) return;
@@ -96,8 +98,8 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
       const resume = await res.json();
       resetAndClose();
       router.push(`/editor/${resume.id}`);
-    } catch (err: any) {
-      setParseError(err.message || t('dashboard.upload.parseFailed'));
+    } catch (err: unknown) {
+      setParseError(err instanceof Error ? err.message : t('dashboard.upload.parseFailed'));
     } finally {
       setIsParsing(false);
     }
@@ -117,7 +119,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
     setIsDragging(false);
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) handleFileSelect(droppedFile);
-  }, []);
+  }, [handleFileSelect]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -222,7 +224,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
                               ? 'bg-brand-muted text-brand dark:bg-brand-muted dark:text-brand'
                               : 'text-zinc-600 dark:text-zinc-400'
                           )}>
-                            {t(templateLabelsMap[tpl])}
+                            {getTemplateLabel(tpl, t)}
                           </div>
                         </button>
                       );
@@ -338,7 +340,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
                               ? 'bg-brand-muted text-brand dark:bg-brand-muted dark:text-brand'
                               : 'text-zinc-600 dark:text-zinc-400'
                           )}>
-                            {t(templateLabelsMap[tpl])}
+                            {getTemplateLabel(tpl, t)}
                           </div>
                         </button>
                       );

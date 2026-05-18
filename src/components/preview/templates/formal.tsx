@@ -47,7 +47,7 @@ export function FormalTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-5" data-section>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
             <div className="mb-2 flex items-center gap-2">
               <h2 className="shrink-0 text-sm font-bold uppercase tracking-wider" style={{ color: DARK_GREEN }}>{section.title}</h2>
               <div className="h-px flex-1 bg-zinc-200" />

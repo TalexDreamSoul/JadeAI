@@ -27,7 +27,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useEditorStore } from '@/stores/editor-store';
+import { useResumeStore } from '@/stores/resume-store';
 import { getAIHeaders } from '@/stores/settings-store';
+import { isLocalResumeId } from '@/lib/local-resumes';
 
 interface GrammarIssue {
   sectionId: string;
@@ -230,6 +232,8 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
   const t = useTranslations('grammarCheck');
   const ct = useTranslations('common');
   const { setShowAiChat, setPendingAiMessage } = useEditorStore();
+  const currentResume = useResumeStore((s) => s.currentResume);
+  const isLocalResume = isLocalResumeId(resumeId);
   const [isChecking, setIsChecking] = useState(false);
   const [result, setResult] = useState<GrammarCheckResult | null>(null);
   const [error, setError] = useState('');
@@ -279,7 +283,10 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
       const res = await fetch('/api/ai/grammar-check', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ resumeId }),
+        body: JSON.stringify({
+          resumeId,
+          ...(isLocalResume && currentResume ? { resume: currentResume } : {}),
+        }),
       });
 
       if (!res.ok) {

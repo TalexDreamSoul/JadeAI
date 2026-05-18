@@ -15,7 +15,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { LanguageSelect } from '@/components/ui/language-select';
 import { cn } from '@/lib/utils';
+import { isLocalResumeId } from '@/lib/local-resumes';
 import { getAIHeaders } from '@/stores/settings-store';
+import { useResumeStore } from '@/stores/resume-store';
 
 interface CoverLetterDialogProps {
   open: boolean;
@@ -32,6 +34,8 @@ type Tone = 'formal' | 'friendly' | 'confident';
 
 export function CoverLetterDialog({ open, onOpenChange, resumeId }: CoverLetterDialogProps) {
   const t = useTranslations('coverLetter');
+  const currentResume = useResumeStore((s) => s.currentResume);
+  const isLocalResume = isLocalResumeId(resumeId);
 
   const [jobDescription, setJobDescription] = useState('');
   const [tone, setTone] = useState<Tone>('formal');
@@ -55,7 +59,13 @@ export function CoverLetterDialog({ open, onOpenChange, resumeId }: CoverLetterD
           ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
           ...getAIHeaders(),
         },
-        body: JSON.stringify({ resumeId, jobDescription, tone, language }),
+        body: JSON.stringify({
+          resumeId,
+          jobDescription,
+          tone,
+          language,
+          ...(isLocalResume && currentResume ? { resume: currentResume } : {}),
+        }),
       });
 
       if (!res.ok) {

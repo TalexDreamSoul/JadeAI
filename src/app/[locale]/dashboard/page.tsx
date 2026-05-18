@@ -16,14 +16,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useResume } from '@/hooks/use-resume';
 import { useUIStore } from '@/stores/ui-store';
 import { useFingerprint } from '@/hooks/use-fingerprint';
-import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
+import { useIsLocalOnly } from '@/stores/settings-store';
 import { ResumeGrid } from '@/components/dashboard/resume-grid';
 import { ResumeListItem } from '@/components/dashboard/resume-list-item';
 import { CreateResumeDialog } from '@/components/dashboard/create-resume-dialog';
 import { GenerateResumeDialog } from '@/components/dashboard/generate-resume-dialog';
 import { ImportJsonDialog } from '@/components/dashboard/import-json-dialog';
 import { ShareDialog } from '@/components/editor/share-dialog';
-import { SettingsDialog } from '@/components/settings/settings-dialog';
 import { TourOverlay, type TourStepConfig } from '@/components/tour/tour-overlay';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { cn } from '@/lib/utils';
@@ -73,12 +72,12 @@ export default function DashboardPage() {
   const { resumes, isLoading, fetchResumes, createResume, deleteResume, renameResume, duplicateResume } = useResume();
   const { openModal, activeModal, closeModal } = useUIStore();
   const { fingerprint, isLoading: fpLoading } = useFingerprint();
-  const { authEnabled } = useRuntimeConfig();
+  const localOnly = useIsLocalOnly();
 
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('lastEdited');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => getInitialView());
   const [shareResumeId, setShareResumeId] = useState<string | null>(null);
   const startTour = useTourStore((s) => s.startTour);
 
@@ -91,11 +90,6 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [isLoading, fpLoading, startTour]);
 
-  // Hydrate view preference from localStorage on mount
-  useEffect(() => {
-    setViewMode(getInitialView());
-  }, []);
-
   // Persist view preference
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode);
@@ -104,12 +98,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (fpLoading) return;
-    // OAuth mode: fingerprint is null, but we still need to fetch
-    // Fingerprint mode: wait until fingerprint is resolved
-    if (authEnabled || fingerprint) {
-      fetchResumes();
-    }
-  }, [fpLoading, fingerprint, fetchResumes]);
+    // Local-only resumes do not need a fingerprint. Logged-in cloud users also
+    // do not have/need a fingerprint, so fetch as soon as runtime mode is known.
+    fetchResumes();
+  }, [fpLoading, fingerprint, fetchResumes, localOnly]);
 
   // Filter and sort resumes
   const filteredResumes = useMemo(() => {
@@ -269,7 +261,7 @@ export default function DashboardPage() {
           onDelete={deleteResume}
           onDuplicate={duplicateResume}
           onRename={renameResume}
-          onShare={(id) => setShareResumeId(id)}
+          onShare={localOnly ? undefined : (id) => setShareResumeId(id)}
         />
       ) : (
         <div className="flex flex-col gap-2">
@@ -299,8 +291,7 @@ export default function DashboardPage() {
         open={activeModal === 'import'}
         onOpenChange={(open) => open ? openModal('import') : closeModal()}
       />
-      <SettingsDialog />
-      {shareResumeId && (
+      {!localOnly && shareResumeId && (
         <ShareDialog
           open={!!shareResumeId}
           onOpenChange={(open) => { if (!open) setShareResumeId(null); }}

@@ -63,7 +63,7 @@ export function CreativeTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-6" data-section>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
               <div className="mb-3 flex items-center gap-3">
                 <div className="h-8 w-1 rounded-full" style={{ background: GRADIENT }} />
                 <h2 className="text-base font-extrabold uppercase tracking-wide" style={{ color: PRIMARY }}>

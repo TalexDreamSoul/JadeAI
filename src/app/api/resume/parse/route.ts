@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig);
 
     // Build messages based on file type

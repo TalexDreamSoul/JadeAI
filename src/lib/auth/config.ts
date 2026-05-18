@@ -1,50 +1,34 @@
 import NextAuth from 'next-auth';
-import Google from 'next-auth/providers/google';
-import Credentials from 'next-auth/providers/credentials';
-import { config } from '@/lib/config';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { createSampleResume } from '@/lib/db/sample-resume';
+import { createRuntimeProviders } from './runtime-config';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+type OAuthProfile = {
+  email?: string | null;
+  name?: string | null;
+  picture?: string | null;
+};
+
+export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
   trustHost: true,
-  providers: config.auth.enabled
-    ? [
-        Google({
-          clientId: process.env.GOOGLE_CLIENT_ID!,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        }),
-      ]
-    : [
-        Credentials({
-          name: 'Fingerprint',
-          credentials: {
-            fingerprint: { label: 'Fingerprint', type: 'text' },
-          },
-          async authorize(credentials) {
-            const fingerprint = credentials?.fingerprint as string;
-            if (!fingerprint) return null;
-            return {
-              id: `fp_${fingerprint}`,
-              name: 'Anonymous User',
-            };
-          },
-        }),
-      ],
+  providers: await createRuntimeProviders(),
   callbacks: {
     async jwt({ token, user, account, profile }) {
       // First sign-in via Google: create DB user immediately
       if (user && account?.provider === 'google') {
         const email = (profile?.email || user.email) as string;
         const name = (profile?.name || user.name) as string | undefined;
-        const avatar = ((profile as any)?.picture || user.image) as string | undefined;
+        const avatar = ((profile as OAuthProfile | undefined)?.picture || user.image) as string | undefined;
 
         let dbUser = email ? await userRepository.findByEmail(email) : null;
         if (!dbUser) {
+          const hasAdmin = await userRepository.findFirstAdmin();
           dbUser = await userRepository.create({
             email: email || undefined,
             name,
             avatarUrl: avatar,
             authType: 'oauth',
+            role: hasAdmin ? 'user' : 'admin',
           });
           if (dbUser) {
             await createSampleResume(dbUser.id);
@@ -59,8 +43,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.picture = avatar;
       }
 
+      if (user && account?.provider === 'password') {
+        token.userId = user.id;
+        token.name = user.name;
+        token.email = user.email;
+      }
+
       // Credentials (fingerprint) mode
-      if (user && !account?.provider) {
+      if (user && account?.provider === 'credentials') {
         token.userId = user.id;
       }
 
@@ -80,4 +70,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: '/login',
   },
   secret: process.env.AUTH_SECRET,
-});
+}));

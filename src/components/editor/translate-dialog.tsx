@@ -16,6 +16,7 @@ import { useResumeStore } from '@/stores/resume-store';
 import { LanguageSelect } from '@/components/ui/language-select';
 import { Languages, Loader2, CheckCircle2, AlertCircle, FileEdit, FilePlus2 } from 'lucide-react';
 import { getAIHeaders } from '@/stores/settings-store';
+import { createLocalResume, isLocalResumeId } from '@/lib/local-resumes';
 import { cn } from '@/lib/utils';
 
 interface TranslateDialogProps {
@@ -65,6 +66,7 @@ export function TranslateDialog({ open, onOpenChange, resumeId }: TranslateDialo
   const t = useTranslations('translate');
   const router = useRouter();
   const currentResume = useResumeStore((s) => s.currentResume);
+  const isLocalResume = isLocalResumeId(resumeId);
 
   const currentLanguage = currentResume?.language || 'en';
   const defaultTarget = currentLanguage === 'zh' ? 'en' : 'zh';
@@ -111,7 +113,12 @@ export function TranslateDialog({ open, onOpenChange, resumeId }: TranslateDialo
           ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
           ...getAIHeaders(),
         },
-        body: JSON.stringify({ resumeId, targetLanguage, mode }),
+        body: JSON.stringify({
+          resumeId,
+          targetLanguage,
+          mode,
+          ...(isLocalResume && currentResume ? { resume: currentResume } : {}),
+        }),
         signal: controller.signal,
       });
 
@@ -155,6 +162,24 @@ export function TranslateDialog({ open, onOpenChange, resumeId }: TranslateDialo
               onOpenChange(false);
               router.push(`/editor/${data.newResumeId}`);
             }, 1500);
+          } else if (mode === 'copy' && isLocalResume && currentResume) {
+            const localCopy = createLocalResume({
+              title: `${currentResume.title}-${data.language as string}`,
+              template: currentResume.template,
+              language: data.language as string,
+              themeConfig: currentResume.themeConfig,
+              sections: data.sections as any,
+              isBase: currentResume.isBase,
+              baseResumeId: currentResume.baseResumeId,
+              targetCompany: currentResume.targetCompany,
+              targetJobTitle: currentResume.targetJobTitle,
+              jobDescription: currentResume.jobDescription,
+              versionLabel: currentResume.versionLabel,
+            });
+            setTimeout(() => {
+              onOpenChange(false);
+              router.push(`/editor/${localCopy.id}`);
+            }, 1500);
           } else {
             // Overwrite mode: sync store and close
             const current = useResumeStore.getState().currentResume;
@@ -177,7 +202,7 @@ export function TranslateDialog({ open, onOpenChange, resumeId }: TranslateDialo
       setState('error');
       setErrorMessage(err.message || t('error'));
     }
-  }, [resumeId, targetLanguage, mode, onOpenChange, t, router]);
+  }, [resumeId, targetLanguage, mode, isLocalResume, currentResume, onOpenChange, t, router]);
 
   const progressPercent = progress.total > 0
     ? Math.round((progress.completed / progress.total) * 100)

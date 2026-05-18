@@ -165,6 +165,45 @@ export interface ResumeSection {
   updatedAt: Date;
 }
 
+export interface TemplateTitleStyle {
+  fontSize?: number;
+  fontWeight?: number;
+  color?: string;
+  align?: 'left' | 'center' | 'right';
+  letterSpacing?: string;
+  marginBottom?: number;
+}
+
+export interface TemplateSectionTitleStyle extends TemplateTitleStyle {
+  textTransform?: 'none' | 'uppercase' | 'capitalize' | 'lowercase';
+  uppercase?: boolean;
+}
+
+export interface TemplateSectionDividerConfig {
+  enabled?: boolean;
+  style?: 'solid' | 'dashed' | 'dotted' | 'double';
+  thickness?: number;
+  color?: string;
+  marginTop?: number;
+  marginBottom?: number;
+}
+
+export interface TemplateLayoutConfig {
+  contentMaxWidth?: number;
+  backgroundColor?: string;
+  borderRadius?: number;
+  pageShadow?: boolean;
+}
+
+export interface TemplateEditorPanelState {
+  openSections?: Record<string, boolean>;
+}
+
+export interface TemplateAdvancedConfig {
+  cssVars?: Record<string, string>;
+  customCss?: string;
+}
+
 export interface ThemeConfig {
   primaryColor: string;
   accentColor: string;
@@ -174,6 +213,12 @@ export interface ThemeConfig {
   margin: { top: number; right: number; bottom: number; left: number };
   sectionSpacing: number;
   avatarStyle?: 'circle' | 'oneInch';
+  titleStyle?: TemplateTitleStyle;
+  sectionTitleStyle?: TemplateSectionTitleStyle;
+  sectionDivider?: TemplateSectionDividerConfig;
+  layout?: TemplateLayoutConfig;
+  advanced?: TemplateAdvancedConfig;
+  editorPanel?: TemplateEditorPanelState;
 }
 
 export interface Resume {
@@ -183,8 +228,85 @@ export interface Resume {
   template: string;
   themeConfig: ThemeConfig;
   isDefault: boolean;
+  isBase?: boolean;
+  cloudSyncEnabled?: boolean;
   language: string;
+  sourceResumeId?: string | null;
+  baseResumeId?: string | null;
+  targetCompany?: string | null;
+  targetJobTitle?: string | null;
+  jobDescription?: string | null;
+  versionLabel?: string;
   sections: ResumeSection[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ResumeVersion {
+  id: string;
+  resumeId: string;
+  label: string;
+  snapshot: Resume;
+  source: 'manual' | 'autosave' | 'ai' | 'jd' | string;
+  createdAt: Date;
+}
+
+export interface ResumeEvent {
+  id: string;
+  resumeId: string;
+  userId: string;
+  type: string;
+  title: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface ResumeReviewComment {
+  id: string;
+  shareId: string;
+  resumeId: string;
+  authorName: string;
+  authorEmail?: string | null;
+  sectionId?: string | null;
+  content: string;
+  status: 'open' | 'resolved' | string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TemplateMarketItem {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  description: string;
+  baseTemplate: string;
+  themeConfig: Partial<ThemeConfig>;
+  customCss: string;
+  isPublic: boolean;
+  installCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface KnowledgeNode {
+  id: string;
+  userId: string;
+  resumeId?: string | null;
+  type: string;
+  label: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface KnowledgeEdge {
+  id: string;
+  userId: string;
+  fromNodeId: string;
+  toNodeId: string;
+  relation: string;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
 }

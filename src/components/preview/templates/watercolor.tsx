@@ -69,7 +69,7 @@ export function WatercolorTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-5" data-section>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
             <div className="mb-2 flex items-center gap-2">
               <div className="h-6 w-1.5 rounded-full" style={{ background: `linear-gradient(to bottom, ${ACCENT}, ${PRIMARY})` }} />
               <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: PRIMARY }}>

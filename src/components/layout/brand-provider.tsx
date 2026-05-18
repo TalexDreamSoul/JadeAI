@@ -2,10 +2,10 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-export type Brand = 'mint' | 'blue' | 'pink';
+export type Brand = 'mint' | 'blue' | 'pink' | 'orange' | 'purple';
 
 const STORAGE_KEY = 'touchresume-brand';
-const VALID_BRANDS: Brand[] = ['mint', 'blue', 'pink'];
+const VALID_BRANDS: Brand[] = ['mint', 'blue', 'pink', 'orange', 'purple'];
 
 // Migrate legacy values (pre-rename) to current ids.
 function normalizeBrand(raw: string | null): Brand | null {

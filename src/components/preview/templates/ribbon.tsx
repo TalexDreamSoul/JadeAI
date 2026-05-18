@@ -58,7 +58,7 @@ export function RibbonTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-5" data-section>
+            <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
               {/* Ribbon tab section header */}
               <div className="relative mb-3 flex items-center">
                 <div className="relative z-10 rounded-r-md px-4 py-1 text-white" style={{ backgroundColor: RIBBON }}>

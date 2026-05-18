@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
   Share2,
@@ -49,6 +48,11 @@ interface ShareItem {
   label: string;
   shareUrl: string;
   hasPassword: boolean;
+  reviewEnabled: boolean;
+  downloadEnabled: boolean;
+  viewRequiresLogin: boolean;
+  anonymousShare: boolean;
+  hideSensitiveInfo: boolean;
   viewCount: number;
   isActive: boolean;
   createdAt: string;
@@ -83,6 +87,11 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
   const [creating, setCreating] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newReviewEnabled, setNewReviewEnabled] = useState(true);
+  const [newDownloadEnabled, setNewDownloadEnabled] = useState(true);
+  const [newViewRequiresLogin, setNewViewRequiresLogin] = useState(false);
+  const [newAnonymousShare, setNewAnonymousShare] = useState(false);
+  const [newHideSensitiveInfo, setNewHideSensitiveInfo] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -129,6 +138,11 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
         body: JSON.stringify({
           label: newLabel || undefined,
           password: newPassword || undefined,
+          reviewEnabled: newReviewEnabled,
+          downloadEnabled: newDownloadEnabled,
+          viewRequiresLogin: newViewRequiresLogin,
+          anonymousShare: newAnonymousShare,
+          hideSensitiveInfo: newHideSensitiveInfo,
         }),
       });
       if (res.ok) {
@@ -136,6 +150,11 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
         setShares((prev) => [data, ...prev]);
         setNewLabel('');
         setNewPassword('');
+        setNewReviewEnabled(true);
+        setNewDownloadEnabled(true);
+        setNewViewRequiresLogin(false);
+        setNewAnonymousShare(false);
+        setNewHideSensitiveInfo(false);
       }
     } catch {
       // silent
@@ -161,6 +180,20 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
       setShares((prev) =>
         prev.map((s) => (s.id === share.id ? { ...s, isActive: share.isActive } : s))
       );
+    }
+  };
+
+  const patchShareFlag = async (share: ShareItem, updates: Partial<ShareItem>) => {
+    setShares((prev) => prev.map((s) => (s.id === share.id ? { ...s, ...updates } : s)));
+    try {
+      const res = await fetch(`/api/resume/${resumeId}/shares/${share.id}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Failed');
+    } catch {
+      setShares((prev) => prev.map((s) => (s.id === share.id ? share : s)));
     }
   };
 
@@ -238,7 +271,7 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
                     {t('label')}
                   </label>
                   <Input
-                    placeholder={t('labelPlaceholder')}
+                    placeholder={t('defaultLabel', { count: shares.length + 1 })}
                     value={newLabel}
                     onChange={(e) => setNewLabel(e.target.value)}
                     className="h-9 text-sm"
@@ -281,10 +314,32 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
                   ) : (
                     <Plus className="h-4 w-4" />
                   )}
-                  {t('create')}
-                </Button>
-              </div>
-            </div>
+	                  {t('create')}
+	                </Button>
+	              </div>
+	              <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800">
+	                <label className="flex items-center gap-2">
+	                  <Switch checked={newReviewEnabled} onCheckedChange={setNewReviewEnabled} />
+	                  {t('allowReview')}
+	                </label>
+	                <label className="flex items-center gap-2">
+	                  <Switch checked={newDownloadEnabled} onCheckedChange={setNewDownloadEnabled} />
+	                  {t('allowDownload')}
+	                </label>
+                    <label className="flex items-center gap-2">
+                      <Switch checked={newViewRequiresLogin} onCheckedChange={setNewViewRequiresLogin} />
+                      {t('requireLoginToView')}
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <Switch checked={newAnonymousShare} onCheckedChange={setNewAnonymousShare} />
+                      {t('anonymousShare')}
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <Switch checked={newHideSensitiveInfo} onCheckedChange={setNewHideSensitiveInfo} />
+                      {t('hideSensitiveInfo')}
+                    </label>
+	              </div>
+	            </div>
 
             {/* ── Loading ── */}
             {loading && (
@@ -351,12 +406,27 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
                         {share.hasPassword && (
                           <Lock className="h-3 w-3 text-zinc-300 dark:text-zinc-600" />
                         )}
-                        {!share.isActive && (
-                          <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-medium uppercase tracking-wide">
-                            {t('inactive')}
-                          </span>
-                        )}
-                      </div>
+	                        {!share.isActive && (
+	                          <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-medium uppercase tracking-wide">
+	                            {t('inactive')}
+	                          </span>
+	                        )}
+	                        {share.reviewEnabled && (
+	                          <span className="text-[10px] text-brand font-medium uppercase tracking-wide">
+	                            {t('reviewEnabled')}
+	                          </span>
+	                        )}
+                            {share.viewRequiresLogin && (
+                              <span className="text-[10px] text-indigo-500 font-medium uppercase tracking-wide">
+                                {t('loginRequired')}
+                              </span>
+                            )}
+                            {share.hideSensitiveInfo && (
+                              <span className="text-[10px] text-amber-500 font-medium uppercase tracking-wide">
+                                {t('masked')}
+                              </span>
+                            )}
+	                      </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums mr-1">
                           <Eye className="h-3 w-3 inline -mt-px mr-0.5" />
@@ -406,9 +476,51 @@ export function ShareDialog({ open, onOpenChange, resumeId }: ShareDialogProps) 
                         ) : (
                           <><Copy className="h-3.5 w-3.5 mr-1" />{t('copyLink')}</>
                         )}
-                      </Button>
-                    </div>
-                  </div>
+	                      </Button>
+	                    </div>
+	                    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+	                      <label className="flex items-center gap-2">
+	                        <Switch
+	                          checked={share.reviewEnabled}
+	                          onCheckedChange={() => patchShareFlag(share, { reviewEnabled: !share.reviewEnabled })}
+	                          className="scale-90"
+	                        />
+	                        {t('allowReview')}
+	                      </label>
+	                      <label className="flex items-center gap-2">
+	                        <Switch
+	                          checked={share.downloadEnabled}
+	                          onCheckedChange={() => patchShareFlag(share, { downloadEnabled: !share.downloadEnabled })}
+	                          className="scale-90"
+	                        />
+	                        {t('allowDownload')}
+	                      </label>
+                          <label className="flex items-center gap-2">
+                            <Switch
+                              checked={share.viewRequiresLogin}
+                              onCheckedChange={() => patchShareFlag(share, { viewRequiresLogin: !share.viewRequiresLogin })}
+                              className="scale-90"
+                            />
+                            {t('requireLoginToView')}
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <Switch
+                              checked={share.anonymousShare}
+                              onCheckedChange={() => patchShareFlag(share, { anonymousShare: !share.anonymousShare })}
+                              className="scale-90"
+                            />
+                            {t('anonymousShare')}
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <Switch
+                              checked={share.hideSensitiveInfo}
+                              onCheckedChange={() => patchShareFlag(share, { hideSensitiveInfo: !share.hideSensitiveInfo })}
+                              className="scale-90"
+                            />
+                            {t('hideSensitiveInfo')}
+                          </label>
+	                    </div>
+	                  </div>
                 ))}
               </div>
             )}

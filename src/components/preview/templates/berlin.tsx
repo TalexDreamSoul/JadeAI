@@ -60,7 +60,7 @@ export function BerlinTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-6" data-section>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
               {/* Section header with geometric accent */}
               <div className="mb-3 flex items-center gap-2">
                 <div className="h-5 w-5 rounded-full" style={{ backgroundColor: BLUE }} />

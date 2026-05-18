@@ -61,7 +61,7 @@ export function ArtisticTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-6" data-section>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
               <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-sm font-extrabold uppercase tracking-widest" style={{ color: PRIMARY }}>
                   {section.title}

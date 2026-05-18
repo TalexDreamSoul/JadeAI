@@ -42,6 +42,159 @@ function TouchPureThumb() {
   );
 }
 
+function TouchSimpleThumb() {
+  return (
+    <div className="flex h-full flex-col p-2.5">
+      <div className="mb-2 border-b border-zinc-200 pb-1.5">
+        <div className="h-1.5 w-12 rounded-full bg-zinc-900" />
+        <div className="mt-1 flex gap-0.5">
+          <div className="h-0.5 w-5 rounded-full bg-zinc-300" />
+          <div className="h-0.5 w-4 rounded-full bg-zinc-300" />
+          <div className="h-0.5 w-5 rounded-full bg-zinc-300" />
+        </div>
+      </div>
+      <div className="flex-1 space-y-1.5">
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <div className="mb-0.5 h-1 w-9 rounded-full bg-zinc-700" />
+            <div className="space-y-0.5">
+              <div className="h-0.5 w-full rounded-full bg-zinc-200" />
+              <div className="h-0.5 w-4/5 rounded-full bg-zinc-200" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TouchFlatThumb() {
+  return (
+    <div className="flex h-full flex-col p-2">
+      <div className="mb-1.5 rounded-lg bg-zinc-100 p-1.5">
+        <div className="h-1.5 w-11 rounded-full bg-zinc-900" />
+        <div className="mt-0.5 h-0.5 w-14 rounded-full bg-zinc-300" />
+      </div>
+      <div className="flex-1 space-y-1">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-md border border-zinc-100 p-1">
+            <div className="mb-0.5 flex items-center gap-0.5">
+              <div className="h-1 w-1 rounded-full bg-[#0f766e]" />
+              <div className="h-0.5 w-8 rounded-full bg-[#0f766e]" />
+            </div>
+            <div className="h-0.5 w-full rounded-full bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TouchLineThumb() {
+  return (
+    <div className="flex h-full flex-col p-2.5">
+      <div className="mb-2 border-b-2 border-zinc-900 pb-1.5">
+        <div className="mb-0.5 h-0.5 w-7 rounded-full bg-zinc-300" />
+        <div className="h-2 w-12 rounded-full bg-zinc-900" />
+      </div>
+      <div className="flex-1 space-y-1.5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="grid grid-cols-[12px_1fr] gap-1">
+            <div className="border-r border-zinc-200 pr-1">
+              <div className="h-0.5 w-2 rounded-full bg-zinc-300" />
+              <div className="mt-0.5 h-1 w-2 rounded-full bg-zinc-700" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="h-0.5 w-full rounded-full bg-zinc-200" />
+              <div className="h-0.5 w-3/4 rounded-full bg-zinc-200" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TouchCompactThumb() {
+  return (
+    <div className="flex h-full flex-col p-2">
+      <div className="mb-1.5 border-b border-zinc-300 pb-1">
+        <div className="h-1.5 w-10 rounded-full bg-zinc-900" />
+        <div className="mt-0.5 h-0.5 w-12 rounded-full bg-zinc-300" />
+      </div>
+      <div className="flex-1 space-y-1">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i}>
+            <div className="mb-0.5 h-0.5 w-8 rounded-full bg-zinc-700" />
+            <div className="h-0.5 w-full rounded-full bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TouchCardThumb() {
+  return (
+    <div className="flex h-full flex-col bg-slate-50 p-1.5">
+      <div className="mb-1 rounded-lg bg-white p-1.5 shadow-sm">
+        <div className="h-0.5 w-5 rounded-full bg-[#4f46e5]" />
+        <div className="mt-0.5 h-1.5 w-10 rounded-full bg-zinc-900" />
+      </div>
+      <div className="grid flex-1 gap-1">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-lg bg-white p-1 shadow-sm">
+            <div className="h-0.5 w-8 rounded-full bg-zinc-700" />
+            <div className="mt-0.5 h-0.5 w-full rounded-full bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TouchGridThumb() {
+  return (
+    <div className="grid h-full grid-cols-[32%_1fr]">
+      <div className="bg-zinc-100 p-1.5">
+        <div className="h-2 w-2 rounded bg-zinc-300" />
+        <div className="mt-1 h-1 w-8 rounded-full bg-zinc-800" />
+        <div className="mt-1 space-y-0.5">
+          <div className="h-0.5 w-full rounded-full bg-zinc-300" />
+          <div className="h-0.5 w-4/5 rounded-full bg-zinc-300" />
+        </div>
+      </div>
+      <div className="space-y-1.5 p-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <div className="h-0.5 w-8 rounded-full bg-zinc-800" />
+            <div className="mt-0.5 h-0.5 w-full rounded-full bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TouchFocusThumb() {
+  return (
+    <div className="flex h-full flex-col p-2.5">
+      <div className="mb-2 border-l-4 border-orange-600 pl-1.5">
+        <div className="h-2 w-12 rounded-full bg-zinc-900" />
+        <div className="mt-0.5 h-0.5 w-12 rounded-full bg-zinc-300" />
+      </div>
+      <div className="flex-1 space-y-1.5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="border-l-2 border-zinc-200 pl-1.5">
+            <div className="h-0.5 w-8 rounded-full bg-orange-600" />
+            <div className="mt-0.5 h-0.5 w-full rounded-full bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ClassicThumb() {
   return (
     <div className="flex h-full flex-col p-2.5">
@@ -1420,6 +1573,13 @@ function MosaicThumb() {
 
 const thumbnails: Record<string, React.FC> = {
   'touch-pure': TouchPureThumb,
+  'touch-simple': TouchSimpleThumb,
+  'touch-flat': TouchFlatThumb,
+  'touch-line': TouchLineThumb,
+  'touch-compact': TouchCompactThumb,
+  'touch-card': TouchCardThumb,
+  'touch-grid': TouchGridThumb,
+  'touch-focus': TouchFocusThumb,
   classic: ClassicThumb,
   modern: ModernThumb,
   minimal: MinimalThumb,

@@ -11,6 +11,8 @@ import { useEditorStore } from '@/stores/editor-store';
 import { useSettingsStore, getAIHeaders } from '@/stores/settings-store';
 import { useAIChat } from '@/hooks/use-ai-chat';
 import { useMessagePagination } from '@/hooks/use-message-pagination';
+import { createLocalChatSession, deleteLocalChatSession, listLocalChatSessions, updateLocalChatSession } from '@/lib/local-chat-sessions';
+import { isLocalResumeId } from '@/lib/local-resumes';
 import { AIMessage } from './ai-message';
 import { AIInput } from './ai-input';
 
@@ -55,6 +57,7 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
 
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>();
+  const localChat = isLocalResumeId(resumeId);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>();
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -102,6 +105,23 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
 
   // Fetch sessions on mount
   useEffect(() => {
+    if (localChat) {
+      const localSessions = listLocalChatSessions(resumeId);
+      if (localSessions.length > 0) {
+        const normalized = localSessions.map((session) => ({ id: session.id, title: session.title, updatedAt: session.updatedAt }));
+        setSessions(normalized);
+        setActiveSessionId(normalized[0].id);
+        setInitialMessages(localSessions[0].messages);
+      } else {
+        const session = createLocalChatSession(resumeId);
+        setSessions([{ id: session.id, title: session.title, updatedAt: session.updatedAt }]);
+        setActiveSessionId(session.id);
+        setInitialMessages([]);
+      }
+      setSessionsLoaded(true);
+      return;
+    }
+
     const headers = getHeaders();
     fetch(`/api/ai/chat/sessions?resumeId=${resumeId}`, { headers })
       .then((res) => res.json())
@@ -121,9 +141,19 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
         setSessionsLoaded(true);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeId]);
+  }, [resumeId, localChat]);
 
   const createNewSession = useCallback(async (isInitial = false) => {
+    if (localChat) {
+      const session = createLocalChatSession(resumeId);
+      setSessions((prev) => [{ id: session.id, title: session.title, updatedAt: session.updatedAt }, ...prev]);
+      setActiveSessionId(session.id);
+      resetPagination();
+      setInitialMessages([]);
+      if (isInitial) setSessionsLoaded(true);
+      return;
+    }
+
     const headers = getHeaders();
     try {
       const res = await fetch('/api/ai/chat/sessions', {
@@ -145,23 +175,32 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
     } catch (err) {
       console.error('Failed to create session:', err);
     }
-  }, [resumeId, resetPagination]);
+  }, [localChat, resumeId, resetPagination]);
 
   const switchSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeSessionId) return;
     setActiveSessionId(sessionId);
     setHistoryOpen(false);
+    if (localChat) {
+      setInitialMessages(listLocalChatSessions(resumeId).find((session) => session.id === sessionId)?.messages || []);
+      resetPagination();
+      return;
+    }
     const msgs = await loadInitial(sessionId);
     setInitialMessages(msgs);
-  }, [activeSessionId, loadInitial]);
+  }, [activeSessionId, loadInitial, localChat, resetPagination, resumeId]);
 
   const deleteSession = useCallback(async (sessionId: string) => {
-    const headers = getHeaders();
-    try {
-      await fetch(`/api/ai/chat/sessions/${sessionId}`, { method: 'DELETE', headers });
-    } catch (err) {
-      console.error('Failed to delete session:', err);
-      return;
+    if (localChat) {
+      deleteLocalChatSession(resumeId, sessionId);
+    } else {
+      const headers = getHeaders();
+      try {
+        await fetch(`/api/ai/chat/sessions/${sessionId}`, { method: 'DELETE', headers });
+      } catch (err) {
+        console.error('Failed to delete session:', err);
+        return;
+      }
     }
 
     // Remove from state (pure updater — no side effects)
@@ -173,12 +212,17 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
       if (remaining.length > 0) {
         const nextId = remaining[0].id;
         setActiveSessionId(nextId);
-        loadInitial(nextId).then((msgs) => setInitialMessages(msgs));
+        if (localChat) {
+          setInitialMessages(listLocalChatSessions(resumeId).find((session) => session.id === nextId)?.messages || []);
+          resetPagination();
+        } else {
+          loadInitial(nextId).then((msgs) => setInitialMessages(msgs));
+        }
       } else {
         await createNewSession();
       }
     }
-  }, [activeSessionId, sessions, loadInitial, createNewSession]);
+  }, [activeSessionId, sessions, loadInitial, createNewSession, localChat, resetPagination, resumeId]);
 
   const { messages: chatMessages, input, handleInputChange, handleSubmit: originalHandleSubmit, isLoading, status, error: chatError, sendMessage } = useAIChat({
     resumeId,
@@ -222,6 +266,15 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
     return [...olderOnly, ...chatMessages];
   }, [historicalMessages, chatMessages]);
 
+  useEffect(() => {
+    if (!localChat || !activeSessionId || !sessionsLoaded) return;
+    updateLocalChatSession(resumeId, activeSessionId, { messages: displayMessages });
+    const updatedAt = Date.now();
+    setSessions((prev) => prev.map((session) => (
+      session.id === activeSessionId ? { ...session, updatedAt } : session
+    )));
+  }, [activeSessionId, displayMessages, localChat, resumeId, sessionsLoaded]);
+
   // Wrap handleSubmit to update session title on first message
   const handleSubmit = useCallback((e: React.FormEvent<HTMLFormElement>) => {
     const activeSession = sessions.find((s) => s.id === activeSessionId);
@@ -230,9 +283,12 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
       setSessions((prev) =>
         prev.map((s) => (s.id === activeSessionId ? { ...s, title: newTitle } : s))
       );
+      if (localChat && activeSessionId) {
+        updateLocalChatSession(resumeId, activeSessionId, { title: newTitle });
+      }
     }
     originalHandleSubmit(e);
-  }, [sessions, activeSessionId, input, originalHandleSubmit]);
+  }, [sessions, activeSessionId, input, originalHandleSubmit, localChat, resumeId]);
 
   // Smart auto-scroll: only scroll to bottom when user is near bottom
   useEffect(() => {

@@ -3,6 +3,8 @@ import { generateText, Output, type LanguageModel } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError, type AIConfig } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { isLocalResumeId } from '@/lib/local-resumes';
+import { normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { translateInputSchema } from '@/lib/ai/translate-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { z } from 'zod/v4';
@@ -30,8 +32,15 @@ const MAX_CONCURRENCY = 4;
 const singleSectionSchema = z.object({
   sectionId: z.string(),
   title: z.string(),
-  content: z.any(),
+  content: z.unknown(),
 });
+
+type ResumeSectionRecord = {
+  id: string;
+  type: string;
+  title: string;
+  content: unknown;
+};
 
 function getSectionTranslatePrompt(targetLanguage: string): string {
   const langName = LANGUAGE_NAMES[targetLanguage] || targetLanguage;
@@ -100,9 +109,6 @@ export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-    }
 
     const body = await request.json();
     const parsed = translateInputSchema.safeParse(body);
@@ -114,23 +120,35 @@ export async function POST(request: NextRequest) {
     }
 
     const { resumeId, targetLanguage, sectionIds, mode } = parsed.data;
+    const localResume = isLocalResumeId(resumeId) ? normalizeResumeSnapshot((body as Record<string, unknown>).resume, resumeId) : null;
 
-    const resume = await resumeRepository.findById(resumeId);
+    let resume: AIResumeSnapshot | NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>> | null = localResume;
+    if (!resume) {
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+      }
+      const cloudResume = await resumeRepository.findById(resumeId);
+      if (!cloudResume) {
+        return new Response(JSON.stringify({ error: 'Resume not found' }), { status: 404 });
+      }
+      if (cloudResume.userId !== user.id) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+      }
+      resume = cloudResume;
+    }
+
     if (!resume) {
       return new Response(JSON.stringify({ error: 'Resume not found' }), { status: 404 });
     }
-    if (resume.userId !== user.id) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-    }
 
-    // In copy mode, duplicate the resume first and translate the copy
+    // In copy mode, duplicate the cloud resume first. Local copies are created client-side.
     let targetResumeId = resumeId;
     let workingSections = resume.sections;
     let newResumeId: string | undefined;
 
-    if (mode === 'copy') {
+    if (mode === 'copy' && !localResume) {
       const newTitle = `${resume.title}-${LANGUAGE_NAMES[targetLanguage] || targetLanguage}`;
-      const duplicated = await resumeRepository.duplicate(resumeId, user.id, newTitle);
+      const duplicated = await resumeRepository.duplicate(resumeId, user!.id, newTitle);
       if (!duplicated) {
         return new Response(JSON.stringify({ error: 'Failed to duplicate resume' }), { status: 500 });
       }
@@ -140,8 +158,8 @@ export async function POST(request: NextRequest) {
     }
 
     const allSections = sectionIds
-      ? workingSections.filter((s: any) => sectionIds.includes(s.id))
-      : workingSections;
+      ? (workingSections as ResumeSectionRecord[]).filter((s) => sectionIds.includes(s.id))
+      : (workingSections as ResumeSectionRecord[]);
 
     if (allSections.length === 0) {
       return new Response(JSON.stringify({ error: 'No sections found to translate' }), { status: 400 });
@@ -151,22 +169,23 @@ export async function POST(request: NextRequest) {
     // Save stripped fields so we can merge them back after translation
     const strippedFields = new Map<string, Record<string, unknown>>();
 
-    const sectionsData = allSections.map((s: any) => {
+    const sectionsData = allSections.map((s) => {
       const fieldsToStrip = STRIP_FIELDS[s.type];
       let content = s.content;
 
       if (fieldsToStrip && content && typeof content === 'object') {
         const saved: Record<string, unknown> = {};
-        content = { ...content };
+        const mutableContent = { ...(content as Record<string, unknown>) };
         for (const field of fieldsToStrip) {
-          if (field in content) {
-            saved[field] = content[field];
-            delete content[field];
+          if (field in mutableContent) {
+            saved[field] = mutableContent[field];
+            delete mutableContent[field];
           }
         }
         if (Object.keys(saved).length > 0) {
           strippedFields.set(s.id, saved);
         }
+        content = mutableContent;
       }
 
       return {
@@ -177,7 +196,7 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig);
     const encoder = new TextEncoder();
 
@@ -194,9 +213,10 @@ export async function POST(request: NextRequest) {
         let completed = 0;
         const total = sectionsData.length;
         let failedCount = 0;
+        let results: PromiseSettledResult<z.infer<typeof singleSectionSchema>>[] = [];
 
         try {
-          const results = await runWithConcurrency<typeof sectionsData[number], z.infer<typeof singleSectionSchema>>(
+          results = await runWithConcurrency<typeof sectionsData[number], z.infer<typeof singleSectionSchema>>(
             sectionsData,
             MAX_CONCURRENCY,
             async (section) => {
@@ -204,14 +224,19 @@ export async function POST(request: NextRequest) {
 
               // Merge back stripped fields (e.g. avatar)
               const saved = strippedFields.get(translated.sectionId);
+              const translatedContent = translated.content && typeof translated.content === 'object'
+                ? translated.content as Record<string, unknown>
+                : {};
               const content = saved
-                ? { ...translated.content, ...saved }
+                ? { ...translatedContent, ...saved }
                 : translated.content;
 
-              await resumeRepository.updateSection(translated.sectionId, {
-                title: translated.title,
-                content,
-              });
+              if (!localResume) {
+                await resumeRepository.updateSection(translated.sectionId, {
+                  title: translated.title,
+                  content,
+                });
+              }
 
               return { ...translated, content };
             },
@@ -236,17 +261,42 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // Update resume language
-          await resumeRepository.update(targetResumeId, { language: targetLanguage });
+          // Update resume language for cloud resumes. Local resumes are updated client-side.
+          if (!localResume) {
+            await resumeRepository.update(targetResumeId, { language: targetLanguage });
+          }
         } catch (err) {
           console.error('Unexpected error during translation:', err);
         }
 
         // Always send done and close — even if something above threw
         try {
+          if (localResume) {
+            const translatedById = new Map(
+              results
+                .filter((result): result is PromiseFulfilledResult<z.infer<typeof singleSectionSchema>> => result.status === 'fulfilled')
+                .map((result) => [result.value.sectionId, result.value])
+            );
+            const localSections = (resume.sections as ResumeSectionRecord[]).map((section) => {
+              const translated = translatedById.get(section.id);
+              return translated ? { ...section, title: translated.title, content: translated.content } : section;
+            });
+            const updatedSections = sectionIds
+              ? localSections.filter((section) => sectionIds.includes(section.id))
+              : localSections;
+            send({
+              type: 'done',
+              resumeId: targetResumeId,
+              language: targetLanguage,
+              sections: updatedSections,
+              failedCount,
+            });
+            return;
+          }
+
           const updatedResume = await resumeRepository.findById(targetResumeId);
           const updatedSections = sectionIds
-            ? updatedResume?.sections.filter((s: any) => sectionIds.includes(s.id))
+            ? (updatedResume?.sections as ResumeSectionRecord[] | undefined)?.filter((s) => sectionIds.includes(s.id))
             : updatedResume?.sections;
 
           send({

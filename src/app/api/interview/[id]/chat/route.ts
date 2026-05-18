@@ -6,6 +6,7 @@ import { interviewRepository } from '@/lib/db/repositories/interview.repository'
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { buildInterviewSystemPrompt } from '@/lib/ai/interview-prompts';
 import { dbReady } from '@/lib/db';
+import type { InterviewerConfig } from '@/types/interview';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    const interviewerConfig = round.interviewerConfig as any;
+    const interviewerConfig = round.interviewerConfig as InterviewerConfig;
 
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig, modelId);
     const modelMessages = await convertToModelMessages(messages);
 

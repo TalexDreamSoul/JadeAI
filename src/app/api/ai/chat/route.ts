@@ -4,32 +4,52 @@ import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { chatRepository } from '@/lib/db/repositories/chat.repository';
+import { isLocalResumeId } from '@/lib/local-resumes';
+import { getResumeSectionsContext, normalizeResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { getSystemPrompt } from '@/lib/ai/prompts';
 import { createExecutableTools } from '@/lib/ai/tools';
 
 const MAX_ROUNDS = 10;
 const MAX_MESSAGES = MAX_ROUNDS * 2; // 10 rounds = 20 messages (user + assistant)
 
+type ToolCallLike = {
+  toolName?: string;
+  input?: unknown;
+};
+
+type ToolResultLike = {
+  output?: unknown;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
-    if (!user) {
+
+    const { messages, resumeId, model: modelId, sessionId, resume: resumeSnapshot } = await request.json();
+    const localResume = resumeId && isLocalResumeId(resumeId)
+      ? normalizeResumeSnapshot(resumeSnapshot, resumeId)
+      : null;
+
+    if (!user && !localResume) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const { messages, resumeId, model: modelId, sessionId } = await request.json();
-
     let resumeContext = '';
-    if (resumeId) {
+    if (localResume) {
+      resumeContext = getResumeSectionsContext(localResume);
+    } else if (resumeId) {
       const resume = await resumeRepository.findById(resumeId);
       if (resume) {
+        if (user && resume.userId !== user.id) {
+          return new Response('Forbidden', { status: 403 });
+        }
         resumeContext = JSON.stringify(resume.sections);
       }
     }
 
     // Save user message to DB before streaming
-    if (sessionId && messages.length > 0) {
+    if (!localResume && sessionId && messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.role === 'user') {
         const textPart = lastMessage.parts?.find((p: { type: string }) => p.type === 'text');
@@ -51,14 +71,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig, modelId);
     const modelMessages = await convertToModelMessages(messages);
 
     // Truncate to last N rounds for LLM context
     const truncatedMessages = modelMessages.slice(-MAX_MESSAGES);
 
-    const tools = resumeId ? createExecutableTools(resumeId, aiConfig) : undefined;
+    const tools = resumeId && !localResume ? createExecutableTools(resumeId, aiConfig) : undefined;
 
     const result = streamText({
       model,
@@ -68,7 +88,7 @@ export async function POST(request: NextRequest) {
       stopWhen: tools ? stepCountIs(25) : undefined,
       providerOptions: getProviderOptions(aiConfig),
       onFinish: async ({ text, steps }) => {
-        if (!sessionId) return;
+        if (localResume || !sessionId) return;
 
         // Build ordered parts array preserving the interleaving of text and tool calls
         const orderedParts: ({ type: 'text'; text: string } | { type: 'tool'; toolName: string; args: unknown; result: unknown })[] = [];
@@ -80,11 +100,13 @@ export async function POST(request: NextRequest) {
           const tcs = step.toolCalls ?? [];
           const trs = step.toolResults ?? [];
           for (let i = 0; i < tcs.length; i++) {
+            const toolCall = tcs[i] as ToolCallLike;
+            const toolResult = trs[i] as ToolResultLike | undefined;
             orderedParts.push({
               type: 'tool',
-              toolName: (tcs[i] as any).toolName,
-              args: (tcs[i] as any).input,
-              result: (trs[i] as any)?.output,
+              toolName: toolCall.toolName || 'tool',
+              args: toolCall.input,
+              result: toolResult?.output,
             });
           }
         }

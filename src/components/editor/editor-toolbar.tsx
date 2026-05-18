@@ -1,33 +1,111 @@
 'use client';
 
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
-import { ArrowLeft, Undo2, Redo2, Download, Upload, Settings, Palette, Save, FileSearch, Languages, FileText, SpellCheck, Share2, MoreHorizontal } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  Cloud,
+  CloudOff,
+  Download,
+  FileSearch,
+  FileText,
+  GitBranch,
+  Languages,
+  MoreHorizontal,
+  Palette,
+  Pencil,
+  Printer,
+  Redo2,
+  Save,
+  Share2,
+  SpellCheck,
+  Undo2,
+  Upload,
+  WandSparkles,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
+import { RenameTitleDialog } from '@/components/editor/rename-title-dialog';
 import { useEditorStore } from '@/stores/editor-store';
 import { useResumeStore } from '@/stores/resume-store';
 import { useUIStore } from '@/stores/ui-store';
-import { useSettingsStore } from '@/stores/settings-store';
-import { LocaleSwitcher } from '@/components/layout/locale-switcher';
+import { isLocalResumeId } from '@/lib/local-resumes';
+import { useIsLocalOnly, useSettingsStore } from '@/stores/settings-store';
 
 interface EditorToolbarProps {
   resumeId: string;
+  onPrint?: () => void;
 }
 
-export function EditorToolbar({ resumeId }: EditorToolbarProps) {
+export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
   const t = useTranslations('editor.toolbar');
   const router = useRouter();
   const { toggleThemeEditor, showThemeEditor, undo, redo, undoStack, redoStack } = useEditorStore();
-  const { isSaving, isDirty, currentResume, sections, reorderSections, save } = useResumeStore();
+  const { isSaving, isDirty, currentResume, reorderSections, save, setTitle, enableCloudSync, disableCloudSync } = useResumeStore();
   const { openModal } = useUIStore();
   const autoSave = useSettingsStore((s) => s.autoSave);
+  const localOnly = useIsLocalOnly();
+  const [renameOpen, setRenameOpen] = useState(false);
+  const isOfflineResume = isLocalResumeId(resumeId) || currentResume?.cloudSyncEnabled === false;
+  const cloudDisabled = localOnly || isOfflineResume;
+  const aiDisabled = false;
+  const cloudActionLabel = isOfflineResume ? t('uploadToCloud') : t('switchToLocalOnly');
+
+  const toggleCloudSync = async () => {
+    if (!currentResume) return;
+
+    if (cloudDisabled) {
+      const ok = await enableCloudSync();
+      if (ok) {
+        toast.success(t('cloudUploadSuccess'));
+        const nextId = useResumeStore.getState().currentResume?.id;
+        if (nextId && nextId !== resumeId) router.push(`/editor/${nextId}`);
+      } else {
+        toast.error(t('cloudUploadFailed'));
+      }
+      return;
+    }
+
+    const confirmed = window.confirm(t('cloudLocalConfirm'));
+    if (!confirmed) return;
+    const ok = await disableCloudSync();
+    if (ok) {
+      toast.success(t('cloudLocalSuccess'));
+      const nextId = useResumeStore.getState().currentResume?.id;
+      if (nextId && nextId !== resumeId) router.push(`/editor/${nextId}`);
+    } else {
+      toast.error(t('cloudLocalFailed'));
+    }
+  };
+
+  const saveVersion = async () => {
+    await save();
+    if (localOnly || isLocalResumeId(resumeId)) return;
+    await fetch(`/api/resume/${resumeId}/versions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof window !== 'undefined' && localStorage.getItem('touchresume_fingerprint')
+          ? { 'x-fingerprint': localStorage.getItem('touchresume_fingerprint') as string }
+          : {}),
+      },
+      body: JSON.stringify({ label: currentResume?.versionLabel || `v${new Date().toISOString()}` }),
+    }).catch(() => null);
+  };
+
+  const handleRename = (title: string) => {
+    setTitle(title);
+  };
 
   const handleUndo = () => {
     const snapshot = undo();
@@ -43,6 +121,67 @@ export function EditorToolbar({ resumeId }: EditorToolbarProps) {
     }
   };
 
+  const fileMenu = (
+    <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuItem onClick={() => openModal('export')} className="cursor-pointer">
+        <Download className="mr-2 h-4 w-4" />
+        {t('exportPdf')}
+      </DropdownMenuItem>
+      {onPrint && (
+        <DropdownMenuItem onClick={onPrint} className="cursor-pointer">
+          <Printer className="mr-2 h-4 w-4" />
+          {t('print')}
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem onClick={() => openModal('import')} className="cursor-pointer">
+        <Upload className="mr-2 h-4 w-4" />
+        {t('import')}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={cloudDisabled} onClick={() => openModal('share')} className="cursor-pointer">
+        <Share2 className="mr-2 h-4 w-4" />
+        {t('share')}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        disabled={localOnly && !isLocalResumeId(resumeId)}
+        onClick={toggleCloudSync}
+        className="cursor-pointer"
+      >
+        {isOfflineResume ? <Cloud className="mr-2 h-4 w-4" /> : <CloudOff className="mr-2 h-4 w-4" />}
+        {cloudActionLabel}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={cloudDisabled} onClick={saveVersion} className="cursor-pointer">
+        <GitBranch className="mr-2 h-4 w-4" />
+        {t('saveVersion')}
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+
+  const aiMenu = (
+    <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('ai-review')} className="cursor-pointer">
+        <WandSparkles className="mr-2 h-4 w-4" />
+        {t('aiReview')}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('jd-analysis')} className="cursor-pointer">
+        <FileSearch className="mr-2 h-4 w-4" />
+        {t('jdAnalysis')}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('translate')} className="cursor-pointer">
+        <Languages className="mr-2 h-4 w-4" />
+        {t('translate')}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('cover-letter')} className="cursor-pointer">
+        <FileText className="mr-2 h-4 w-4" />
+        {t('coverLetter')}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('grammar-check')} className="cursor-pointer">
+        <SpellCheck className="mr-2 h-4 w-4" />
+        {t('grammarCheck')}
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+
   return (
     <div className="flex h-12 items-center justify-between gap-2 border-b bg-white px-2 sm:px-3 dark:bg-background dark:border-zinc-800">
       <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
@@ -55,13 +194,21 @@ export function EditorToolbar({ resumeId }: EditorToolbarProps) {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
-        <span className="min-w-0 max-w-[8rem] truncate text-sm font-medium text-zinc-900 sm:max-w-48 dark:text-zinc-100">
-          {currentResume?.title || ''}
-        </span>
+        <button
+          type="button"
+          onClick={() => setRenameOpen(true)}
+          className="group flex min-w-0 max-w-[10rem] cursor-pointer items-center gap-1 rounded px-1 py-1 text-left hover:bg-zinc-100 sm:max-w-56 dark:hover:bg-zinc-800"
+          title={t('renameTitle')}
+        >
+          <span className="min-w-0 truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            {currentResume?.title || ''}
+          </span>
+          <Pencil className="h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-70 group-hover:opacity-100" />
+        </button>
         <span className="hidden text-xs text-zinc-400 sm:inline">
           {isSaving ? t('saving') : isDirty ? (autoSave ? '' : t('unsaved')) : t('autoSaved')}
         </span>
-        {!autoSave && isDirty && !isSaving && (
+        {!cloudDisabled && !autoSave && isDirty && !isSaving && (
           <Button
             variant="ghost"
             size="sm"
@@ -75,7 +222,6 @@ export function EditorToolbar({ resumeId }: EditorToolbarProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-        {/* Primary: undo/redo — always visible */}
         <Button
           variant="ghost"
           size="icon"
@@ -98,138 +244,94 @@ export function EditorToolbar({ resumeId }: EditorToolbarProps) {
         </Button>
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
 
-        {/* Desktop: show all secondary buttons */}
         <div className="hidden items-center gap-1 md:flex">
-          <Button
-            data-tour="export"
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('export')}
-            className="cursor-pointer"
-            title={t('exportPdf')}
-          >
-            <Download className="h-4 w-4" />
-            <span className="ml-1 text-xs hidden sm:inline">{t('exportPdf')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('import')}
-            className="cursor-pointer"
-            title={t('import')}
-          >
-            <Upload className="h-4 w-4" />
-            <span className="ml-1 text-xs hidden sm:inline">{t('import')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('share')}
-            className="cursor-pointer"
-            title={t('share')}
-          >
-            <Share2 className="h-4 w-4" />
-            <span className="ml-1 text-xs hidden sm:inline">{t('share')}</span>
-          </Button>
-          <Separator orientation="vertical" className="h-6" />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('jd-analysis')}
-            className="cursor-pointer"
-            title={t('jdAnalysis')}
-          >
-            <FileSearch className="h-4 w-4" />
-            <span className="ml-1 text-xs hidden sm:inline">{t('jdAnalysis')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('translate')}
-            className="cursor-pointer"
-            title={t('translate')}
-          >
-            <Languages className="h-4 w-4" />
-            <span className="ml-1 text-xs hidden sm:inline">{t('translate')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('cover-letter')}
-            className="cursor-pointer"
-            title={t('coverLetter')}
-          >
-            <FileText className="h-4 w-4" />
-            <span className="ml-1 text-xs hidden sm:inline">{t('coverLetter')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('grammar-check')}
-            className="cursor-pointer"
-            title={t('grammarCheck')}
-          >
-            <SpellCheck className="h-4 w-4" />
-            <span className="ml-1 text-xs hidden sm:inline">{t('grammarCheck')}</span>
-          </Button>
-          <Separator orientation="vertical" className="h-6" />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openModal('settings')}
-            className="cursor-pointer"
-            title={t('settings')}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button data-tour="export" variant="ghost" size="sm" className="cursor-pointer gap-1.5">
+                <Download className="h-4 w-4" />
+                <span className="text-xs">{t('fileActions')}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            {fileMenu}
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="cursor-pointer gap-1.5">
+                <WandSparkles className="h-4 w-4" />
+                <span className="text-xs">{t('aiActions')}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            {aiMenu}
+          </DropdownMenu>
         </div>
 
-        {/* Mobile: "more" dropdown */}
         <div className="md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openModal('export')}>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => openModal('export')} className="cursor-pointer">
                 <Download className="mr-2 h-4 w-4" />
                 {t('exportPdf')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal('import')}>
+              {onPrint && (
+                <DropdownMenuItem onClick={onPrint} className="cursor-pointer">
+                  <Printer className="mr-2 h-4 w-4" />
+                  {t('print')}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => openModal('import')} className="cursor-pointer">
                 <Upload className="mr-2 h-4 w-4" />
                 {t('import')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal('share')}>
+              <DropdownMenuItem disabled={cloudDisabled} onClick={() => openModal('share')} className="cursor-pointer">
                 <Share2 className="mr-2 h-4 w-4" />
                 {t('share')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal('jd-analysis')}>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('ai-review')} className="cursor-pointer">
+                <WandSparkles className="mr-2 h-4 w-4" />
+                {t('aiReview')}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('jd-analysis')} className="cursor-pointer">
                 <FileSearch className="mr-2 h-4 w-4" />
                 {t('jdAnalysis')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal('translate')}>
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('translate')} className="cursor-pointer">
                 <Languages className="mr-2 h-4 w-4" />
                 {t('translate')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal('cover-letter')}>
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('cover-letter')} className="cursor-pointer">
                 <FileText className="mr-2 h-4 w-4" />
                 {t('coverLetter')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal('grammar-check')}>
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('grammar-check')} className="cursor-pointer">
                 <SpellCheck className="mr-2 h-4 w-4" />
                 {t('grammarCheck')}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal('settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                {t('settings')}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={localOnly && !isLocalResumeId(resumeId)}
+                onClick={toggleCloudSync}
+                className="cursor-pointer"
+              >
+                {isOfflineResume ? <Cloud className="mr-2 h-4 w-4" /> : <CloudOff className="mr-2 h-4 w-4" />}
+                {cloudActionLabel}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={cloudDisabled} onClick={saveVersion} className="cursor-pointer">
+                <GitBranch className="mr-2 h-4 w-4" />
+                {t('saveVersion')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        {/* Primary: theme toggle — always visible */}
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
         <Button
           data-tour="theme"
@@ -242,9 +344,14 @@ export function EditorToolbar({ resumeId }: EditorToolbarProps) {
           <Palette className="h-4 w-4" />
           <span className="ml-1 hidden text-xs sm:inline">{t('theme')}</span>
         </Button>
-        <Separator orientation="vertical" className="hidden h-6 sm:block" />
-        <LocaleSwitcher />
       </div>
+
+      <RenameTitleDialog
+        open={renameOpen}
+        title={currentResume?.title || ''}
+        onOpenChange={setRenameOpen}
+        onSave={handleRename}
+      />
     </div>
   );
 }

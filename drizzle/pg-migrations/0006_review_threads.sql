@@ -1,0 +1,1 @@
+ALTER TABLE "resume_review_comments" ADD COLUMN "parent_comment_id" text;

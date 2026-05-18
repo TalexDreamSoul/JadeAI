@@ -1,7 +1,38 @@
 import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '../index';
-import { resumes, resumeSections } from '../schema';
+import { resumeReviewComments, resumeReviewPresence, resumes, resumeSections, resumeEvents, resumeShares, resumeVersions, users } from '../schema';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
+
+type ResumeCreateData = {
+  userId: string;
+  title?: string;
+  template?: string;
+  language?: string;
+  themeConfig?: unknown;
+  isBase?: boolean;
+  cloudSyncEnabled?: boolean;
+  sourceResumeId?: string | null;
+  baseResumeId?: string | null;
+  targetCompany?: string | null;
+  targetJobTitle?: string | null;
+  jobDescription?: string | null;
+  versionLabel?: string;
+};
+
+type ResumeUpdateData = Partial<{
+  title: string;
+  template: string;
+  themeConfig: unknown;
+  language: string;
+  isBase: boolean;
+  cloudSyncEnabled: boolean;
+  sourceResumeId: string | null;
+  baseResumeId: string | null;
+  targetCompany: string | null;
+  targetJobTitle: string | null;
+  jobDescription: string | null;
+  versionLabel: string;
+}>;
 
 export const resumeRepository = {
   async findAllByUserId(userId: string) {
@@ -15,7 +46,17 @@ export const resumeRepository = {
     return { ...resume[0], sections };
   },
 
-  async create(data: { userId: string; title?: string; template?: string; language?: string }) {
+  async findOwnerByResumeId(id: string) {
+    const rows = await db
+      .select({ id: users.id, name: users.name, email: users.email })
+      .from(resumes)
+      .leftJoin(users, eq(resumes.userId, users.id))
+      .where(eq(resumes.id, id))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  async create(data: ResumeCreateData) {
     const id = crypto.randomUUID();
     await db.insert(resumes).values({
       id,
@@ -23,12 +64,21 @@ export const resumeRepository = {
       title: data.title || '未命名简历',
       template: data.template || DEFAULT_TEMPLATE,
       language: data.language || 'zh',
+      ...(data.themeConfig !== undefined ? { themeConfig: data.themeConfig } : {}),
+      ...(data.isBase !== undefined ? { isBase: data.isBase } : {}),
+      ...(data.cloudSyncEnabled !== undefined ? { cloudSyncEnabled: data.cloudSyncEnabled } : {}),
+      ...(data.sourceResumeId !== undefined ? { sourceResumeId: data.sourceResumeId } : {}),
+      ...(data.baseResumeId !== undefined ? { baseResumeId: data.baseResumeId } : {}),
+      ...(data.targetCompany !== undefined ? { targetCompany: data.targetCompany } : {}),
+      ...(data.targetJobTitle !== undefined ? { targetJobTitle: data.targetJobTitle } : {}),
+      ...(data.jobDescription !== undefined ? { jobDescription: data.jobDescription } : {}),
+      ...(data.versionLabel !== undefined ? { versionLabel: data.versionLabel } : {}),
     });
     return this.findById(id);
   },
 
-  async update(id: string, data: Partial<{ title: string; template: string; themeConfig: unknown; language: string }>) {
-    await db.update(resumes).set({ ...data, updatedAt: new Date() } as any).where(eq(resumes.id, id));
+  async update(id: string, data: ResumeUpdateData) {
+    await db.update(resumes).set({ ...data, updatedAt: new Date() }).where(eq(resumes.id, id));
     return this.findById(id);
   },
 
@@ -36,7 +86,29 @@ export const resumeRepository = {
     await db.delete(resumes).where(eq(resumes.id, id));
   },
 
-  async duplicate(id: string, userId: string, titleOverride?: string) {
+  async purgeCloudDataForLocalOnly(id: string) {
+    await db.delete(resumeReviewComments).where(eq(resumeReviewComments.resumeId, id));
+    await db.delete(resumeReviewPresence).where(eq(resumeReviewPresence.resumeId, id));
+    await db.delete(resumeShares).where(eq(resumeShares.resumeId, id));
+    await db.delete(resumeVersions).where(eq(resumeVersions.resumeId, id));
+    await db.delete(resumeEvents).where(eq(resumeEvents.resumeId, id));
+    await db.delete(resumeSections).where(eq(resumeSections.resumeId, id));
+    await db.update(resumes).set({
+      cloudSyncEnabled: false,
+      shareToken: null,
+      isPublic: false,
+      sharePassword: null,
+      viewCount: 0,
+      updatedAt: new Date(),
+    }).where(eq(resumes.id, id));
+  },
+
+  async duplicate(
+    id: string,
+    userId: string,
+    titleOverride?: string,
+    options?: Partial<Pick<ResumeCreateData, 'baseResumeId' | 'targetCompany' | 'targetJobTitle' | 'jobDescription' | 'versionLabel'>>
+  ) {
     const original = await this.findById(id);
     if (!original) return null;
 
@@ -48,6 +120,12 @@ export const resumeRepository = {
       template: original.template,
       themeConfig: original.themeConfig,
       language: original.language,
+      sourceResumeId: original.id,
+      baseResumeId: options?.baseResumeId ?? original.baseResumeId ?? (original.isBase ? original.id : null),
+      targetCompany: options?.targetCompany ?? null,
+      targetJobTitle: options?.targetJobTitle ?? null,
+      jobDescription: options?.jobDescription ?? null,
+      versionLabel: options?.versionLabel ?? 'v1',
     });
 
     for (const section of original.sections) {
@@ -65,6 +143,57 @@ export const resumeRepository = {
     return this.findById(newId);
   },
 
+  async createVersion(resumeId: string, label: string, snapshot: unknown, source = 'manual') {
+    const id = crypto.randomUUID();
+    await db.insert(resumeVersions).values({
+      id,
+      resumeId,
+      label,
+      snapshot,
+      source,
+    });
+    const rows = await db.select().from(resumeVersions).where(eq(resumeVersions.id, id)).limit(1);
+    return rows[0] ?? null;
+  },
+
+  async findVersions(resumeId: string) {
+    return db
+      .select()
+      .from(resumeVersions)
+      .where(eq(resumeVersions.resumeId, resumeId))
+      .orderBy(desc(resumeVersions.createdAt));
+  },
+
+  async createEvent(data: {
+    resumeId: string;
+    userId: string;
+    type: string;
+    title: string;
+    description?: string;
+    metadata?: unknown;
+  }) {
+    const id = crypto.randomUUID();
+    await db.insert(resumeEvents).values({
+      id,
+      resumeId: data.resumeId,
+      userId: data.userId,
+      type: data.type,
+      title: data.title,
+      description: data.description || '',
+      metadata: data.metadata || {},
+    });
+    const rows = await db.select().from(resumeEvents).where(eq(resumeEvents.id, id)).limit(1);
+    return rows[0] ?? null;
+  },
+
+  async findEvents(resumeId: string) {
+    return db
+      .select()
+      .from(resumeEvents)
+      .where(eq(resumeEvents.resumeId, resumeId))
+      .orderBy(desc(resumeEvents.createdAt));
+  },
+
   // Share operations
   async findByShareToken(token: string) {
     const resume = await db.select().from(resumes).where(eq(resumes.shareToken, token)).limit(1);
@@ -74,11 +203,11 @@ export const resumeRepository = {
   },
 
   async incrementViewCount(id: string) {
-    await db.update(resumes).set({ viewCount: sql`${resumes.viewCount} + 1` } as any).where(eq(resumes.id, id));
+    await db.update(resumes).set({ viewCount: sql`${resumes.viewCount} + 1` }).where(eq(resumes.id, id));
   },
 
   async updateShareSettings(id: string, settings: { isPublic?: boolean; shareToken?: string | null; sharePassword?: string | null }) {
-    await db.update(resumes).set({ ...settings, updatedAt: new Date() } as any).where(eq(resumes.id, id));
+    await db.update(resumes).set({ ...settings, updatedAt: new Date() }).where(eq(resumes.id, id));
   },
 
   // Section operations
@@ -92,12 +221,13 @@ export const resumeRepository = {
       sortOrder: data.sortOrder,
       visible: data.visible ?? true,
       content: data.content || {},
-    } as any);
-    return db.select().from(resumeSections).where(eq(resumeSections.id, id)).limit(1).then((r: any[]) => r[0]);
+    });
+    const rows = await db.select().from(resumeSections).where(eq(resumeSections.id, id)).limit(1);
+    return rows[0] ?? null;
   },
 
   async updateSection(id: string, data: Partial<{ title: string; sortOrder: number; visible: boolean; content: unknown }>) {
-    await db.update(resumeSections).set({ ...data, updatedAt: new Date() } as any).where(eq(resumeSections.id, id));
+    await db.update(resumeSections).set({ ...data, updatedAt: new Date() }).where(eq(resumeSections.id, id));
   },
 
   async deleteSection(id: string) {

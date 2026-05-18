@@ -3,6 +3,8 @@ import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { isLocalResumeId } from '@/lib/local-resumes';
+import { normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { grammarCheckInputSchema, grammarCheckOutputSchema } from '@/lib/ai/grammar-check-schema';
 import { extractJson } from '@/lib/ai/extract-json';
@@ -33,13 +35,17 @@ You MUST return a JSON object with exactly these fields:
 
 CRITICAL: You are a JSON API. Your entire response must be a single valid JSON object starting with { and ending with }. Do NOT use markdown syntax. Do NOT wrap in code fences. Do NOT add any text before or after the JSON.`;
 
+type ResumeSectionRecord = {
+  id: string;
+  title: string;
+  type: string;
+  content: unknown;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const body = await request.json();
     const parsed = grammarCheckInputSchema.safeParse(body);
@@ -51,34 +57,45 @@ export async function POST(request: NextRequest) {
     }
 
     const { resumeId, sectionIds } = parsed.data;
+    const localResume = isLocalResumeId(resumeId) ? normalizeResumeSnapshot((body as Record<string, unknown>).resume, resumeId) : null;
 
-    // Fetch the resume and verify ownership
-    const resume = await resumeRepository.findById(resumeId);
+    let resume: AIResumeSnapshot | NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>> | null = localResume;
+    if (!resume) {
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const cloudResume = await resumeRepository.findById(resumeId);
+      if (!cloudResume) {
+        return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+      }
+      if (cloudResume.userId !== user.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      resume = cloudResume;
+    }
+
     if (!resume) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
-    }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Filter sections if specific IDs are provided
     const sectionsToCheck = sectionIds
-      ? resume.sections.filter((s: any) => sectionIds.includes(s.id))
-      : resume.sections;
+      ? (resume.sections as ResumeSectionRecord[]).filter((s) => sectionIds.includes(s.id))
+      : (resume.sections as ResumeSectionRecord[]);
 
     if (sectionsToCheck.length === 0) {
       return NextResponse.json({ error: 'No sections found to check' }, { status: 400 });
     }
 
     // Prepare sections data for AI analysis
-    const sectionsData = sectionsToCheck.map((s: any) => ({
+    const sectionsData = sectionsToCheck.map((s) => ({
       sectionId: s.id,
       sectionTitle: s.title,
       type: s.type,
       content: s.content,
     }));
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig);
 
     const result = await generateText({
@@ -93,18 +110,20 @@ export async function POST(request: NextRequest) {
     console.log('[grammar-check] raw response:\n', result.text);
     const checkResult = extractJson(result.text, grammarCheckOutputSchema);
 
-    // Persist to database
+    // Persist to database only for cloud resumes.
     let historyId: string | undefined;
-    try {
-      const saved = await analysisRepository.createGrammarCheck({
-        resumeId,
-        result: checkResult,
-        score: checkResult.score,
-        issueCount: checkResult.issues.length,
-      });
-      historyId = saved?.id;
-    } catch (e) {
-      console.error('Failed to save grammar check history:', e);
+    if (!localResume) {
+      try {
+        const saved = await analysisRepository.createGrammarCheck({
+          resumeId,
+          result: checkResult,
+          score: checkResult.score,
+          issueCount: checkResult.issues.length,
+        });
+        historyId = saved?.id;
+      } catch (e) {
+        console.error('Failed to save grammar check history:', e);
+      }
     }
 
     return NextResponse.json({ ...checkResult, historyId });

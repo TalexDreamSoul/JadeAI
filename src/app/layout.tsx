@@ -18,10 +18,10 @@ export default function RootLayout({
 }) {
   return (
     <html suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      <body suppressHydrationWarning className="font-sans antialiased">
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var b=localStorage.getItem('touchresume-brand');if(b==='boss'){b='mint';localStorage.setItem('touchresume-brand','mint');}else if(b==='jade'){b='blue';localStorage.setItem('touchresume-brand','blue');}if(b==='blue'||b==='pink'){document.documentElement.setAttribute('data-brand',b);}}catch(e){}})();`,
+            __html: `(function(){try{var b=localStorage.getItem('touchresume-brand');if(b==='boss'){b='mint';localStorage.setItem('touchresume-brand','mint');}else if(b==='jade'){b='blue';localStorage.setItem('touchresume-brand','blue');}if(b==='blue'||b==='pink'||b==='orange'||b==='purple'){document.documentElement.setAttribute('data-brand',b);}}catch(e){}})();`,
           }}
         />
         {children}

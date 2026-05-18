@@ -8,6 +8,8 @@ const OPTIONS: { id: Brand; swatch: string }[] = [
   { id: 'mint', swatch: '#00A77F' },
   { id: 'blue', swatch: '#2563eb' },
   { id: 'pink', swatch: '#ec4899' },
+  { id: 'orange', swatch: '#f97316' },
+  { id: 'purple', swatch: '#8b5cf6' },
 ];
 
 export function BrandSwitcher() {

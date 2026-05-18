@@ -28,7 +28,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, template, language, sections, themeConfig } = body;
+    const {
+      title,
+      template,
+      language,
+      sections,
+      themeConfig,
+      isBase,
+      cloudSyncEnabled,
+      baseResumeId,
+      targetCompany,
+      targetJobTitle,
+      jobDescription,
+      versionLabel,
+    } = body;
 
     const resume = await resumeRepository.create({
       userId: user.id,
@@ -36,6 +49,13 @@ export async function POST(request: NextRequest) {
       template: template || DEFAULT_TEMPLATE,
       language: language || 'zh',
       ...(themeConfig ? { themeConfig } : {}),
+      ...(isBase !== undefined ? { isBase } : {}),
+      ...(cloudSyncEnabled !== undefined ? { cloudSyncEnabled } : {}),
+      ...(baseResumeId !== undefined ? { baseResumeId } : {}),
+      ...(targetCompany !== undefined ? { targetCompany } : {}),
+      ...(targetJobTitle !== undefined ? { targetJobTitle } : {}),
+      ...(jobDescription !== undefined ? { jobDescription } : {}),
+      ...(versionLabel !== undefined ? { versionLabel } : {}),
     });
 
     if (resume) {

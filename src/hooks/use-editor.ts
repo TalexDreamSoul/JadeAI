@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useResumeStore } from '@/stores/resume-store';
 import { useEditorStore } from '@/stores/editor-store';
-import type { ResumeSection } from '@/types/resume';
+import { getLocalResume, isLocalResumeId } from '@/lib/local-resumes';
+import { useIsLocalOnly } from '@/stores/settings-store';
+import { normalizeThemeConfig } from '@/lib/theme-config';
+import type { ResumeSection, SectionContent } from '@/types/resume';
 
 function getHeaders() {
   const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
@@ -14,37 +17,50 @@ function getHeaders() {
 }
 
 export function useEditor(resumeId: string) {
+  const localOnly = useIsLocalOnly();
+  const [hasLoaded, setHasLoaded] = useState(false);
   const { setResume, sections, currentResume, updateSection, addSection, removeSection, reorderSections, reset: resetResume } = useResumeStore();
   const { pushSnapshot, reset: resetEditor } = useEditorStore();
 
   const loadResume = useCallback(async () => {
+    setHasLoaded(false);
+    resetResume();
     try {
+      if (localOnly || isLocalResumeId(resumeId)) {
+        const data = getLocalResume(resumeId);
+        if (data) setResume(data);
+        return;
+      }
+
       const res = await fetch(`/api/resume/${resumeId}`, { headers: getHeaders() });
       if (res.ok) {
         const data = await res.json();
         setResume({
           ...data,
           sections: data.sections || [],
-          themeConfig: data.themeConfig || {},
+          themeConfig: normalizeThemeConfig(data.themeConfig),
           createdAt: new Date(data.createdAt),
           updatedAt: new Date(data.updatedAt),
         });
       }
     } catch (error) {
       console.error('Failed to load resume:', error);
+    } finally {
+      setHasLoaded(true);
     }
-  }, [resumeId, setResume]);
+  }, [localOnly, resetResume, resumeId, setResume]);
 
   useEffect(() => {
     loadResume();
     return () => {
+      setHasLoaded(false);
       resetResume();
       resetEditor();
     };
   }, [loadResume, resetResume, resetEditor]);
 
   const handleUpdateSection = useCallback(
-    (sectionId: string, content: any) => {
+    (sectionId: string, content: Partial<SectionContent>) => {
       pushSnapshot(sections);
       updateSection(sectionId, content);
     },
@@ -83,5 +99,6 @@ export function useEditor(resumeId: string) {
     removeSection: handleRemoveSection,
     reorderSections: handleReorder,
     loadResume,
+    hasLoaded,
   };
 }

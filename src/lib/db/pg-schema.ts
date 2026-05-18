@@ -11,10 +11,13 @@ const epochNow = sql`extract(epoch from now())::integer`;
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   email: text('email').unique(),
+  passwordHash: text('password_hash'),
   name: text('name'),
   avatarUrl: text('avatar_url'),
   fingerprint: text('fingerprint').unique(),
   authType: text('auth_type').notNull(),
+  role: text('role').notNull().default('user'),
+  aiCredits: integer('ai_credits').notNull().default(20),
   settings: text('settings').default('{}'),
   createdAt: integer('created_at').notNull().default(epochNow),
   updatedAt: integer('updated_at').notNull().default(epochNow),
@@ -40,13 +43,41 @@ export const resumes = pgTable('resumes', {
   template: text('template').notNull().default('touch-pure'),
   themeConfig: text('theme_config').default('{}'),
   isDefault: integer('is_default').notNull().default(0),
+  isBase: integer('is_base').notNull().default(0),
+  cloudSyncEnabled: integer('cloud_sync_enabled').notNull().default(1),
   language: text('language').notNull().default('zh'),
+  sourceResumeId: text('source_resume_id'),
+  baseResumeId: text('base_resume_id'),
+  targetCompany: text('target_company'),
+  targetJobTitle: text('target_job_title'),
+  jobDescription: text('job_description'),
+  versionLabel: text('version_label').notNull().default('v1'),
   shareToken: text('share_token'),
   isPublic: integer('is_public').notNull().default(0),
   sharePassword: text('share_password'),
   viewCount: integer('view_count').notNull().default(0),
   createdAt: integer('created_at').notNull().default(epochNow),
   updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const resumeVersions = pgTable('resume_versions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  resumeId: text('resume_id').notNull(),
+  label: text('label').notNull(),
+  snapshot: text('snapshot').notNull(),
+  source: text('source').notNull().default('manual'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const resumeEvents = pgTable('resume_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  resumeId: text('resume_id').notNull(),
+  userId: text('user_id').notNull(),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
 });
 
 export const resumeSections = pgTable('resume_sections', {
@@ -84,10 +115,109 @@ export const resumeShares = pgTable('resume_shares', {
   token: text('token').notNull().unique(),
   label: text('label').notNull().default(''),
   password: text('password'),
+  reviewEnabled: integer('review_enabled').notNull().default(0),
+  downloadEnabled: integer('download_enabled').notNull().default(1),
+  viewRequiresLogin: integer('view_requires_login').notNull().default(0),
+  anonymousShare: integer('anonymous_share').notNull().default(0),
+  hideSensitiveInfo: integer('hide_sensitive_info').notNull().default(0),
   viewCount: integer('view_count').notNull().default(0),
   isActive: integer('is_active').notNull().default(1),
   createdAt: integer('created_at').notNull().default(epochNow),
   updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const resumeReviewComments = pgTable('resume_review_comments', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  shareId: text('share_id').notNull(),
+  resumeId: text('resume_id').notNull(),
+  parentCommentId: text('parent_comment_id'),
+  authorUserId: text('author_user_id'),
+  authorName: text('author_name').notNull().default('Reviewer'),
+  authorEmail: text('author_email'),
+  sectionId: text('section_id'),
+  selectedText: text('selected_text'),
+  anchor: text('anchor'),
+  content: text('content').notNull(),
+  status: text('status').notNull().default('open'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const resumeReviewPresence = pgTable('resume_review_presence', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  shareId: text('share_id').notNull(),
+  resumeId: text('resume_id').notNull(),
+  userId: text('user_id').notNull(),
+  reviewerName: text('reviewer_name').notNull().default('Reviewer'),
+  reviewerEmail: text('reviewer_email'),
+  reviewerAvatarUrl: text('reviewer_avatar_url'),
+  cursorX: integer('cursor_x').notNull().default(0),
+  cursorY: integer('cursor_y').notNull().default(0),
+  color: text('color').notNull().default('#10b981'),
+  lastSeenAt: integer('last_seen_at').notNull().default(epochNow),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const resumeAiReviews = pgTable('resume_ai_reviews', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  resumeId: text('resume_id').notNull(),
+  userId: text('user_id').notNull(),
+  result: text('result').notNull(),
+  score: integer('score').notNull().default(0),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const templateMarketItems = pgTable('template_market_items', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ownerUserId: text('owner_user_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  baseTemplate: text('base_template').notNull().default('touch-pure'),
+  themeConfig: text('theme_config').notNull().default('{}'),
+  customCss: text('custom_css').notNull().default(''),
+  isPublic: integer('is_public').notNull().default(0),
+  installCount: integer('install_count').notNull().default(0),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const aiChannels = pgTable('ai_channels', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  provider: text('provider').notNull(),
+  apiKey: text('api_key').notNull(),
+  baseUrl: text('base_url').notNull(),
+  model: text('model').notNull(),
+  openAIEndpoint: text('openai_endpoint').notNull().default('chat'),
+  weight: integer('weight').notNull().default(1),
+  enabled: integer('enabled').notNull().default(1),
+  lastUsedAt: integer('last_used_at'),
+  failureCount: integer('failure_count').notNull().default(0),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const knowledgeNodes = pgTable('knowledge_nodes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  resumeId: text('resume_id'),
+  type: text('type').notNull(),
+  label: text('label').notNull(),
+  content: text('content').notNull().default(''),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const knowledgeEdges = pgTable('knowledge_edges', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  fromNodeId: text('from_node_id').notNull(),
+  toNodeId: text('to_node_id').notNull(),
+  relation: text('relation').notNull().default('related'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
 });
 
 export const jdAnalyses = pgTable('jd_analyses', {

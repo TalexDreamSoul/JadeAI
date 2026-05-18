@@ -27,23 +27,48 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => ({}));
-    const { label, password, isActive } = body as {
+    const { label, password, isActive, reviewEnabled, downloadEnabled, viewRequiresLogin, anonymousShare, hideSensitiveInfo } = body as {
       label?: string;
       password?: string | null;
       isActive?: boolean;
+      reviewEnabled?: boolean;
+      downloadEnabled?: boolean;
+      viewRequiresLogin?: boolean;
+      anonymousShare?: boolean;
+      hideSensitiveInfo?: boolean;
     };
 
-    const updates: { label?: string; password?: string | null; isActive?: boolean } = {};
+    const updates: {
+      label?: string;
+      password?: string | null;
+      isActive?: boolean;
+      reviewEnabled?: boolean;
+      downloadEnabled?: boolean;
+      viewRequiresLogin?: boolean;
+      anonymousShare?: boolean;
+      hideSensitiveInfo?: boolean;
+    } = {};
     if (label !== undefined) updates.label = label;
     if (password !== undefined) {
       updates.password = password ? await hashPassword(password) : null;
     }
     if (isActive !== undefined) updates.isActive = isActive;
+    if (reviewEnabled !== undefined) updates.reviewEnabled = reviewEnabled;
+    if (downloadEnabled !== undefined) updates.downloadEnabled = downloadEnabled;
+    if (viewRequiresLogin !== undefined) updates.viewRequiresLogin = viewRequiresLogin;
+    if (anonymousShare !== undefined) updates.anonymousShare = anonymousShare;
+    if (hideSensitiveInfo !== undefined) updates.hideSensitiveInfo = hideSensitiveInfo;
 
     const updated = await shareRepository.update(shareId, updates);
     console.log('[shares/PATCH] updated share:', shareId, 'isActive:', updated?.isActive, 'updates:', updates);
     return NextResponse.json({
       ...updated,
+      reviewEnabled: !!updated?.reviewEnabled,
+      downloadEnabled: !!updated?.downloadEnabled,
+      viewRequiresLogin: !!updated?.viewRequiresLogin,
+      anonymousShare: !!updated?.anonymousShare,
+      hideSensitiveInfo: !!updated?.hideSensitiveInfo,
+      isActive: !!updated?.isActive,
       hasPassword: !!updated?.password,
       password: undefined,
     });

@@ -6,6 +6,7 @@ import { DefaultChatTransport } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResumeStore } from '@/stores/resume-store';
 import { getAIHeaders, hasUsableAIConfig } from '@/stores/settings-store';
+import { isLocalResumeId } from '@/lib/local-resumes';
 import { generateId } from '@/lib/utils';
 
 interface UseAIChatOptions {
@@ -29,7 +30,15 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
     () =>
       new DefaultChatTransport({
         api: '/api/ai/chat',
-        body: () => ({ resumeId, model: modelRef.current, sessionId: sessionIdRef.current }),
+        body: () => {
+          const current = useResumeStore.getState().currentResume;
+          return {
+            resumeId,
+            model: modelRef.current,
+            sessionId: sessionIdRef.current,
+            ...(isLocalResumeId(resumeId) && current ? { resume: current } : {}),
+          };
+        },
         // headers must be a function — useChat never updates the transport ref,
         // so a static object would freeze stale values from before store hydration.
         headers: () => {
@@ -53,7 +62,7 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
   const completedToolCountRef = useRef(0);
 
   const reloadResume = useCallback(async () => {
-    if (!resumeId) return;
+    if (!resumeId || isLocalResumeId(resumeId)) return;
     try {
       const store = useResumeStore.getState();
       // Cancel any pending autosave to prevent overwriting server data

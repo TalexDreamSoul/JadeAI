@@ -57,7 +57,7 @@ export function CardTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-4" data-section>
+          <div key={section.id} className="mb-4" data-section data-section-id={section.id}>
             <div className="rounded-lg p-4 shadow-sm" style={{ backgroundColor: CARD_BG, border: '1px solid #e4e4e7' }}>
               <div className="mb-3 flex items-center gap-2">
                 <div className="h-5 w-1 rounded-full" style={{ backgroundColor: ACCENT }} />

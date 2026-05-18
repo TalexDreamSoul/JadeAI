@@ -3,6 +3,13 @@ import { EXPORT_TAILWIND_CSS } from '@/lib/pdf/export-tailwind-css';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import { generateQrSvg } from '@/lib/qrcode';
 import { buildTouchPureHtml } from './templates/touch-pure';
+import { buildTouchSimpleHtml } from './templates/touch-simple';
+import { buildTouchFlatHtml } from './templates/touch-flat';
+import { buildTouchLineHtml } from './templates/touch-line';
+import { buildTouchCompactHtml } from './templates/touch-compact';
+import { buildTouchCardHtml } from './templates/touch-card';
+import { buildTouchGridHtml } from './templates/touch-grid';
+import { buildTouchFocusHtml } from './templates/touch-focus';
 import { buildClassicHtml } from './templates/classic';
 import { buildModernHtml } from './templates/modern';
 import { buildMinimalHtml } from './templates/minimal';
@@ -78,6 +85,13 @@ const SIDEBAR_DARK_TEMPLATES: Record<string, { bg: string; width: string }> = {
 
 const TEMPLATE_BUILDERS: Record<string, (r: ResumeWithSections) => string> = {
   'touch-pure': buildTouchPureHtml,
+  'touch-simple': buildTouchSimpleHtml,
+  'touch-flat': buildTouchFlatHtml,
+  'touch-line': buildTouchLineHtml,
+  'touch-compact': buildTouchCompactHtml,
+  'touch-card': buildTouchCardHtml,
+  'touch-grid': buildTouchGridHtml,
+  'touch-focus': buildTouchFocusHtml,
   classic: buildClassicHtml,
   modern: buildModernHtml,
   minimal: buildMinimalHtml,

@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useEditor } from '@/hooks/use-editor';
 import { useFingerprint } from '@/hooks/use-fingerprint';
@@ -9,12 +9,12 @@ import { EditorToolbar } from '@/components/editor/editor-toolbar';
 import { EditorSidebar } from '@/components/editor/editor-sidebar';
 import { EditorCanvas } from '@/components/editor/editor-canvas';
 import { ThemeEditor } from '@/components/editor/theme-editor';
-import { EditorPreviewPanel } from '@/components/editor/editor-preview-panel';
+import { EditorPreviewTabs } from '@/components/editor/editor-preview-tabs';
 import { EditorMobileTabBar } from '@/components/editor/editor-mobile-tab-bar';
 import { AIChatBubble } from '@/components/ai/ai-chat-bubble';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from '@/components/ui/button';
 import { List } from "lucide-react";
-import { SettingsDialog } from '@/components/settings/settings-dialog';
 import { JdAnalysisDialog } from '@/components/editor/jd-analysis-dialog';
 import { TranslateDialog } from '@/components/editor/translate-dialog';
 import { ExportDialog } from '@/components/editor/export-dialog';
@@ -22,12 +22,16 @@ import { ImportDialog } from '@/components/editor/import-dialog';
 import { ShareDialog } from '@/components/editor/share-dialog';
 import { CoverLetterDialog } from '@/components/editor/cover-letter-dialog';
 import { GrammarCheckDialog } from '@/components/editor/grammar-check-dialog';
+import { AIReviewDialog } from '@/components/editor/ai-review-dialog';
 import { TourOverlay, type TourStepConfig } from '@/components/tour/tour-overlay';
 import { useEditorStore } from '@/stores/editor-store';
 import { useUIStore } from '@/stores/ui-store';
-import { useSettingsStore } from '@/stores/settings-store';
+import { useSettingsStore, useIsLocalOnly } from '@/stores/settings-store';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SettingsLauncher } from '@/components/layout/settings-launcher';
+import { SettingsDialog } from '@/components/settings/settings-dialog';
+import { useRouter, usePathname } from '@/i18n/routing';
 import { cn } from '@/lib/utils';
 
 const EDITOR_TOUR_STEPS: TourStepConfig[] = [
@@ -40,18 +44,29 @@ const EDITOR_TOUR_STEPS: TourStepConfig[] = [
 
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const pathname = usePathname();
   const { isLoading: fpLoading } = useFingerprint();
-  const { resume, sections, updateSection, addSection, removeSection, reorderSections } = useEditor(id);
+  const { resume, sections, updateSection, addSection, removeSection, reorderSections, hasLoaded } = useEditor(id);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { showThemeEditor, mobileActiveTab } = useEditorStore();
   const { activeModal, openModal, closeModal } = useUIStore();
-  const { hydrate, _hydrated } = useSettingsStore();
+  const { hydrate, _hydrated, _localOnlyHydrated } = useSettingsStore();
+  const localOnly = useIsLocalOnly();
   const startTour = useTourStore((s) => s.startTour);
+  const visibleSections = useMemo(
+    () => sections.filter((section) => section.visible !== false),
+    [sections]
+  );
+  const printResume = () => {
+    const target = `${pathname.replace(/\/$/, '')}/print`;
+    window.open(target, '_blank', 'noopener,noreferrer');
+  };
 
   useEffect(() => {
-    if (!_hydrated) hydrate();
-  }, [_hydrated, hydrate]);
+    if (!_hydrated || (!localOnly && _localOnlyHydrated)) hydrate(localOnly);
+  }, [_hydrated, _localOnlyHydrated, hydrate, localOnly]);
 
   // Catch unhandled promise rejections (e.g. "Failed to find Server Action")
   // to prevent page crash — show toast instead
@@ -79,7 +94,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     return () => clearTimeout(timer);
   }, [resume, startTour]);
 
-  if (fpLoading || !resume) {
+  if (fpLoading || (!hasLoaded && !resume)) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="space-y-4 w-64">
@@ -91,9 +106,25 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     );
   }
 
+  if (hasLoaded && !resume) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-zinc-50 px-6 text-center dark:bg-zinc-950">
+        <div className="max-w-sm space-y-4 rounded-2xl border bg-white p-6 shadow-sm dark:bg-zinc-900">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">简历未找到</h1>
+          <p className="text-sm text-zinc-500">这份简历可能不存在，或当前是未登录的本地模式，无法读取云端简历。</p>
+          <Button onClick={() => router.push('/dashboard')} className="cursor-pointer bg-brand hover:bg-brand-hover">
+            返回工作台
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!resume) return null;
+
   return (
     <div className="flex h-screen flex-col">
-      <EditorToolbar resumeId={id} />
+      <EditorToolbar resumeId={id} onPrint={printResume} />
       <EditorMobileTabBar />
 
       <div className="flex flex-1 overflow-hidden">
@@ -112,7 +143,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           isMobile && mobileActiveTab !== "edit" && "hidden"
         )}>
           <EditorCanvas
-            sections={sections}
+            sections={visibleSections}
             onUpdateSection={updateSection}
             onRemoveSection={removeSection}
             onReorderSections={reorderSections}
@@ -126,9 +157,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           "min-w-0 flex-1 overflow-hidden md:flex-[6]",
           isMobile && mobileActiveTab !== "preview" && "hidden"
         )}>
-          <EditorPreviewPanel />
+          <EditorPreviewTabs resumeId={id} />
         </div>
       </div>
+
+      <SettingsLauncher variant="profile" />
 
       {/* Mobile sidebar FAB */}
       <button
@@ -188,6 +221,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       <GrammarCheckDialog
         open={activeModal === 'grammar-check'}
         onOpenChange={(open) => open ? openModal('grammar-check') : closeModal()}
+        resumeId={id}
+      />
+      <AIReviewDialog
+        open={activeModal === 'ai-review'}
+        onOpenChange={(open) => open ? openModal('ai-review') : closeModal()}
         resumeId={id}
       />
       <TourOverlay tourId="editor" steps={EDITOR_TOUR_STEPS} />

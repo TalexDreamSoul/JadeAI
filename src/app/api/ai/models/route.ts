@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { getServerAIConfig, hasServerAIConfig } from '@/lib/ai/server-config';
+import { auth } from '@/lib/auth/config';
+import { selectServerAIConfig } from '@/lib/ai/server-config';
 
 async function fetchModels(provider: string, apiKey: string, baseURL: string) {
   let models: { id: string }[] = [];
@@ -53,16 +54,23 @@ async function fetchModels(provider: string, apiKey: string, baseURL: string) {
 export async function GET(request: NextRequest) {
   const requestedMode = request.headers.get('x-ai-mode');
 
-  if (requestedMode !== 'custom' && hasServerAIConfig()) {
-    const serverConfig = getServerAIConfig();
-    try {
-      const models = await fetchModels(serverConfig.provider, serverConfig.apiKey, serverConfig.baseURL);
-      if (!models.some((m) => m.id === serverConfig.model)) {
-        models.unshift({ id: serverConfig.model });
+  if (requestedMode !== 'custom') {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return Response.json({ models: [], mode: 'server', loginRequired: true });
+    }
+
+    const serverConfig = await selectServerAIConfig();
+    if (serverConfig.apiKey) {
+      try {
+        const models = await fetchModels(serverConfig.provider, serverConfig.apiKey, serverConfig.baseURL);
+        if (!models.some((m) => m.id === serverConfig.model)) {
+          models.unshift({ id: serverConfig.model });
+        }
+        return Response.json({ models, mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint });
+      } catch {
+        return Response.json({ models: [{ id: serverConfig.model }], mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint });
       }
-      return Response.json({ models, mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint });
-    } catch {
-      return Response.json({ models: [{ id: serverConfig.model }], mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint });
     }
   }
 

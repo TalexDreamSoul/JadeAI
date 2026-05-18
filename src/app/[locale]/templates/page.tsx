@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Eye, Loader2 } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, Store, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -17,8 +20,19 @@ import { useFingerprint } from '@/hooks/use-fingerprint';
 import { ResumePreview } from '@/components/preview/resume-preview';
 import { TourOverlay, type TourStepConfig } from '@/components/tour/tour-overlay';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
-import { templateLabelsMap as templateLabelKeys } from '@/lib/template-labels';
+import { getTemplateLabel } from '@/lib/template-labels';
 import type { Resume } from '@/types/resume';
+
+interface MarketTemplate {
+  id: string;
+  name: string;
+  description: string;
+  baseTemplate: string;
+  themeConfig: Record<string, unknown>;
+  customCss: string;
+  isPublic: boolean;
+  installCount: number;
+}
 
 const TEMPLATES_TOUR_STEPS: TourStepConfig[] = [
   { target: 'tpl-preview', placement: 'bottom', i18nKey: 'tplPreview' },
@@ -229,6 +243,14 @@ export default function TemplatesPage() {
   const { fingerprint } = useFingerprint();
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null);
   const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null);
+  const [marketTemplates, setMarketTemplates] = useState<MarketTemplate[]>([]);
+  const [publishForm, setPublishForm] = useState({
+    name: '',
+    description: '',
+    baseTemplate: 'touch-pure',
+    customCss: '',
+    isPublic: true,
+  });
   const startTour = useTourStore((s) => s.startTour);
 
   useEffect(() => {
@@ -237,6 +259,15 @@ export default function TemplatesPage() {
     const timer = setTimeout(() => startTour('templates', TEMPLATES_TOUR_STEPS.length), 800);
     return () => clearTimeout(timer);
   }, [startTour]);
+
+  useEffect(() => {
+    const headers: Record<string, string> = {};
+    if (fingerprint) headers['x-fingerprint'] = fingerprint;
+    fetch('/api/templates', { headers })
+      .then((res) => res.ok ? res.json() : [])
+      .then(setMarketTemplates)
+      .catch(() => setMarketTemplates([]));
+  }, [fingerprint]);
 
   const handleUseTemplate = async (template: string) => {
     setCreatingTemplate(template);
@@ -247,6 +278,47 @@ export default function TemplatesPage() {
       }
     } finally {
       setCreatingTemplate(null);
+    }
+  };
+
+  const handleUseMarketTemplate = async (item: MarketTemplate) => {
+    setCreatingTemplate(item.id);
+    try {
+      const resume = await createResume({
+        title: item.name,
+        template: item.baseTemplate,
+        themeConfig: {
+          ...item.themeConfig,
+          advanced: {
+            ...((item.themeConfig?.advanced as Record<string, unknown> | undefined) || {}),
+            customCss: item.customCss,
+          },
+        },
+      });
+      if (resume) {
+        fetch(`/api/templates/${item.id}/install`, { method: 'POST' }).catch(() => {});
+        router.push(`/editor/${resume.id}`);
+      }
+    } finally {
+      setCreatingTemplate(null);
+    }
+  };
+
+  const handlePublishTemplate = async () => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (fingerprint) headers['x-fingerprint'] = fingerprint;
+    const res = await fetch('/api/templates', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        ...publishForm,
+        themeConfig: {},
+      }),
+    });
+    if (res.ok) {
+      const item = await res.json();
+      setMarketTemplates((prev) => [item, ...prev]);
+      setPublishForm({ ...publishForm, name: '', description: '', customCss: '' });
     }
   };
 
@@ -268,10 +340,81 @@ export default function TemplatesPage() {
         </p>
       </div>
 
+      <section className="mb-8 space-y-4">
+        <div className="flex items-center gap-2">
+          <Store className="h-5 w-5 text-brand" />
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t('templates.market')}</h2>
+        </div>
+        <div className="grid gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 md:grid-cols-[1fr_1fr_1fr_auto]">
+          <Input
+            value={publishForm.name}
+            onChange={(e) => setPublishForm({ ...publishForm, name: e.target.value })}
+            placeholder={t('templates.marketName')}
+          />
+          <Input
+            value={publishForm.baseTemplate}
+            onChange={(e) => setPublishForm({ ...publishForm, baseTemplate: e.target.value })}
+            placeholder={t('templates.marketBase')}
+          />
+          <Textarea
+            value={publishForm.customCss}
+            onChange={(e) => setPublishForm({ ...publishForm, customCss: e.target.value })}
+            placeholder={t('templates.marketCss')}
+            className="min-h-10 md:col-span-1"
+          />
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-zinc-500">
+              <Switch
+                checked={publishForm.isPublic}
+                onCheckedChange={(checked) => setPublishForm({ ...publishForm, isPublic: checked })}
+              />
+              {t('templates.public')}
+            </label>
+            <Button
+              onClick={handlePublishTemplate}
+              disabled={!publishForm.name.trim()}
+              className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"
+            >
+              <UploadCloud className="h-4 w-4" />
+              {t('templates.publish')}
+            </Button>
+          </div>
+          <Input
+            value={publishForm.description}
+            onChange={(e) => setPublishForm({ ...publishForm, description: e.target.value })}
+            placeholder={t('templates.marketDescription')}
+            className="md:col-span-4"
+          />
+        </div>
+        {marketTemplates.length > 0 && (
+          <div className="grid gap-3 md:grid-cols-3">
+            {marketTemplates.map((item) => (
+              <div key={item.id} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <h3 className="truncate text-sm font-semibold">{item.name}</h3>
+                  <span className="text-xs text-zinc-400">{item.installCount}</span>
+                </div>
+                <p className="mb-3 line-clamp-2 text-xs text-zinc-500">{item.description || item.baseTemplate}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleUseMarketTemplate(item)}
+                  disabled={creatingTemplate === item.id}
+                  className="w-full cursor-pointer"
+                >
+                  {creatingTemplate === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {t('templates.useTemplate')}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {TEMPLATES.map((template, idx) => {
           const mockResume = buildMockResume(template);
-          const label = t(templateLabelKeys[template]);
+          const label = getTemplateLabel(template, t);
           const isCreating = creatingTemplate === template;
           const isFirst = idx === 0;
 
@@ -349,7 +492,7 @@ export default function TemplatesPage() {
         <DialogContent className="flex h-[90vh] w-[90vw] max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[900px]">
           <DialogHeader className="shrink-0 border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <DialogTitle>
-              {previewTemplate && t(templateLabelKeys[previewTemplate])}
+              {previewTemplate && getTemplateLabel(previewTemplate, t)}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 
+type ResumeSectionInput = {
+  id: string;
+  type: string;
+  title: string;
+  sortOrder: number;
+  visible?: boolean;
+  content?: unknown;
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -49,23 +58,77 @@ export async function PUT(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const beforeUpdate = resume;
     const body = await request.json();
-    const { title, template, themeConfig, sections } = body;
+    const {
+      title,
+      template,
+      themeConfig,
+      language,
+      sections,
+      isBase,
+      cloudSyncEnabled,
+      baseResumeId,
+      targetCompany,
+      targetJobTitle,
+      jobDescription,
+      versionLabel,
+    } = body;
+
+    if (resume.cloudSyncEnabled === false || cloudSyncEnabled === false) {
+      await resumeRepository.update(id, {
+        cloudSyncEnabled: false,
+        ...(title !== undefined ? { title } : {}),
+        ...(isBase !== undefined ? { isBase } : {}),
+        ...(baseResumeId !== undefined ? { baseResumeId } : {}),
+        ...(targetCompany !== undefined ? { targetCompany } : {}),
+        ...(targetJobTitle !== undefined ? { targetJobTitle } : {}),
+        ...(jobDescription !== undefined ? { jobDescription } : {}),
+        ...(versionLabel !== undefined ? { versionLabel } : {}),
+      });
+      const updated = await resumeRepository.findById(id);
+      return NextResponse.json({
+        ...updated,
+        localOnly: true,
+        message: 'Cloud sync is disabled for this resume. Content changes stay in the browser draft.',
+      });
+    }
 
     // Update resume metadata
-    if (title || template || themeConfig) {
+    if (
+      title !== undefined ||
+      template !== undefined ||
+      themeConfig !== undefined ||
+      language !== undefined ||
+      isBase !== undefined ||
+      cloudSyncEnabled !== undefined ||
+      baseResumeId !== undefined ||
+      targetCompany !== undefined ||
+      targetJobTitle !== undefined ||
+      jobDescription !== undefined ||
+      versionLabel !== undefined
+    ) {
       await resumeRepository.update(id, {
-        ...(title && { title }),
-        ...(template && { template }),
-        ...(themeConfig && { themeConfig }),
+        ...(title !== undefined ? { title } : {}),
+        ...(template !== undefined ? { template } : {}),
+        ...(themeConfig !== undefined ? { themeConfig } : {}),
+        ...(language !== undefined ? { language } : {}),
+        ...(isBase !== undefined ? { isBase } : {}),
+        ...(cloudSyncEnabled !== undefined ? { cloudSyncEnabled } : {}),
+        ...(baseResumeId !== undefined ? { baseResumeId } : {}),
+        ...(targetCompany !== undefined ? { targetCompany } : {}),
+        ...(targetJobTitle !== undefined ? { targetJobTitle } : {}),
+        ...(jobDescription !== undefined ? { jobDescription } : {}),
+        ...(versionLabel !== undefined ? { versionLabel } : {}),
       });
     }
 
     // Sync sections: create new, update existing, delete removed
     if (sections && Array.isArray(sections)) {
-      const existingSections = resume.sections || [];
-      const existingIds = new Set(existingSections.map((s: any) => s.id));
-      const incomingIds = new Set(sections.map((s: any) => s.id));
+      const existingSections = (resume.sections || []) as ResumeSectionInput[];
+      const typedSections = sections as ResumeSectionInput[];
+      const existingIds = new Set(existingSections.map((s) => s.id));
+      const incomingIds = new Set(typedSections.map((s) => s.id));
 
       // Delete sections that were removed by the user
       for (const existing of existingSections) {
@@ -74,7 +137,7 @@ export async function PUT(
         }
       }
 
-      for (const section of sections) {
+      for (const section of typedSections) {
         if (existingIds.has(section.id)) {
           // Update existing section
           await resumeRepository.updateSection(section.id, {
@@ -99,6 +162,29 @@ export async function PUT(
     }
 
     const updated = await resumeRepository.findById(id);
+    if (updated) {
+      const now = new Date().toISOString();
+      const labelBase = versionLabel || `autosave-${now}`;
+      await resumeRepository.createVersion(
+        id,
+        `${labelBase}-before`,
+        beforeUpdate,
+        'autosave'
+      ).catch(() => null);
+      await resumeRepository.createVersion(
+        id,
+        `${labelBase}-after`,
+        updated,
+        'autosave'
+      ).catch(() => null);
+      await resumeRepository.createEvent({
+        resumeId: id,
+        userId: user.id,
+        type: 'resume.updated',
+        title: 'Resume updated',
+        metadata: { versionLabel: versionLabel || updated.versionLabel || null },
+      }).catch(() => null);
+    }
     return NextResponse.json(updated);
   } catch (error) {
     console.error('PUT /api/resume/[id] error:', error);

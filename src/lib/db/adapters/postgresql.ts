@@ -26,13 +26,16 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       const check = await this.db.execute(
         sql`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') AS ok`
       );
-      if (!(check as any)[0]?.ok) {
+      const checkRows = check as Array<{ ok?: boolean }>;
+      if (!checkRows[0]?.ok) {
         console.warn('[DB] Migration tracking is stale — resetting and re-running');
         await this.db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
         await migrate(this.db, {
           migrationsFolder: resolve(process.cwd(), 'drizzle/pg-migrations'),
         });
       }
+
+      await this.db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_credits integer NOT NULL DEFAULT 20`);
 
       console.log('[DB] PostgreSQL migrations applied');
     } catch (e) {
@@ -42,12 +45,15 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     // Auto-seed if empty
     try {
       const result = await this.db.execute(sql`SELECT count(*)::int as count FROM users`);
-      const count = Number((result as any)[0]?.count ?? 0);
+      const rows = result as Array<{ count?: number | string }>;
+      const count = Number(rows[0]?.count ?? 0);
       if (count === 0) {
         const { seedDemoUser } = await import('../seed-demo');
         await seedDemoUser(this.db);
         console.log('[DB] PostgreSQL auto-seed complete');
       }
+      const { ensureAdminUser } = await import('../seed-admin');
+      await ensureAdminUser(this.db);
     } catch (e) {
       console.error('[DB] PostgreSQL auto-seed failed:', e);
     }

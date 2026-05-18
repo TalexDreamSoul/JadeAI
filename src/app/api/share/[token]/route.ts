@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { hashPassword } from '@/lib/utils/share';
+import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { sanitizeResumeForShare } from '@/lib/share/review';
+import { normalizeThemeConfig } from '@/lib/theme-config';
 
 export async function GET(
   request: NextRequest,
@@ -10,6 +13,7 @@ export async function GET(
   try {
     const { token } = await params;
     const password = request.nextUrl.searchParams.get('password');
+    const isPolling = request.nextUrl.searchParams.get('poll') === '1';
 
     // 1. Try new resume_shares table first
     const share = await shareRepository.findByToken(token);
@@ -35,15 +39,38 @@ export async function GET(
         }
       }
 
-      await shareRepository.incrementViewCount(share.id);
+      if (share.viewRequiresLogin) {
+        const user = await resolveUser(getUserIdFromRequest(request));
+        if (!user) {
+          return NextResponse.json({ error: 'Login required', loginRequired: true }, { status: 401 });
+        }
+      }
+
+      if (!isPolling) {
+        await shareRepository.incrementViewCount(share.id);
+      }
 
       const resume = await resumeRepository.findById(share.resumeId);
       if (!resume) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
 
-      const { userId, sharePassword, ...publicResume } = resume;
-      return NextResponse.json(publicResume);
+      const owner = await resumeRepository.findOwnerByResumeId(share.resumeId);
+      const ownerName = owner?.name || owner?.email || null;
+      const sanitizedResume = sanitizeResumeForShare(resume, !!share.hideSensitiveInfo);
+      const publicResume = { ...sanitizedResume, themeConfig: normalizeThemeConfig(sanitizedResume.themeConfig), userId: undefined, sharePassword: undefined };
+      return NextResponse.json({
+        ...publicResume,
+        shareMeta: {
+          reviewEnabled: !!share.reviewEnabled,
+          downloadEnabled: !!share.downloadEnabled,
+          viewRequiresLogin: !!share.viewRequiresLogin,
+          anonymousShare: !!share.anonymousShare,
+          hideSensitiveInfo: !!share.hideSensitiveInfo,
+          shareLabel: share.label,
+          ownerName: share.anonymousShare ? null : ownerName,
+        },
+      });
     }
 
     // 2. Fallback to legacy resumes.shareToken
@@ -72,9 +99,11 @@ export async function GET(
       }
     }
 
-    await resumeRepository.incrementViewCount(resume.id);
+    if (!isPolling) {
+      await resumeRepository.incrementViewCount(resume.id);
+    }
 
-    const { userId, sharePassword, ...publicResume } = resume;
+    const publicResume = { ...resume, themeConfig: normalizeThemeConfig(resume.themeConfig), userId: undefined, sharePassword: undefined };
     return NextResponse.json(publicResume);
   } catch (error) {
     console.error('GET /api/share/[token] error:', error);

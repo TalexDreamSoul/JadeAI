@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { templateLabelsMap as templateLabelKeys } from '@/lib/template-labels';
+import { getTemplateLabel } from '@/lib/template-labels';
 import type { Resume } from '@/types/resume';
 
 interface ResumeListItemProps {
@@ -76,8 +76,7 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: Resu
     });
   }, []);
 
-  const labelKey = templateLabelKeys[resume.template] || 'dashboard.templateClassic';
-  const templateLabel = t(labelKey);
+  const templateLabel = getTemplateLabel(resume.template, t);
 
   return (
     <div

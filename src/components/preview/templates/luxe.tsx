@@ -65,7 +65,7 @@ export function LuxeTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-7" data-section>
+          <div key={section.id} className="mb-7" data-section data-section-id={section.id}>
             {/* Section header with gold borders */}
             <div className="mb-4 flex items-center gap-3">
               <div className="h-px flex-1" style={{ backgroundColor: GOLD }} />

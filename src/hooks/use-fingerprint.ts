@@ -2,20 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
-import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
 import { generateId } from '@/lib/utils';
 
 export function useFingerprint() {
   const [fingerprint, setFingerprint] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { authEnabled } = useRuntimeConfig();
 
   useEffect(() => {
-    if (authEnabled) {
-      setIsLoading(false);
-      return;
-    }
-
     async function getFingerprint() {
       try {
         // Check localStorage first
@@ -44,7 +37,7 @@ export function useFingerprint() {
     }
 
     getFingerprint();
-  }, [authEnabled]);
+  }, []);
 
   return { fingerprint, isLoading };
 }

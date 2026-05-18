@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useRuntimeConfig } from '@/components/providers/runtime-config-provider';
 
 export type AIProvider = 'openai' | 'anthropic' | 'gemini';
 export type AIMode = 'server' | 'custom';
@@ -17,12 +18,14 @@ interface SettingsStore {
   serverAIModel: string;
   serverOpenAIEndpoint: OpenAIEndpoint;
   serverImageAIConfigured: boolean;
+  aiCredits: number;
   // Editor settings
   autoSave: boolean;
   autoSaveInterval: number; // in milliseconds
 
   // Hydration state
   _hydrated: boolean;
+  _localOnlyHydrated: boolean;
   _syncing: boolean;
 
   // Actions
@@ -34,7 +37,7 @@ interface SettingsStore {
   setOpenAIEndpoint: (endpoint: OpenAIEndpoint) => void;
   setAutoSave: (enabled: boolean) => void;
   setAutoSaveInterval: (interval: number) => void;
-  hydrate: () => void;
+  hydrate: (localOnly?: boolean) => void;
 }
 
 const API_KEY_STORAGE_KEY = 'touchresume_api_key';
@@ -86,6 +89,11 @@ function getFingerprint(): string | null {
   return localStorage.getItem('touchresume_fingerprint');
 }
 
+export function isCloudAvailable(): boolean {
+  if (typeof window === 'undefined') return true;
+  return document.documentElement.dataset.localOnly !== 'true';
+}
+
 function getHeaders(): Record<string, string> {
   const fp = getFingerprint();
   return {
@@ -98,6 +106,7 @@ function getHeaders(): Record<string, string> {
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function syncToServer(state: SettingsStore) {
+  if (!isCloudAvailable()) return;
   if (syncTimeout) clearTimeout(syncTimeout);
   syncTimeout = setTimeout(async () => {
     try {
@@ -186,9 +195,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   serverAIModel: 'gpt-4o',
   serverOpenAIEndpoint: 'chat',
   serverImageAIConfigured: false,
+  aiCredits: 0,
   autoSave: true,
   autoSaveInterval: 500,
   _hydrated: false,
+  _localOnlyHydrated: false,
   _syncing: false,
 
   setAIMode: (mode) => {
@@ -259,12 +270,18 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     syncToServer(get());
   },
 
-  hydrate: async () => {
-    if (get()._hydrated) return;
+  hydrate: async (localOnly = false) => {
+    const current = get();
+    if (current._hydrated && (localOnly || !current._localOnlyHydrated)) return;
 
     // Load API key from localStorage immediately
     const apiKey = loadApiKeyLocally();
     set({ aiApiKey: apiKey });
+
+    if (localOnly || !isCloudAvailable()) {
+      set({ aiMode: 'custom', autoSave: true, _hydrated: true, _localOnlyHydrated: true });
+      return;
+    }
 
     // Load other settings from server
     try {
@@ -285,9 +302,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           serverAIModel: typeof data.serverAIModel === 'string' ? data.serverAIModel : PROVIDER_DEFAULTS[serverProvider].model,
           serverOpenAIEndpoint: normalizeOpenAIEndpoint(data.serverOpenAIEndpoint),
           serverImageAIConfigured: !!data.serverImageAIConfigured,
+          aiCredits: typeof data.aiCredits === 'number' ? data.aiCredits : 0,
           ...(typeof data.autoSave === 'boolean' && { autoSave: data.autoSave }),
           ...(typeof data.autoSaveInterval === 'number' && { autoSaveInterval: data.autoSaveInterval }),
           _hydrated: true,
+          _localOnlyHydrated: false,
         });
         // Seed provider config cache with hydrated values
         syncProviderConfig(get());
@@ -295,11 +314,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       }
     } catch { /* fall through */ }
 
-    set({ aiMode: 'custom', _hydrated: true });
+    set({ aiMode: 'custom', _hydrated: true, _localOnlyHydrated: false });
   },
 }));
 
-// Auto-hydrate on client side so settings are ready before any component uses them
-if (typeof window !== 'undefined') {
-  useSettingsStore.getState().hydrate();
+export function useIsLocalOnly(): boolean {
+  return useRuntimeConfig().localOnly;
 }

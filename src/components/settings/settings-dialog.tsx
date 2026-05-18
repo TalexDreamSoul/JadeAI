@@ -27,7 +27,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUIStore } from '@/stores/ui-store';
-import { useSettingsStore, getAIHeaders, type AIProvider, type OpenAIEndpoint } from '@/stores/settings-store';
+import { useSettingsStore, getAIHeaders, useIsLocalOnly, type AIProvider, type OpenAIEndpoint } from '@/stores/settings-store';
 import { useTourStore } from '@/stores/tour-store';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { locales, localeNames } from '@/i18n/config';
@@ -58,6 +58,7 @@ export function SettingsDialog() {
     serverAIProvider,
     serverAIModel,
     serverOpenAIEndpoint,
+    aiCredits,
     autoSave,
     autoSaveInterval,
     setAIMode,
@@ -70,11 +71,13 @@ export function SettingsDialog() {
     setAutoSaveInterval,
     hydrate,
     _hydrated,
+    _localOnlyHydrated,
   } = useSettingsStore();
 
   const startTour = useTourStore((s) => s.startTour);
   const [showApiKey, setShowApiKey] = useState(false);
   const isOpen = activeModal === 'settings';
+  const localOnly = useIsLocalOnly();
 
   // Model combobox state
   const [modelOpen, setModelOpen] = useState(false);
@@ -85,10 +88,10 @@ export function SettingsDialog() {
   const modelSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isOpen && !_hydrated) {
-      hydrate();
+    if (isOpen && (!_hydrated || (!localOnly && _localOnlyHydrated))) {
+      hydrate(localOnly);
     }
-  }, [isOpen, _hydrated, hydrate]);
+  }, [isOpen, _hydrated, _localOnlyHydrated, hydrate, localOnly]);
 
   // Fetch models when combobox opens or when apiKey/baseURL changes
   const fetchModels = useCallback(async () => {
@@ -183,7 +186,7 @@ export function SettingsDialog() {
                 <button
                   type="button"
                   onClick={() => setAIMode('server')}
-                  disabled={!serverAIConfigured}
+                  disabled={localOnly || !serverAIConfigured}
                   className={cn(
                     'cursor-pointer rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                     aiMode === 'server'
@@ -193,7 +196,9 @@ export function SettingsDialog() {
                 >
                   <div className="text-sm font-medium">{t('ai.modeServer')}</div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    {serverAIConfigured
+                    {localOnly
+                      ? t('ai.loginRequiredForServer')
+                      : serverAIConfigured
                       ? t('ai.serverConfigured', {
                           provider: serverAIProvider,
                           model: serverAIModel,
@@ -366,7 +371,12 @@ export function SettingsDialog() {
               </>
             ) : (
               <div className="rounded-lg border border-brand/20 bg-brand-muted p-3 text-sm text-brand">
-                {serverAIConfigured
+                {!localOnly && serverAIConfigured && (
+                  <p className="mb-1 text-xs opacity-80">{t('ai.creditsLeft', { count: aiCredits })}</p>
+                )}
+                {localOnly
+                  ? t('ai.loginRequiredForServer')
+                  : serverAIConfigured
                   ? t('ai.serverModeDescription', {
                       provider: serverAIProvider,
                       model: serverAIModel,

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
+import { useIsLocalOnly } from '@/stores/settings-store';
 import { Loader2, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 import {
   Dialog,
@@ -18,7 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LanguageSelect } from '@/components/ui/language-select';
 import { DEFAULT_TEMPLATE, RECOMMENDED_TEMPLATES, TEMPLATES } from '@/lib/constants';
 import { TemplateThumbnail } from './template-thumbnail';
-import { templateLabelsMap } from '@/lib/template-labels';
+import { getTemplateLabel } from '@/lib/template-labels';
+import { createLocalResume } from '@/lib/local-resumes';
 import { getAIHeaders } from '@/stores/settings-store';
 
 interface GenerateResumeDialogProps {
@@ -34,6 +36,7 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
   const tGlobal = useTranslations();
   const locale = useLocale();
   const router = useRouter();
+  const localOnly = useIsLocalOnly();
 
   const [jobTitle, setJobTitle] = useState('');
   const [yearsOfExperience, setYearsOfExperience] = useState<number | ''>('');
@@ -79,7 +82,17 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
       }
 
       const data = await res.json();
-      setResult(data);
+      const resultData = localOnly
+        ? createLocalResume({
+            title: data.title || jobTitle.trim(),
+            template,
+            language,
+            sections: data.sections,
+            themeConfig: data.themeConfig,
+            cloudSyncEnabled: false,
+          })
+        : data;
+      setResult({ resumeId: resultData.id || resultData.resumeId, title: resultData.title });
       setState('success');
       onCreated?.();
     } catch (err: any) {
@@ -214,7 +227,7 @@ export function GenerateResumeDialog({ open, onOpenChange, onCreated }: Generate
                         <SelectItem key={tpl} value={tpl}>
                           <span className="flex items-center gap-2">
                             <TemplateThumbnail template={tpl} className="h-8 w-6 shrink-0 rounded-sm ring-1 ring-zinc-200/50" />
-                            <span>{tGlobal(templateLabelsMap[tpl])}</span>
+                            <span>{getTemplateLabel(tpl, tGlobal)}</span>
                             {RECOMMENDED_TEMPLATES.has(tpl) && (
                               <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
                                 {tGlobal('templates.recommended')}

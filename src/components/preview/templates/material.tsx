@@ -65,7 +65,7 @@ export function MaterialTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-4" data-section>
+            <div key={section.id} className="mb-4" data-section data-section-id={section.id}>
               <div className="mb-3 rounded-xl bg-white p-5 shadow-sm">
                 <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider" style={{ color: PRIMARY }}>
                   <span className="inline-block h-5 w-1 rounded-full" style={{ backgroundColor: VIOLET }} />

@@ -63,7 +63,7 @@ export function BlocksTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-5" data-section>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
             <div className="mb-2 flex items-center gap-2">
               <span className="text-sm" style={{ color: '#9b9a97' }}>&#9654;</span>
               <h2 className="text-sm font-semibold" style={{ color: PRIMARY }}>

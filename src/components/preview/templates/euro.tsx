@@ -48,7 +48,7 @@ export function EuroTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-5 flex gap-4" data-section>
+            <div key={section.id} className="mb-5 flex gap-4" data-section data-section-id={section.id}>
               <div className="w-28 shrink-0 pt-0.5 text-right">
                 <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: BLUE }}>{section.title}</h2>
               </div>

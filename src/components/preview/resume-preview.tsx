@@ -3,7 +3,15 @@
 import { useId } from 'react';
 import type { Resume, ThemeConfig } from '@/types/resume';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
+import { buildTemplateCustomizationCSS } from '@/lib/template-customization';
 import { TouchPureTemplate } from './templates/touch-pure';
+import { TouchSimpleTemplate } from './templates/touch-simple';
+import { TouchFlatTemplate } from './templates/touch-flat';
+import { TouchLineTemplate } from './templates/touch-line';
+import { TouchCompactTemplate } from './templates/touch-compact';
+import { TouchCardTemplate } from './templates/touch-card';
+import { TouchGridTemplate } from './templates/touch-grid';
+import { TouchFocusTemplate } from './templates/touch-focus';
 import { ClassicTemplate } from './templates/classic';
 import { ModernTemplate } from './templates/modern';
 import { MinimalTemplate } from './templates/minimal';
@@ -67,6 +75,13 @@ interface ResumePreviewProps {
 
 const templateMap: Record<string, React.ComponentType<{ resume: Resume }>> = {
   'touch-pure': TouchPureTemplate,
+  'touch-simple': TouchSimpleTemplate,
+  'touch-flat': TouchFlatTemplate,
+  'touch-line': TouchLineTemplate,
+  'touch-compact': TouchCompactTemplate,
+  'touch-card': TouchCardTemplate,
+  'touch-grid': TouchGridTemplate,
+  'touch-focus': TouchFocusTemplate,
   classic: ClassicTemplate,
   modern: ModernTemplate,
   minimal: MinimalTemplate,
@@ -175,7 +190,7 @@ function buildThemeCSS(scopeId: string, theme: ThemeConfig, template: string): s
       --base-margin-bottom: ${m.bottom}px;
       --base-margin-left: ${m.left}px;
     }
-    ${s} p, ${s} li, ${s} span, ${s} td, ${s} a, ${s} div {
+    ${s} p, ${s} li, ${s} span, ${s} td, ${s} a {
       font-size: ${fs.body} !important;
       line-height: ${theme.lineSpacing} !important;
     }
@@ -242,9 +257,16 @@ export function ResumePreview({ resume }: ResumePreviewProps) {
   const Template = templateMap[resume.template] || ClassicTemplate;
   const scopeId = useId();
   const theme: ThemeConfig = { ...DEFAULT_THEME, ...(resume.themeConfig || {}) };
+  const scopeSelector = `[data-theme-scope="${scopeId}"]`;
+  const customCss = buildTemplateCustomizationCSS(scopeSelector, theme);
 
-  // Defensive: ensure resume.sections is always an array (AI may return invalid/empty data)
-  const safeResume = resume.sections ? resume : { ...resume, sections: [] };
+  // Defensive: ensure resume.sections is always an array and only visible sections render.
+  const safeResume = {
+    ...resume,
+    sections: (Array.isArray(resume.sections) ? resume.sections : []).filter(
+      (section) => section.visible !== false
+    ),
+  };
 
   return (
     <>
@@ -254,7 +276,7 @@ export function ResumePreview({ resume }: ResumePreviewProps) {
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       <div data-theme-scope={scopeId}>
-        <style dangerouslySetInnerHTML={{ __html: buildThemeCSS(scopeId, theme, safeResume.template) }} />
+        <style dangerouslySetInnerHTML={{ __html: `${buildThemeCSS(scopeId, theme, safeResume.template)}\n${customCss}` }} />
         <Template resume={safeResume} />
       </div>
     </>

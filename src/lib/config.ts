@@ -1,6 +1,6 @@
 export const config = {
   auth: {
-    enabled: process.env.AUTH_ENABLED === 'true',
+    enabled: process.env.AUTH_ENABLED !== 'false',
     providers: ['google'] as const,
   },
   db: {

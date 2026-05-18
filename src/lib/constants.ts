@@ -26,7 +26,7 @@ export const DEFAULT_SECTIONS: { type: SectionType; titleZh: string; titleEn: st
 ];
 
 export const TEMPLATES = [
-  'touch-pure',
+  'touch-pure', 'touch-simple', 'touch-flat', 'touch-line', 'touch-compact', 'touch-card', 'touch-grid', 'touch-focus',
   'classic', 'modern', 'minimal', 'professional', 'two-column', 'creative', 'ats', 'academic', 'elegant', 'executive',
   'developer', 'designer', 'startup', 'formal', 'infographic', 'compact', 'euro', 'clean', 'bold', 'timeline',
   // Batch 1: Industry/Professional

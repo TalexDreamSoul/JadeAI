@@ -58,7 +58,7 @@ export function JapaneseTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-8" data-section>
+          <div key={section.id} className="mb-8" data-section data-section-id={section.id}>
             {/* Section header with subtle dot */}
             <div className="mb-4 flex items-center gap-2">
               <span className="inline-block h-1 w-1 rounded-full" style={{ backgroundColor: ACCENT }} />

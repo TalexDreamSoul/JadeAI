@@ -92,13 +92,15 @@ export function EditorCanvas({
             >
               <div className="space-y-3 md:space-y-4">
                 {sections.map((section) => (
-                  <SortableSection key={section.id} id={section.id}>
-                    <SectionWrapper
-                      section={section}
-                      onUpdate={(content) => onUpdateSection(section.id, content)}
-                      onRemove={() => onRemoveSection(section.id)}
-                    />
-                  </SortableSection>
+                  <div key={section.id} data-section-id={section.id} className="scroll-mt-4">
+                    <SortableSection id={section.id}>
+                      <SectionWrapper
+                        section={section}
+                        onUpdate={(content) => onUpdateSection(section.id, content)}
+                        onRemove={() => onRemoveSection(section.id)}
+                      />
+                    </SortableSection>
+                  </div>
                 ))}
               </div>
             </SortableContext>

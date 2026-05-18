@@ -145,7 +145,7 @@ export function TwoColumnTemplate({ resume }: { resume: Resume }) {
 
         {/* Left Sections */}
         {leftSections.map((section) => (
-          <div key={section.id} className="mb-5" data-section>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
             <h2 className="mb-2 border-b border-white/20 pb-1 text-xs font-bold uppercase tracking-wider text-white">
               {section.title}
             </h2>
@@ -157,7 +157,7 @@ export function TwoColumnTemplate({ resume }: { resume: Resume }) {
       {/* Right Column */}
       <div className="flex-1 p-6">
         {rightSections.map((section) => (
-          <div key={section.id} className="mb-5" data-section>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
             <h2 className="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style={{ color: '#1a1a2e', borderColor: '#1a1a2e' }}>
               {section.title}
             </h2>

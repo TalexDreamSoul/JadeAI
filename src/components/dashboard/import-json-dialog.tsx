@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
 import { useRouter } from '@/i18n/routing';
+import { createLocalResume } from '@/lib/local-resumes';
+import { useIsLocalOnly } from '@/stores/settings-store';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +41,7 @@ function getHeaders() {
 export function ImportJsonDialog({ open, onOpenChange }: ImportJsonDialogProps) {
   const t = useTranslations('import');
   const router = useRouter();
+  const localOnly = useIsLocalOnly();
 
   const [state, setState] = useState<ImportState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
@@ -101,6 +104,23 @@ export function ImportJsonDialog({ open, onOpenChange }: ImportJsonDialogProps) 
         throw new Error(t('invalidFormat'));
       }
 
+      if (localOnly) {
+        const newResume = createLocalResume({
+          title: data.title || 'Imported Resume',
+          template: data.template || DEFAULT_TEMPLATE,
+          themeConfig: data.themeConfig,
+          sections: data.sections,
+          cloudSyncEnabled: false,
+        });
+
+        setState('success');
+        setTimeout(() => {
+          onOpenChange(false);
+          router.push(`/editor/${newResume.id}`);
+        }, 1000);
+        return;
+      }
+
       // Create a new resume with imported data (ids are ignored server-side)
       const res = await fetch('/api/resume', {
         method: 'POST',
@@ -129,7 +149,7 @@ export function ImportJsonDialog({ open, onOpenChange }: ImportJsonDialogProps) 
         setErrorMessage(err.message || t('error'));
       }
     }
-  }, [selectedFile, onOpenChange, router, t]);
+  }, [localOnly, selectedFile, onOpenChange, router, t]);
 
   const isLoading = state === 'importing';
 

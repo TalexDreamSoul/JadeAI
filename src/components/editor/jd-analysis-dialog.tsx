@@ -29,7 +29,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useEditorStore } from '@/stores/editor-store';
+import { useResumeStore } from '@/stores/resume-store';
 import { getAIHeaders } from '@/stores/settings-store';
+import { isLocalResumeId } from '@/lib/local-resumes';
 
 interface JdAnalysisResult {
   overallScore: number;
@@ -267,6 +269,8 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
   const t = useTranslations('jdAnalysis');
   const ct = useTranslations('common');
   const { setShowAiChat, setPendingAiMessage } = useEditorStore();
+  const currentResume = useResumeStore((s) => s.currentResume);
+  const isLocalResume = isLocalResumeId(resumeId);
   const [jobDescription, setJobDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<JdAnalysisResult | null>(null);
@@ -320,7 +324,11 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
       const res = await fetch('/api/ai/jd-analysis', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ resumeId, jobDescription }),
+        body: JSON.stringify({
+          resumeId,
+          jobDescription,
+          ...(isLocalResume && currentResume ? { resume: currentResume } : {}),
+        }),
       });
 
       if (!res.ok) {

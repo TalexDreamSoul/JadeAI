@@ -1,9 +1,11 @@
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
+import { buildTemplateCustomizationCSS } from '@/lib/template-customization';
 import type {
   PersonalInfoContent,
   SkillsContent,
   SummaryContent,
+  ThemeConfig,
 } from '@/types/resume';
 
 export type ResumeWithSections = NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>>;
@@ -120,7 +122,7 @@ const FONT_SIZE_SCALE: Record<string, { body: string; h1: string; h2: string; h3
   large:  { body: '16px', h1: '30px', h2: '19px', h3: '17px' },
 };
 
-export const DEFAULT_THEME = {
+export const DEFAULT_THEME: ThemeConfig = {
   primaryColor: '#1a1a1a',
   accentColor: '#3b82f6',
   fontFamily: 'Inter',
@@ -145,6 +147,7 @@ export function buildExportThemeCSS(theme: typeof DEFAULT_THEME, template: strin
   const sel = '.resume-export';
   const needsPadding = !BACKGROUND_TEMPLATES.has(template);
   const primaryIsDark = isDark(theme.primaryColor);
+  const templateCustomizationCSS = buildTemplateCustomizationCSS(sel, theme);
   return `
     ${sel} > div {
       font-family: ${theme.fontFamily}, 'Noto Sans SC', sans-serif !important;
@@ -194,5 +197,6 @@ export function buildExportThemeCSS(theme: typeof DEFAULT_THEME, template: strin
     ${sel} .bg-black h3:not([style*="color"]) {
       color: #ffffff !important;
     }` : ''}
+    ${templateCustomizationCSS}
   `;
 }

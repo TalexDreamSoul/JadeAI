@@ -61,7 +61,7 @@ export function AcademicTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-4" data-section>
+          <div key={section.id} className="mb-4" data-section data-section-id={section.id}>
             <h2 className="mb-1.5 text-xs font-bold uppercase tracking-[0.25em] text-zinc-800" style={{ borderBottom: '1px solid #d4d4d8', paddingBottom: '2px' }}>
               {section.title}
             </h2>

@@ -12,6 +12,7 @@ import type {
 } from '@/types/resume';
 import QRCode from 'qrcode';
 import { type ResumeWithSections, getPersonalInfo, visibleSections, DEFAULT_THEME, safe } from './utils';
+import { sanitizeAlign, sanitizeColor, sanitizeDividerStyle, sanitizeFontWeight } from '@/lib/template-customization';
 
 // ─── Template style configuration ───────────────────────────
 // Colors + layout style per template. Templates without headerBg
@@ -84,8 +85,15 @@ const TEMPLATE_STYLES: Record<string, TemplateStyle> = {
   sidebar:      { headerBg: '#1e40af', accent: '#3b82f6', itemBorder: false, layout: 'sidebar-left', sidebarWidth: 35, sidebarBg: '#1e40af', sidebarTextColor: 'FFFFFF', sidebarLabelColor: 'B3D4FC', sidebarSections: ['skills', 'languages', 'certifications', 'custom'], headerInSidebar: true },
 
   // ── Light header (no bg) + bottom-border (default for light) ──
-  'touch-pure': { accent: '#2563eb', headingStyle: 'bottom-border', itemBorder: false },
-  classic:      { accent: '#d4d4d8', headingStyle: 'bottom-border', itemBorder: false },
+  'touch-pure':   { accent: '#2563eb', headingStyle: 'bottom-border', itemBorder: false },
+  'touch-simple': { accent: '#18181b', headingStyle: 'bottom-border', itemBorder: false },
+  'touch-flat':   { accent: '#0f766e', headingStyle: 'bg-badge', itemBorder: false },
+  'touch-line':    { accent: '#111827', headingStyle: 'left-border', itemBorder: false, headerAlign: 'left' },
+  'touch-compact': { accent: '#3f3f46', headingStyle: 'bottom-border', itemBorder: false, headerAlign: 'left' },
+  'touch-card':    { accent: '#4f46e5', headingStyle: 'left-border', itemBorder: false },
+  'touch-grid':    { accent: '#18181b', headingStyle: 'bottom-border', itemBorder: false, layout: 'sidebar-left', sidebarWidth: 32, sidebarBg: '#f4f4f5', sidebarTextColor: '3F3F46', sidebarLabelColor: '71717A', sidebarSections: ['skills', 'languages', 'certifications', 'qr_codes'], headerInSidebar: true },
+  'touch-focus':   { accent: '#ea580c', headingStyle: 'left-border', itemBorder: false, headerAlign: 'left' },
+  classic:         { accent: '#d4d4d8', headingStyle: 'bottom-border', itemBorder: false },
   academic:     { accent: '#27272a', headingStyle: 'bottom-border', itemBorder: false },
   ats:          { accent: '#000000', headingStyle: 'bottom-border', itemBorder: false },
   elegant:      { accent: '#d4af37' },
@@ -130,6 +138,16 @@ interface DocxTheme {
   sidebarLabelColor: string;
   sidebarSections: string[];
   headerInSidebar: boolean;
+  titleAlign?: 'left' | 'center' | 'right';
+  titleWeight?: boolean;
+  titleColor?: string;
+  titleSize?: number;
+  sectionTitleWeight?: boolean;
+  sectionTitleColor?: string;
+  dividerEnabled?: boolean;
+  dividerStyle?: 'solid' | 'dashed' | 'dotted' | 'double';
+  dividerThickness?: number;
+  dividerColor?: string;
 }
 
 const FONT_SIZES: Record<string, { body: number; h1: number; h2: number; h3: number }> = {
@@ -139,6 +157,21 @@ const FONT_SIZES: Record<string, { body: number; h1: number; h2: number; h3: num
 };
 
 function strip(hex: string) { return hex.replace('#', ''); }
+
+function stripSafeColor(value: unknown, fallback: string): string {
+  const color = sanitizeColor(value, `#${fallback}`);
+  return /^#[0-9a-fA-F]{3,8}$/.test(color) ? strip(color) : fallback;
+}
+
+function docxBorderStyle(style?: 'solid' | 'dashed' | 'dotted' | 'double') {
+  switch (style) {
+    case 'dashed': return BorderStyle.DASHED;
+    case 'dotted': return BorderStyle.DOTTED;
+    case 'double': return BorderStyle.DOUBLE;
+    case 'solid':
+    default: return BorderStyle.SINGLE;
+  }
+}
 
 function isDark(hex: string) {
   const c = strip(hex);
@@ -156,7 +189,7 @@ function resolveTheme(cfg: unknown, template?: string): DocxTheme {
   // Merge: global defaults → template colors → user overrides
   const base = { ...DEFAULT_THEME } as Record<string, unknown>;
   if (tc?.accent && !userCfg.accentColor) base.accentColor = tc.accent;
-  const t = { ...base, ...userCfg } as typeof DEFAULT_THEME;
+  const t = { ...base, ...userCfg } as unknown as typeof DEFAULT_THEME;
 
   const fs = FONT_SIZES[t.fontSize] || FONT_SIZES.medium;
   const primary = strip(t.primaryColor);
@@ -185,6 +218,18 @@ function resolveTheme(cfg: unknown, template?: string): DocxTheme {
   const headingStyle: HeadingStyle = tc?.headingStyle ?? (headerLight ? 'bottom-border' : 'left-border');
   const itemBorder = tc?.itemBorder ?? !headerLight;
 
+  const titleStyle = t.titleStyle || {};
+  const sectionTitleStyle = t.sectionTitleStyle || {};
+  const sectionDivider = t.sectionDivider || {};
+  const titleWeightRaw = sanitizeFontWeight(titleStyle.fontWeight);
+  const sectionTitleWeightRaw = sanitizeFontWeight(sectionTitleStyle.fontWeight);
+  const titleSize = typeof titleStyle.fontSize === 'number'
+    ? Math.round(Math.max(14, Math.min(72, titleStyle.fontSize)) * 2)
+    : undefined;
+  const dividerThickness = typeof sectionDivider.thickness === 'number'
+    ? Math.max(2, Math.min(48, Math.round(sectionDivider.thickness * 8)))
+    : undefined;
+
   return {
     primary, accent, secondary, headerBg, headerText, headerLight,
     headingStyle, headerAlign: tc?.headerAlign ?? 'center', itemBorder,
@@ -204,6 +249,16 @@ function resolveTheme(cfg: unknown, template?: string): DocxTheme {
     sidebarLabelColor: tc?.sidebarLabelColor ?? 'A0AEC0',
     sidebarSections: tc?.sidebarSections ?? [],
     headerInSidebar: tc?.headerInSidebar ?? false,
+    titleAlign: sanitizeAlign(titleStyle.align) || undefined,
+    titleWeight: titleWeightRaw ? Number(titleWeightRaw) >= 600 : undefined,
+    titleColor: titleStyle.color ? stripSafeColor(titleStyle.color, primary) : undefined,
+    titleSize,
+    sectionTitleWeight: sectionTitleWeightRaw ? Number(sectionTitleWeightRaw) >= 600 : undefined,
+    sectionTitleColor: sectionTitleStyle.color ? stripSafeColor(sectionTitleStyle.color, primary) : undefined,
+    dividerEnabled: typeof sectionDivider.enabled === 'boolean' ? sectionDivider.enabled : undefined,
+    dividerStyle: sectionDivider.style ? sanitizeDividerStyle(sectionDivider.style) : undefined,
+    dividerThickness,
+    dividerColor: sectionDivider.color ? stripSafeColor(sectionDivider.color, accent) : undefined,
   };
 }
 
@@ -305,7 +360,7 @@ function sectionHeading(title: string, theme: DocxTheme): DocxChild[] {
   switch (theme.headingStyle) {
     case 'plain':
       return [new Paragraph({
-        children: [run(title.toUpperCase(), theme, { size: theme.bodySize - 2, bold: true, color: theme.accent })],
+        children: [run(title.toUpperCase(), theme, { size: theme.bodySize - 2, bold: theme.sectionTitleWeight ?? true, color: theme.sectionTitleColor ?? theme.accent })],
         spacing: { before: theme.sectionSpacing, after: 80 },
       })];
     case 'bg-badge': {
@@ -317,10 +372,10 @@ function sectionHeading(title: string, theme: DocxTheme): DocxChild[] {
           rows: [new TableRow({
             children: [new TableCell({
               children: [new Paragraph({
-                children: [run(title.toUpperCase(), theme, { size: theme.h2Size, bold: true, color: textColor })],
+                children: [run(title.toUpperCase(), theme, { size: theme.h2Size, bold: theme.sectionTitleWeight ?? true, color: theme.sectionTitleColor ?? textColor })],
               })],
-              shading: { type: ShadingType.CLEAR, fill: theme.accent, color: 'auto' },
-              borders: matchingBorders(theme.accent),
+              shading: { type: ShadingType.CLEAR, fill: theme.dividerColor ?? theme.accent, color: 'auto' },
+              borders: matchingBorders(theme.dividerColor ?? theme.accent),
               margins: { top: 40, bottom: 40, left: 140, right: 140 },
             })],
           })],
@@ -331,20 +386,24 @@ function sectionHeading(title: string, theme: DocxTheme): DocxChild[] {
     }
     case 'bottom-border':
       return [new Paragraph({
-        children: [run(title.toUpperCase(), theme, { size: theme.h2Size, bold: true, color: theme.primary })],
+        children: [run(title.toUpperCase(), theme, { size: theme.h2Size, bold: theme.sectionTitleWeight ?? true, color: theme.sectionTitleColor ?? theme.primary })],
         spacing: { before: theme.sectionSpacing, after: 120 },
-        border: {
-          bottom: { style: BorderStyle.SINGLE, size: 4, color: theme.accent, space: 4 },
-        },
+        ...(theme.dividerEnabled === false ? {} : {
+          border: {
+            bottom: { style: docxBorderStyle(theme.dividerStyle), size: theme.dividerThickness ?? 4, color: theme.dividerColor ?? theme.accent, space: 4 },
+          },
+        }),
       })];
     case 'left-border':
     default:
       return [new Paragraph({
-        children: [run(title.toUpperCase(), theme, { size: theme.h2Size, bold: true, color: theme.accent })],
+        children: [run(title.toUpperCase(), theme, { size: theme.h2Size, bold: theme.sectionTitleWeight ?? true, color: theme.sectionTitleColor ?? theme.accent })],
         spacing: { before: theme.sectionSpacing, after: 120 },
-        border: {
-          left: { style: BorderStyle.SINGLE, size: 18, color: theme.accent, space: 8 },
-        },
+        ...(theme.dividerEnabled === false ? {} : {
+          border: {
+            left: { style: docxBorderStyle(theme.dividerStyle), size: theme.dividerThickness ?? 18, color: theme.dividerColor ?? theme.accent, space: 8 },
+          },
+        }),
         indent: { left: 120 },
       })];
   }
@@ -386,10 +445,16 @@ function buildContactParts(info: PersonalInfoContent): string[] {
 function buildHeaderDark(info: PersonalInfoContent, theme: DocxTheme): DocxChild[] {
   const tc = theme.headerText;
   const headerParas: Paragraph[] = [];
+  const align = theme.titleAlign === 'left'
+    ? AlignmentType.LEFT
+    : theme.titleAlign === 'right'
+      ? AlignmentType.RIGHT
+      : undefined;
 
   if (info.fullName) {
     headerParas.push(new Paragraph({
-      children: [run(info.fullName, theme, { size: theme.h1Size, bold: true, color: tc })],
+      children: [run(info.fullName, theme, { size: theme.titleSize ?? theme.h1Size, bold: theme.titleWeight ?? true, color: theme.titleColor ?? tc })],
+      alignment: align,
       spacing: { after: 80 },
     }));
   }
@@ -451,19 +516,27 @@ function buildHeaderDark(info: PersonalInfoContent, theme: DocxTheme): DocxChild
     });
   }
 
-  return [headerTable, new Paragraph({
-    spacing: { before: 0, after: 0 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: theme.accent } },
-  }), spacer(160)];
+  return [
+    headerTable,
+    ...(theme.dividerEnabled === false ? [] : [new Paragraph({
+      spacing: { before: 0, after: 0 },
+      border: { bottom: { style: docxBorderStyle(theme.dividerStyle), size: theme.dividerThickness ?? 6, color: theme.dividerColor ?? theme.accent } },
+    })]),
+    spacer(160),
+  ];
 }
 
 function buildHeaderLight(info: PersonalInfoContent, theme: DocxTheme): DocxChild[] {
   const res: DocxChild[] = [];
-  const align = theme.headerAlign === 'left' ? AlignmentType.LEFT : AlignmentType.CENTER;
+  const align = theme.titleAlign === 'left'
+    ? AlignmentType.LEFT
+    : theme.titleAlign === 'right'
+      ? AlignmentType.RIGHT
+      : theme.headerAlign === 'left' ? AlignmentType.LEFT : AlignmentType.CENTER;
 
   if (info.fullName) {
     res.push(new Paragraph({
-      children: [run(info.fullName, theme, { size: theme.h1Size, bold: theme.headerAlign !== 'left', color: theme.primary })],
+      children: [run(info.fullName, theme, { size: theme.titleSize ?? theme.h1Size, bold: theme.titleWeight ?? theme.headerAlign !== 'left', color: theme.titleColor ?? theme.primary })],
       alignment: align,
       spacing: { after: 60 },
     }));
@@ -485,10 +558,10 @@ function buildHeaderLight(info: PersonalInfoContent, theme: DocxTheme): DocxChil
   }
 
   // Separator line (skip for plain/minimal style)
-  if (theme.headingStyle !== 'plain') {
+  if (theme.headingStyle !== 'plain' && theme.dividerEnabled !== false) {
     res.push(new Paragraph({
       spacing: { before: 60, after: 0 },
-      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: theme.accent, space: 4 } },
+      border: { bottom: { style: docxBorderStyle(theme.dividerStyle), size: theme.dividerThickness ?? 4, color: theme.dividerColor ?? theme.accent, space: 4 } },
     }));
   }
   res.push(spacer(120));
@@ -750,11 +823,13 @@ function buildCustom(c: CustomContent, title: string, theme: DocxTheme): DocxChi
 
 function sidebarSectionHeading(title: string, theme: DocxTheme): Paragraph {
   return new Paragraph({
-    children: [run(title.toUpperCase(), theme, { size: theme.bodySize, bold: true, color: theme.sidebarLabelColor })],
+    children: [run(title.toUpperCase(), theme, { size: theme.bodySize, bold: theme.sectionTitleWeight ?? true, color: theme.sectionTitleColor ?? theme.sidebarLabelColor })],
     spacing: { before: 200, after: 80 },
-    border: {
-      bottom: { style: BorderStyle.SINGLE, size: 2, color: theme.sidebarLabelColor, space: 4 },
-    },
+    ...(theme.dividerEnabled === false ? {} : {
+      border: {
+        bottom: { style: docxBorderStyle(theme.dividerStyle), size: theme.dividerThickness ?? 2, color: theme.dividerColor ?? theme.sidebarLabelColor, space: 4 },
+      },
+    }),
   });
 }
 

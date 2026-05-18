@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { TemplateThumbnail } from './template-thumbnail';
-import { templateLabelsMap as templateLabelKeys } from '@/lib/template-labels';
+import { getTemplateLabel } from '@/lib/template-labels';
 import type { Resume } from '@/types/resume';
 
 interface ResumeCardProps {
@@ -79,8 +79,7 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
     });
   }, []);
 
-  const labelKey = templateLabelKeys[resume.template] || 'dashboard.templateClassic';
-  const templateLabel = t(labelKey);
+  const templateLabel = getTemplateLabel(resume.template, t);
 
   return (
     <div

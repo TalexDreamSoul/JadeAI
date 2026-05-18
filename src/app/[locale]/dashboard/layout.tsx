@@ -1,14 +1,5 @@
-import { Header } from '@/components/layout/header';
+import { AppShell } from '@/components/layout/app-shell';
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-background">
-      <Header />
-      <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
-    </div>
-  );
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return <AppShell>{children}</AppShell>;
 }

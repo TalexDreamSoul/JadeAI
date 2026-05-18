@@ -61,9 +61,6 @@ export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const body = await request.json();
     const parsed = generateResumeInputSchema.safeParse(body);
@@ -77,7 +74,7 @@ export async function POST(request: NextRequest) {
     const { jobTitle, yearsOfExperience, skills, industry, experience, template, language } = parsed.data;
     const lang = language || 'zh';
 
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig);
 
     const skillsContext = skills && skills.length > 0
@@ -113,10 +110,27 @@ Respond with JSON only.`,
 
     const generatedData: GenerateResumeOutput = extractJson(result.text, generateResumeOutputSchema) as GenerateResumeOutput;
 
-    // Create a new resume in the database
     const resumeTitle = lang === 'zh'
       ? `${jobTitle} - AI生成简历`
       : `${jobTitle} - AI Generated Resume`;
+    const titles = SECTION_TITLES[lang] || SECTION_TITLES.zh;
+    const sectionTypes = ['personal_info', 'summary', 'work_experience', 'education', 'skills', 'projects'] as const;
+
+    if (!user) {
+      return NextResponse.json({
+        resumeId: null,
+        title: resumeTitle,
+        template: template || DEFAULT_TEMPLATE,
+        language: lang,
+        sections: sectionTypes.map((type, i) => ({
+          type,
+          title: titles[type],
+          sortOrder: i,
+          visible: true,
+          content: generatedData[type],
+        })),
+      });
+    }
 
     const newResume = await resumeRepository.create({
       userId: user.id,
@@ -128,10 +142,6 @@ Respond with JSON only.`,
     if (!newResume) {
       return NextResponse.json({ error: 'Failed to create resume' }, { status: 500 });
     }
-
-    // Create sections in the database
-    const titles = SECTION_TITLES[lang] || SECTION_TITLES.zh;
-    const sectionTypes = ['personal_info', 'summary', 'work_experience', 'education', 'skills', 'projects'] as const;
 
     for (let i = 0; i < sectionTypes.length; i++) {
       const type = sectionTypes[i];
@@ -146,7 +156,6 @@ Respond with JSON only.`,
       });
     }
 
-    // Fetch the complete resume with sections
     const completeResume = await resumeRepository.findById(newResume.id);
 
     return NextResponse.json({

@@ -3,6 +3,8 @@ import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { isLocalResumeId } from '@/lib/local-resumes';
+import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { jdAnalysisInputSchema, jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
 import { extractJson } from '@/lib/ai/extract-json';
@@ -25,9 +27,6 @@ export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const body = await request.json();
     const parsed = jdAnalysisInputSchema.safeParse(body);
@@ -39,18 +38,29 @@ export async function POST(request: NextRequest) {
     }
 
     const { resumeId, jobDescription } = parsed.data;
+    const localResume = isLocalResumeId(resumeId) ? normalizeResumeSnapshot((body as Record<string, unknown>).resume, resumeId) : null;
 
-    // Fetch the resume and verify ownership
-    const resume = await resumeRepository.findById(resumeId);
+    let resume: AIResumeSnapshot | NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>> | null = localResume;
+    if (!resume) {
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const cloudResume = await resumeRepository.findById(resumeId);
+      if (!cloudResume) {
+        return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+      }
+      if (cloudResume.userId !== user.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      resume = cloudResume;
+    }
+
     if (!resume) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
     }
-    if (resume.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const resumeContext = JSON.stringify(resume.sections);
-    const aiConfig = extractAIConfig(request);
+    const resumeContext = getResumeSectionsContext(resume);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig);
 
     const result = await generateText({
@@ -64,19 +74,21 @@ export async function POST(request: NextRequest) {
 
     const analysisData = extractJson(result.text, jdAnalysisOutputSchema);
 
-    // Persist to database
+    // Persist to database only for cloud resumes.
     let historyId: string | undefined;
-    try {
-      const saved = await analysisRepository.createJdAnalysis({
-        resumeId,
-        jobDescription,
-        result: analysisData,
-        overallScore: analysisData.overallScore,
-        atsScore: analysisData.atsScore,
-      });
-      historyId = saved?.id;
-    } catch (e) {
-      console.error('Failed to save JD analysis history:', e);
+    if (!localResume) {
+      try {
+        const saved = await analysisRepository.createJdAnalysis({
+          resumeId,
+          jobDescription,
+          result: analysisData,
+          overallScore: analysisData.overallScore,
+          atsScore: analysisData.atsScore,
+        });
+        historyId = saved?.id;
+      } catch (e) {
+        console.error('Failed to save JD analysis history:', e);
+      }
     }
 
     return NextResponse.json({ ...analysisData, historyId });

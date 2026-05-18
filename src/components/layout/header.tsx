@@ -1,24 +1,23 @@
 'use client';
 
 import Image from 'next/image';
-import { Settings, Menu } from 'lucide-react';
-import { LocaleSwitcher } from './locale-switcher';
+import { Menu } from 'lucide-react';
 import { UserMenu } from './user-menu';
 import { Link, usePathname } from '@/i18n/routing';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { useUIStore } from '@/stores/ui-store';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS: { href: string; i18nKey: string; match: string; tourId?: string }[] = [
   { href: '/dashboard', i18nKey: 'dashboard.nav', match: '/dashboard' },
   { href: '/templates', i18nKey: 'templates.nav', match: '/templates', tourId: 'dash-templates' },
+  { href: '/knowledge', i18nKey: 'knowledge.nav', match: '/knowledge' },
   { href: '/interview', i18nKey: 'interview.nav', match: '/interview' },
+  { href: '/admin', i18nKey: 'admin.nav', match: '/admin' },
 ];
 
 export function Header() {
-  const { openModal } = useUIStore();
   const t = useTranslations();
   const pathname = usePathname();
 
@@ -54,16 +53,6 @@ export function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <LocaleSwitcher />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => openModal('settings')}
-            className="cursor-pointer text-zinc-500"
-            title={t('settings.title')}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
           <UserMenu />
           {/* Mobile menu */}
           <div className="md:hidden">

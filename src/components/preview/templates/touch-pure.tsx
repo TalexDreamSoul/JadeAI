@@ -70,7 +70,7 @@ export function TouchPureTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <section key={section.id} data-section>
+            <section key={section.id} data-section data-section-id={section.id}>
               <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-[13px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT }}>
                   {section.title}
@@ -85,7 +85,7 @@ export function TouchPureTemplate({ resume }: { resume: Resume }) {
   );
 }
 
-function TouchPureSectionContent({ section, resume }: { section: any; resume: Resume }) {
+export function TouchPureSectionContent({ section, resume }: { section: any; resume: Resume }) {
   const content = section.content;
   if (!content) return null;
 

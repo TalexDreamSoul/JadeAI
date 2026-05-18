@@ -1,4 +1,5 @@
 import type { AIProvider } from '@/stores/settings-store';
+import { aiChannelRepository, type AIChannelRecord } from '@/lib/db/repositories/ai-channel.repository';
 
 export type OpenAIEndpoint = 'chat' | 'responses';
 
@@ -44,6 +45,25 @@ export function getServerAIConfig(): ServerAIConfig {
 
 export function hasServerAIConfig(): boolean {
   return !!getServerAIConfig().apiKey;
+}
+
+export async function selectServerAIConfig(): Promise<ServerAIConfig> {
+  const channel = await aiChannelRepository.selectForRequest().catch(() => null);
+  if (!channel) return getServerAIConfig();
+
+  const provider = normalizeProvider(channel.provider);
+  return {
+    provider,
+    apiKey: channel.apiKey || '',
+    baseURL: channel.baseUrl || DEFAULT_BASE_URLS[provider],
+    model: channel.model || DEFAULT_MODELS[provider],
+    openAIEndpoint: normalizeOpenAIEndpoint(channel.openAIEndpoint),
+  };
+}
+
+export async function hasDynamicServerAIConfig(): Promise<boolean> {
+  const channels = await aiChannelRepository.listEnabled().catch((): AIChannelRecord[] => []);
+  return channels.some((channel) => channel.apiKey);
 }
 
 export function getServerImageAIConfig() {

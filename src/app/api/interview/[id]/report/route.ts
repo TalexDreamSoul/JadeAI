@@ -6,6 +6,7 @@ import { interviewRepository } from '@/lib/db/repositories/interview.repository'
 import { interviewReportSchema } from '@/lib/ai/interview-report-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { dbReady } from '@/lib/db';
+import type { InterviewerConfig } from '@/types/interview';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await dbReady;
@@ -37,13 +38,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (existing) return NextResponse.json(existing);
 
     const { model: modelId, locale = 'zh' } = await request.json();
-    const aiConfig = extractAIConfig(request);
+    const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig, modelId);
 
     const roundsWithMessages = await interviewRepository.findAllMessagesBySessionId(sessionId);
 
     const conversationLog = roundsWithMessages.map(({ round, messages }) => {
-      const config = round.interviewerConfig as any;
+      const config = round.interviewerConfig as InterviewerConfig;
       return {
         interviewerType: round.interviewerType,
         interviewerName: config.name,
@@ -55,8 +56,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         })),
       };
     });
-
-    const lang = locale === 'zh' ? '中文' : 'English';
 
     const reportPrompt = locale === 'zh'
       ? `你是一位拥有丰富面试评估经验的人才评估专家。请基于以下面试对话记录，对候选人进行系统化、结构化的评估分析，生成专业的面试评估报告。请以 JSON 格式输出。
