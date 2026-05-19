@@ -4,10 +4,11 @@ export function buildInterviewSystemPrompt(params: {
   interviewer: InterviewerConfig;
   jobDescription: string;
   resumeContent?: string;
+  resumeStyle?: string;
   maxQuestions: number;
   locale: string;
 }) {
-  const { interviewer, jobDescription, resumeContent, maxQuestions, locale } = params;
+  const { interviewer, jobDescription, resumeContent, resumeStyle, maxQuestions, locale } = params;
   const lang = locale === 'zh' ? '中文' : 'English';
 
   if (locale === 'zh') {
@@ -37,6 +38,9 @@ ${jobDescription}
 ## 候选人简历
 ${resumeContent ? resumeContent : '候选人未提供简历，请根据岗位要求从零开始考察。'}
 
+## 简历呈现/画风
+${resumeStyle || '未提供简历视觉配置。'}
+
 ---
 
 # 面试执行规范
@@ -49,6 +53,7 @@ ${resumeContent ? resumeContent : '候选人未提供简历，请根据岗位要
 ## 提问策略
 - 开场：简短自我介绍 + 本轮方向说明，随即进入第一个问题。
 - 追问应基于候选人的实际回答内容，探查深度和真实性，而不是机械展开预设问题。
+- 结合 JD 判断简历画风、信息密度、模块顺序和候选人表达是否支撑目标岗位定位；必要时可以追问候选人为什么这样呈现。
 - 当候选人已经给出充分、到位的回答时，不要为了追问而追问，自然过渡到下一主题。
 - 问题之间要有逻辑关联或自然过渡，避免给人"逐条念清单"的感觉。
 
@@ -99,6 +104,9 @@ ${jobDescription}
 ## Candidate Resume
 ${resumeContent ? resumeContent : 'No resume provided. Assess the candidate based on the job requirements alone.'}
 
+## Resume Presentation / Style
+${resumeStyle || 'No resume visual configuration provided.'}
+
 ---
 
 # Interview Conduct Guidelines
@@ -111,6 +119,7 @@ ${resumeContent ? resumeContent : 'No resume provided. Assess the candidate base
 ## Questioning Strategy
 - Opening: Brief self-introduction + round overview, then directly into the first question.
 - Follow-ups should stem from the candidate's actual responses — probe for depth and authenticity rather than mechanically running through preset questions.
+- Use the JD to judge whether the resume's visual style, information density, section order, and candidate positioning support the target role. Ask why they chose that presentation when relevant.
 - When the candidate gives a thorough, well-articulated answer, don't force follow-ups. Transition naturally.
 - Maintain logical flow between topics. Avoid a "reading from a checklist" feel.
 

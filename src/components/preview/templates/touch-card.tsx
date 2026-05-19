@@ -3,6 +3,7 @@
 import type { PersonalInfoContent, Resume } from '@/types/resume';
 import { isSectionEmpty } from '../utils';
 import { AvatarImage } from '../avatar-image';
+import { getPersonalInfoItems } from '../personal-info-utils';
 import { TouchSimpleSectionContent } from './touch-simple';
 
 const ACCENT = '#4f46e5';
@@ -10,7 +11,7 @@ const ACCENT = '#4f46e5';
 export function TouchCardTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
   const pi = (personalInfo?.content || {}) as PersonalInfoContent;
-  const contacts = [pi.jobTitle, pi.email, pi.phone, pi.location, pi.website].filter(Boolean);
+  const contacts = getPersonalInfoItems(pi, { includeJobTitle: true });
 
   return (
     <div className="mx-auto max-w-[210mm] bg-[#f8fafc] p-6 shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: '#111827' }}>

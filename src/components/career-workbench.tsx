@@ -6,6 +6,7 @@ import {
   Brain,
   Briefcase,
   Check,
+  ClipboardPaste,
   ExternalLink,
   FileText,
   GitBranch,
@@ -25,6 +26,14 @@ import {
 import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -41,7 +50,18 @@ import { Link, useRouter } from '@/i18n/routing';
 import { getAIHeaders } from '@/stores/settings-store';
 import type { Resume } from '@/types/resume';
 
+type CareerWorkbenchProps = {
+  embedded?: boolean;
+  resumeId?: string;
+  activeTab?: CareerWorkbenchTab;
+  onActiveTabChange?: (tab: CareerWorkbenchTab) => void;
+  onResumeChanged?: () => void | Promise<void>;
+};
+
+export type CareerWorkbenchTab = 'match' | 'github' | 'memory';
+
 type JobTemplate = {
+  id?: string;
   roleKey: string;
   title: string;
   level: string;
@@ -50,6 +70,8 @@ type JobTemplate = {
   keywords: string[];
   interviewQuestions: string[];
   recommendedSections: string[];
+  scope?: 'public' | 'personal';
+  enabled?: boolean;
 };
 
 type MemoryItem = {
@@ -86,6 +108,14 @@ type JdAnalysisResult = {
   historyId?: string;
 };
 
+type JdHistoryItem = {
+  id: string;
+  overallScore: number;
+  atsScore: number;
+  jobDescription: string;
+  createdAt: string | number | Date;
+};
+
 function getHeaders() {
   const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
   return {
@@ -108,15 +138,63 @@ function scoreTone(score?: number) {
   return 'text-red-600 dark:text-red-400';
 }
 
-export default function CareerPage() {
+export const CAREER_WORKBENCH_TABS: { value: CareerWorkbenchTab; icon: React.ElementType; labelKey: string }[] = [
+  { value: 'match', icon: Target, labelKey: 'matchTab' },
+  { value: 'github', icon: Github, labelKey: 'githubTab' },
+  { value: 'memory', icon: Brain, labelKey: 'memoryTab' },
+];
+
+export function CareerWorkbenchNav({
+  activeTab,
+  onActiveTabChange,
+}: {
+  activeTab: CareerWorkbenchTab;
+  onActiveTabChange: (tab: CareerWorkbenchTab) => void;
+}) {
+  const t = useTranslations('career');
+  return (
+    <div className="w-56 shrink-0 border-r bg-white dark:border-zinc-800 dark:bg-zinc-900 max-md:w-full max-md:border-r-0">
+      <div className="p-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          {t('nav')}
+        </h3>
+      </div>
+      <div className="space-y-0.5 px-2">
+        {CAREER_WORKBENCH_TABS.map((item) => {
+          const Icon = item.icon;
+          const active = activeTab === item.value;
+          return (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => onActiveTabChange(item.value)}
+              className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-150 ${
+                active
+                  ? 'bg-brand-muted text-brand dark:bg-brand-muted dark:text-brand'
+                  : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t(item.labelKey)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiveTabChange, onResumeChanged }: CareerWorkbenchProps) {
   const t = useTranslations('career');
   const router = useRouter();
   const { isLoading: fpLoading } = useFingerprint();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [jdHistory, setJdHistory] = useState<JdHistoryItem[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
+  const [internalActiveTab, setInternalActiveTab] = useState<CareerWorkbenchTab>('match');
   const [jobTitle, setJobTitle] = useState('');
   const [targetCompany, setTargetCompany] = useState('');
   const [jobDescription, setJobDescription] = useState('');
@@ -124,6 +202,7 @@ export default function CareerPage() {
   const [repoToken, setRepoToken] = useState('');
   const [memoryForm, setMemoryForm] = useState({ type: 'profile', title: '', content: '' });
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [jdDialogOpen, setJdDialogOpen] = useState(false);
   const [analysis, setAnalysis] = useState<JdAnalysisResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [appliedSuggestions, setAppliedSuggestions] = useState<Record<number, AppliedSuggestionState>>({});
@@ -146,6 +225,8 @@ export default function CareerPage() {
       reason: item.suggested,
       evidenceRequired: true,
     })) || [];
+  const currentTab = activeTab || internalActiveTab;
+  const setCurrentTab = onActiveTabChange || setInternalActiveTab;
 
   const load = async () => {
     const [resumeRes, templateRes, memoryRes] = await Promise.all([
@@ -158,7 +239,7 @@ export default function CareerPage() {
       const data = await resumeRes.json();
       const cloudResumes = Array.isArray(data) ? data.filter((resume: Resume) => resume.cloudSyncEnabled !== false) : [];
       setResumes(cloudResumes);
-      setSelectedResumeId((current) => current || cloudResumes[0]?.id || '');
+      setSelectedResumeId((current) => resumeId || current || cloudResumes[0]?.id || '');
     }
     if (templateRes.ok) {
       const data = await templateRes.json();
@@ -170,6 +251,14 @@ export default function CareerPage() {
     }
   };
 
+  const loadJdHistory = async (targetResumeId = selectedResumeId) => {
+    if (!targetResumeId) return;
+    const res = await fetch(`/api/ai/jd-analysis/history?resumeId=${targetResumeId}`, { headers: getRequestHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    setJdHistory(Array.isArray(data) ? data : []);
+  };
+
   useEffect(() => {
     if (fpLoading) return;
     load().catch((error) => {
@@ -177,7 +266,17 @@ export default function CareerPage() {
       toast.error(t('loadFailed'));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fpLoading]);
+  }, [fpLoading, resumeId]);
+
+  useEffect(() => {
+    if (resumeId) setSelectedResumeId(resumeId);
+  }, [resumeId]);
+
+  useEffect(() => {
+    if (!selectedResumeId) return;
+    loadJdHistory(selectedResumeId).catch(() => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedResumeId]);
 
   const applyTemplate = (roleKey: string) => {
     setSelectedTemplateKey(roleKey);
@@ -205,6 +304,7 @@ export default function CareerPage() {
       const data = await res.json();
       setAnalysis(data);
       setAppliedSuggestions({});
+      await loadJdHistory();
       toast.success(t('analysisDone'));
     } catch (error) {
       console.error(error);
@@ -235,6 +335,7 @@ export default function CareerPage() {
       const resume = await res.json();
       toast.success(t('deriveDone'));
       await load();
+      await onResumeChanged?.();
       router.push(`/editor/${resume.id}`);
     } catch (error) {
       console.error(error);
@@ -263,6 +364,7 @@ export default function CareerPage() {
         },
       }));
       await load();
+      await onResumeChanged?.();
       toast.success(t('applyDone'));
     } catch (error) {
       console.error(error);
@@ -294,6 +396,7 @@ export default function CareerPage() {
         return next;
       });
       await load();
+      await onResumeChanged?.();
       toast.success(t('undoDone'));
     } catch (error) {
       console.error(error);
@@ -324,6 +427,7 @@ export default function CareerPage() {
       setRepoUrl('');
       setRepoToken('');
       await load();
+      await onResumeChanged?.();
       toast.success(t('githubDone'));
     } catch (error) {
       console.error(error);
@@ -520,9 +624,42 @@ export default function CareerPage() {
     }
   };
 
+  const saveJdTemplate = async () => {
+    if (!jobDescription.trim()) {
+      setJdDialogOpen(false);
+      return;
+    }
+    const title = (jobTitle || selectedTemplate?.title || t('jobTitle')).trim();
+    try {
+      const res = await fetch('/api/career/job-templates/personal', {
+        method: 'POST',
+        headers: getRequestHeaders(),
+        body: JSON.stringify({
+          title,
+          industry: targetCompany || t('personalTemplate'),
+          jd: jobDescription,
+          keywords: selectedTemplate?.keywords || [],
+          interviewQuestions: selectedTemplate?.interviewQuestions || [],
+          recommendedSections: selectedTemplate?.recommendedSections || ['个人简介', '工作经历', '项目经历', '技能特长'],
+          enabled: false,
+        }),
+      });
+      if (res.ok) {
+        const template = await res.json();
+        await load();
+        if (template?.roleKey) setSelectedTemplateKey(template.roleKey);
+        toast.success(t('jdTemplateSaved'));
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setJdDialogOpen(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className={embedded ? 'h-full overflow-auto bg-zinc-50 p-4 dark:bg-zinc-950' : 'space-y-6'}>
+      <div className={embedded ? 'mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between' : 'flex flex-col gap-4 md:flex-row md:items-end md:justify-between'}>
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-brand">
             <Sparkles className="h-4 w-4" />
@@ -531,7 +668,7 @@ export default function CareerPage() {
           <h1 className="text-2xl font-bold text-zinc-950 dark:text-zinc-50">{t('title')}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">{t('subtitle')}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {!embedded && <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="gap-2" asChild>
             <Link href="/knowledge">
               <Network className="h-4 w-4" />
@@ -544,11 +681,11 @@ export default function CareerPage() {
               {t('openInterview')}
             </Link>
           </Button>
-        </div>
+        </div>}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <aside className="space-y-4">
+      <div className="space-y-4">
+        {!embedded && (
           <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
             <div className="mb-4 flex items-center gap-2">
               <FileText className="h-4 w-4 text-brand" />
@@ -582,13 +719,15 @@ export default function CareerPage() {
               </div>
             </div>
           </section>
+        )}
 
-          <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
-            <div className="mb-4 flex items-center gap-2">
+        {currentTab === 'match' && <section className="rounded-lg border bg-white p-3 dark:bg-zinc-900">
+          <div className="space-y-3">
+            <div className="flex min-w-0 items-center gap-2">
               <Briefcase className="h-4 w-4 text-brand" />
               <h2 className="text-sm font-semibold">{t('templateLibrary')}</h2>
             </div>
-            <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_auto]">
               <Select value={selectedTemplateKey} onValueChange={applyTemplate}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={t('selectTemplate')} />
@@ -596,36 +735,61 @@ export default function CareerPage() {
                 <SelectContent>
                   {templates.map((template) => (
                     <SelectItem key={template.roleKey} value={template.roleKey}>
-                      {template.title} · {template.industry}
+                      {template.title} · {template.industry} · {template.scope === 'personal' ? t('personalTemplate') : t('publicTemplate')}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {selectedTemplate && (
-                <div className="space-y-3 rounded-md bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedTemplate.keywords.slice(0, 8).map((keyword) => (
-                      <Badge key={keyword} variant="secondary">{keyword}</Badge>
-                    ))}
-                  </div>
-                  <div>
-                    <p className="mb-1 text-xs font-semibold text-zinc-500">{t('recommendedSections')}</p>
-                    <p className="text-zinc-600 dark:text-zinc-300">{selectedTemplate.recommendedSections.join(' / ')}</p>
-                  </div>
+              <Button variant="outline" onClick={() => setJdDialogOpen(true)} className="gap-2">
+                <ClipboardPaste className="h-4 w-4" />
+                {jobDescription.trim() ? t('editJd') : t('importJd')}
+              </Button>
+            </div>
+          </div>
+          {(selectedTemplate || jobDescription.trim()) && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {selectedTemplate?.keywords.slice(0, 8).map((keyword) => (
+                <Badge key={keyword} variant="secondary">{keyword}</Badge>
+              ))}
+              {jobTitle && <Badge variant="outline">{jobTitle}</Badge>}
+              {targetCompany && <Badge variant="outline">{targetCompany}</Badge>}
+            </div>
+          )}
+        </section>}
+
+        <Dialog open={jdDialogOpen} onOpenChange={setJdDialogOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{t('jdDialogTitle')}</DialogTitle>
+              <DialogDescription>{t('jdDialogDescription')}</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>{t('jobTitle')}</Label>
+                  <Input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder={t('jobTitlePlaceholder')} />
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label>{t('targetCompany')}</Label>
+                  <Input value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} placeholder={t('targetCompanyPlaceholder')} />
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label>{t('jobDescription')}</Label>
                 <Textarea
                   value={jobDescription}
                   onChange={(event) => setJobDescription(event.target.value)}
                   placeholder={t('jobDescriptionPlaceholder')}
-                  className="min-h-52"
+                  className="min-h-72"
                 />
               </div>
             </div>
-          </section>
-        </aside>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setJdDialogOpen(false)}>{t('cancel')}</Button>
+              <Button onClick={saveJdTemplate} className="bg-brand hover:bg-brand-hover">{t('saveJd')}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <main className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
@@ -639,34 +803,65 @@ export default function CareerPage() {
               <p className="text-sm font-semibold">{t('derive')}</p>
               <p className="mt-1 text-xs text-zinc-500">{t('deriveHint')}</p>
             </button>
-            <button type="button" onClick={createKnowledge} disabled={busy === 'knowledge'} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand dark:bg-zinc-900">
+            <button type="button" onClick={createKnowledge} disabled={busy === 'knowledge' || !jobDescription.trim()} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-900">
               <Brain className="mb-3 h-5 w-5 text-brand" />
               <p className="text-sm font-semibold">{t('buildKnowledge')}</p>
               <p className="mt-1 text-xs text-zinc-500">{t('buildKnowledgeHint')}</p>
             </button>
-            <button type="button" onClick={createInterview} disabled={busy === 'interview'} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand dark:bg-zinc-900">
+            <button type="button" onClick={createInterview} disabled={busy === 'interview' || !jobDescription.trim()} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-900">
               <MessageSquareText className="mb-3 h-5 w-5 text-brand" />
               <p className="text-sm font-semibold">{t('createInterview')}</p>
               <p className="mt-1 text-xs text-zinc-500">{t('createInterviewHint')}</p>
             </button>
           </div>
 
-          <Link href={selectedResumeId ? `/editor/${selectedResumeId}` : '/dashboard'} className="flex items-center justify-between rounded-lg border bg-white p-4 text-left transition hover:border-brand dark:bg-zinc-900">
+          {!embedded && <Link href={selectedResumeId ? `/editor/${selectedResumeId}` : '/dashboard'} className="flex items-center justify-between rounded-lg border bg-white p-4 text-left transition hover:border-brand dark:bg-zinc-900">
             <div>
               <p className="text-sm font-semibold">{t('openEditor')}</p>
               <p className="mt-1 text-xs text-zinc-500">{t('openEditorHint')}</p>
             </div>
             <ExternalLink className="h-5 w-5 text-brand" />
-          </Link>
+          </Link>}
 
-          <Tabs defaultValue="match" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="match">{t('matchTab')}</TabsTrigger>
-              <TabsTrigger value="github">{t('githubTab')}</TabsTrigger>
-              <TabsTrigger value="memory">{t('memoryTab')}</TabsTrigger>
-            </TabsList>
+          <Tabs value={currentTab} onValueChange={(value) => setCurrentTab(value as CareerWorkbenchTab)} className="space-y-4">
+            {!embedded && (
+              <TabsList>
+                <TabsTrigger value="match">{t('matchTab')}</TabsTrigger>
+                <TabsTrigger value="github">{t('githubTab')}</TabsTrigger>
+                <TabsTrigger value="memory">{t('memoryTab')}</TabsTrigger>
+              </TabsList>
+            )}
 
             <TabsContent value="match" className="space-y-4">
+              <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
+                <h2 className="text-sm font-semibold">{t('matchHistory')}</h2>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {jdHistory.length === 0 ? (
+                    <div className="rounded-md border border-dashed p-4 text-sm text-zinc-400 md:col-span-2">{t('noMatchHistory')}</div>
+                  ) : jdHistory.slice(0, 6).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={async () => {
+                        const res = await fetch(`/api/ai/jd-analysis/history?resumeId=${selectedResumeId}&id=${item.id}`, { headers: getRequestHeaders() });
+                        if (!res.ok) return;
+                        const detail = await res.json();
+                        setJobDescription(detail.jobDescription || '');
+                        setAnalysis({ ...detail.result, historyId: detail.id });
+                        setCurrentTab('match');
+                      }}
+                      className="rounded-md border p-3 text-left transition hover:border-brand"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium">{item.jobDescription}</span>
+                        <Badge variant="secondary">{item.overallScore}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-zinc-500">ATS {item.atsScore}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
               <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -851,3 +1046,5 @@ export default function CareerPage() {
     </div>
   );
 }
+
+export default CareerWorkbench;

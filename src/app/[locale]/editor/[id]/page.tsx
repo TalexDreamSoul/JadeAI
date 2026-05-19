@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useEditor } from '@/hooks/use-editor';
 import { useFingerprint } from '@/hooks/use-fingerprint';
@@ -8,6 +9,7 @@ import { useIsMobile } from '@/hooks/use-media-query';
 import { EditorToolbar } from '@/components/editor/editor-toolbar';
 import { EditorSidebar } from '@/components/editor/editor-sidebar';
 import { EditorCanvas } from '@/components/editor/editor-canvas';
+import { CareerWorkbench, CareerWorkbenchNav, type CareerWorkbenchTab } from '@/components/career-workbench';
 import { ThemeEditor } from '@/components/editor/theme-editor';
 import { EditorPreviewTabs } from '@/components/editor/editor-preview-tabs';
 import { EditorMobileTabBar } from '@/components/editor/editor-mobile-tab-bar';
@@ -46,10 +48,18 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const { id } = use(params);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { isLoading: fpLoading } = useFingerprint();
-  const { resume, sections, updateSection, addSection, removeSection, reorderSections, hasLoaded } = useEditor(id);
+  const { resume, sections, updateSection, addSection, removeSection, reorderSections, loadResume, hasLoaded } = useEditor(id);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<'resume' | 'career'>(() => (
+    searchParams.get('workspace') === 'career' ? 'career' : 'resume'
+  ));
+  const [careerTab, setCareerTab] = useState<CareerWorkbenchTab>(() => {
+    const tab = searchParams.get('careerTab');
+    return tab === 'github' || tab === 'memory' || tab === 'match' ? tab : 'match';
+  });
   const { showThemeEditor, mobileActiveTab } = useEditorStore();
   const { activeModal, openModal, closeModal } = useUIStore();
   const { hydrate, _hydrated, _localOnlyHydrated } = useSettingsStore();
@@ -62,6 +72,44 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const printResume = () => {
     const target = `${pathname.replace(/\/$/, '')}/print`;
     window.open(target, '_blank', 'noopener,noreferrer');
+  };
+
+  const updateEditorQuery = (next: { workspace?: 'resume' | 'career'; careerTab?: CareerWorkbenchTab; modal?: string | null }) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.workspace) {
+      if (next.workspace === 'resume') params.delete('workspace');
+      else params.set('workspace', next.workspace);
+    }
+    if (next.careerTab) {
+      if (next.careerTab === 'match') params.delete('careerTab');
+      else params.set('careerTab', next.careerTab);
+    }
+    if (next.modal !== undefined) {
+      if (next.modal) params.set('modal', next.modal);
+      else params.delete('modal');
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  };
+
+  const handleWorkspaceModeChange = (mode: 'resume' | 'career') => {
+    setWorkspaceMode(mode);
+    updateEditorQuery({ workspace: mode });
+  };
+
+  const handleCareerTabChange = (tab: CareerWorkbenchTab) => {
+    setCareerTab(tab);
+    updateEditorQuery({ workspace: 'career', careerTab: tab });
+  };
+
+  const openEditorModal = (modal: string) => {
+    openModal(modal as Parameters<typeof openModal>[0]);
+    updateEditorQuery({ modal });
+  };
+
+  const closeEditorModal = () => {
+    closeModal();
+    updateEditorQuery({ modal: null });
   };
 
   useEffect(() => {
@@ -94,6 +142,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     return () => clearTimeout(timer);
   }, [resume, startTour]);
 
+  useEffect(() => {
+    const modal = searchParams.get('modal');
+    if (modal) openModal(modal as Parameters<typeof openModal>[0]);
+  }, [openModal, searchParams]);
+
   if (fpLoading || (!hasLoaded && !resume)) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -124,17 +177,27 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   return (
     <div className="flex h-screen flex-col">
-      <EditorToolbar resumeId={id} onPrint={printResume} />
+      <EditorToolbar
+        resumeId={id}
+        onPrint={printResume}
+        workspaceMode={workspaceMode}
+        onWorkspaceModeChange={handleWorkspaceModeChange}
+        onOpenModal={openEditorModal}
+      />
       <EditorMobileTabBar />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar: hidden on mobile, shown on desktop */}
         <div className="hidden md:block">
-          <EditorSidebar
-            sections={sections}
-            onAddSection={addSection}
-            onReorderSections={reorderSections}
-          />
+          {workspaceMode === 'resume' ? (
+            <EditorSidebar
+              sections={sections}
+              onAddSection={addSection}
+              onReorderSections={reorderSections}
+            />
+          ) : (
+            <CareerWorkbenchNav activeTab={careerTab} onActiveTabChange={handleCareerTabChange} />
+          )}
         </div>
 
         {/* Canvas: always mounted, hidden on mobile when preview tab active */}
@@ -142,12 +205,22 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           "min-w-0 flex-1 overflow-hidden md:flex-[4]",
           isMobile && mobileActiveTab !== "edit" && "hidden"
         )}>
-          <EditorCanvas
-            sections={visibleSections}
-            onUpdateSection={updateSection}
-            onRemoveSection={removeSection}
-            onReorderSections={reorderSections}
-          />
+          {workspaceMode === 'resume' ? (
+            <EditorCanvas
+              sections={visibleSections}
+              onUpdateSection={updateSection}
+              onRemoveSection={removeSection}
+              onReorderSections={reorderSections}
+            />
+          ) : (
+            <CareerWorkbench
+              embedded
+              resumeId={id}
+              activeTab={careerTab}
+              onActiveTabChange={handleCareerTabChange}
+              onResumeChanged={loadResume}
+            />
+          )}
         </div>
 
         {showThemeEditor && <ThemeEditor />}
@@ -157,7 +230,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           "min-w-0 flex-1 overflow-hidden md:flex-[6]",
           isMobile && mobileActiveTab !== "preview" && "hidden"
         )}>
-          <EditorPreviewTabs resumeId={id} />
+          <EditorPreviewTabs resumeId={id} readonly={workspaceMode === 'career'} />
         </div>
       </div>
 
@@ -176,13 +249,23 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="border-b px-4 py-3">
-            <SheetTitle className="text-sm font-semibold">Sections</SheetTitle>
+            <SheetTitle className="text-sm font-semibold">{workspaceMode === 'resume' ? 'Sections' : '求职工作台'}</SheetTitle>
           </SheetHeader>
-          <EditorSidebar
-            sections={sections}
-            onAddSection={(s) => { addSection(s); setSidebarOpen(false); }}
-            onReorderSections={reorderSections}
-          />
+          {workspaceMode === 'resume' ? (
+            <EditorSidebar
+              sections={sections}
+              onAddSection={(s) => { addSection(s); setSidebarOpen(false); }}
+              onReorderSections={reorderSections}
+            />
+          ) : (
+            <CareerWorkbenchNav
+              activeTab={careerTab}
+              onActiveTabChange={(tab) => {
+                handleCareerTabChange(tab);
+                setSidebarOpen(false);
+              }}
+            />
+          )}
         </SheetContent>
       </Sheet>
 
@@ -190,42 +273,42 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       <SettingsDialog />
       <JdAnalysisDialog
         open={activeModal === 'jd-analysis'}
-        onOpenChange={(open) => open ? openModal('jd-analysis') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('jd-analysis') : closeEditorModal()}
         resumeId={id}
       />
       <TranslateDialog
         open={activeModal === 'translate'}
-        onOpenChange={(open) => open ? openModal('translate') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('translate') : closeEditorModal()}
         resumeId={id}
       />
       <ExportDialog
         open={activeModal === 'export'}
-        onOpenChange={(open) => open ? openModal('export') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('export') : closeEditorModal()}
         resumeId={id}
       />
       <ImportDialog
         open={activeModal === 'import'}
-        onOpenChange={(open) => open ? openModal('import') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('import') : closeEditorModal()}
         resumeId={id}
       />
       <ShareDialog
         open={activeModal === 'share'}
-        onOpenChange={(open) => open ? openModal('share') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('share') : closeEditorModal()}
         resumeId={id}
       />
       <CoverLetterDialog
         open={activeModal === 'cover-letter'}
-        onOpenChange={(open) => open ? openModal('cover-letter') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('cover-letter') : closeEditorModal()}
         resumeId={id}
       />
       <GrammarCheckDialog
         open={activeModal === 'grammar-check'}
-        onOpenChange={(open) => open ? openModal('grammar-check') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('grammar-check') : closeEditorModal()}
         resumeId={id}
       />
       <AIReviewDialog
         open={activeModal === 'ai-review'}
-        onOpenChange={(open) => open ? openModal('ai-review') : closeModal()}
+        onOpenChange={(open) => open ? openEditorModal('ai-review') : closeEditorModal()}
         resumeId={id}
       />
       <TourOverlay tourId="editor" steps={EDITOR_TOUR_STEPS} />

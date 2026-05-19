@@ -14,6 +14,7 @@ import type {
   WorkExperienceContent,
 } from '@/types/resume';
 import { AvatarImage } from '../avatar-image';
+import { getPersonalInfoItems } from '../personal-info-utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 import { degreeField, isSectionEmpty, md } from '../utils';
 
@@ -28,7 +29,7 @@ function dateRange(start?: string, end?: string | null, current?: boolean, lang?
 export function TouchLineTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
   const pi = (personalInfo?.content || {}) as PersonalInfoContent;
-  const contacts = [pi.jobTitle, pi.email, pi.phone, pi.location, pi.website].filter(Boolean);
+  const contacts = getPersonalInfoItems(pi, { includeJobTitle: true });
 
   return (
     <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: ACCENT }}>

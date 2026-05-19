@@ -15,7 +15,7 @@ import type { Resume } from '@/types/resume';
 type PreviewMode = 'edit' | 'review';
 type EditView = 'live' | 'versions';
 
-export function EditorPreviewTabs({ resumeId }: { resumeId: string }) {
+export function EditorPreviewTabs({ resumeId, readonly = false }: { resumeId: string; readonly?: boolean }) {
   const t = useTranslations('editor.previewTabs');
   const toolbarT = useTranslations('editor.toolbar');
   const { currentResume, sections } = useResumeStore();
@@ -33,6 +33,14 @@ export function EditorPreviewTabs({ resumeId }: { resumeId: string }) {
   }, [currentResume, sections]);
 
   if (!liveResume) return null;
+
+  if (readonly) {
+    return (
+      <div data-tour="preview" className="flex h-full min-w-0 flex-col border-l bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
+        <PreviewZoom resume={liveResume} title={toolbarT('preview')} initialZoom={80} mobileFit={isMobile} showToolbar={false} />
+      </div>
+    );
+  }
 
   return (
     <div data-tour="preview" className="flex h-full min-w-0 flex-col border-l bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">

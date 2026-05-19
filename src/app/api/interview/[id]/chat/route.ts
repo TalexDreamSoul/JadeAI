@@ -30,10 +30,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let resumeContent: string | undefined;
+    let resumeStyle: string | undefined;
     if (session.resumeId) {
       const resume = await resumeRepository.findById(session.resumeId as string);
       if (resume) {
         resumeContent = JSON.stringify(resume.sections);
+        resumeStyle = JSON.stringify({
+          template: resume.template,
+          themeConfig: resume.themeConfig,
+          targetCompany: resume.targetCompany,
+          targetJobTitle: resume.targetJobTitle,
+          jobDescription: resume.jobDescription,
+        });
       }
     }
 
@@ -68,6 +76,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       interviewer: interviewerConfig,
       jobDescription: session.jobDescription,
       resumeContent,
+      resumeStyle,
       maxQuestions: round.maxQuestions,
       locale,
     });

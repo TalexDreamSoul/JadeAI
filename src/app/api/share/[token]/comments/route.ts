@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
+import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { anonymizeDisplayName, getReviewerDisplay, isReviewLoginRequired } from '@/lib/share/review';
 import { hashPassword } from '@/lib/utils/share';
@@ -93,6 +94,22 @@ export async function POST(
       anchor: body.anchor && typeof body.anchor === 'object' ? body.anchor : null,
       content,
     });
+    const owner = await resumeRepository.findOwnerByResumeId(result.share!.resumeId);
+    if (owner?.id && owner.id !== reviewer?.id) {
+      await resumeRepository.createEvent({
+        resumeId: result.share!.resumeId,
+        userId: owner.id,
+        type: 'notification_review_comment',
+        title: '简历收到新评论',
+        description: `${reviewerDisplay.name} 评论了你的分享简历。`,
+        metadata: {
+          shareId: result.share!.id,
+          commentId: comment?.id,
+          reviewerName: reviewerDisplay.name,
+          selectedText: selectedText || null,
+        },
+      });
+    }
     return NextResponse.json(sanitizeComment(comment, !!result.share!.anonymousShare), { status: 201 });
   } catch (error) {
     console.error('POST /api/share/[token]/comments error:', error);

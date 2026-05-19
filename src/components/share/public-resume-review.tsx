@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
+import { md } from '@/components/preview/utils';
 import { getAIHeaders, hasUsableAIConfig } from '@/stores/settings-store';
 import type { Resume } from '@/types/resume';
 
@@ -126,6 +127,10 @@ function safeCopy(value: string, fallback: string) {
   return value.startsWith('publicView.') ? fallback : value;
 }
 
+function normalizeForMatch(value: string) {
+  return value.toLowerCase().replace(/\s+/g, '');
+}
+
 function VisitorWatermarkLayer({ text }: { text: string }) {
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden select-none" aria-hidden="true">
@@ -174,6 +179,7 @@ export function PublicResumeReview({
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [selection, setSelection] = useState<SelectionState | null>(null);
+  const [previewZoom, setPreviewZoom] = useState(100);
   const [draft, setDraft] = useState('');
   const [activeLeftTab, setActiveLeftTab] = useState<'info' | 'review' | 'jd'>('info');
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
@@ -275,12 +281,21 @@ export function PublicResumeReview({
     selectionMarkerRef.current = null;
   }, []);
 
+  const clearSelection = useCallback(() => {
+    setSelection(null);
+    clearSelectionMarker();
+    window.getSelection()?.removeAllRanges();
+  }, [clearSelectionMarker]);
+
   const handleMouseUp = useCallback(() => {
     if (!shareMeta.reviewEnabled) return;
     window.setTimeout(() => {
       const sel = window.getSelection();
       const text = sel?.toString().trim();
-      if (!sel || !text || sel.rangeCount === 0 || !previewRef.current) return;
+      if (!sel || !text || sel.rangeCount === 0 || !previewRef.current) {
+        clearSelection();
+        return;
+      }
       const range = sel.getRangeAt(0);
       const common = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
         ? range.commonAncestorContainer as Element
@@ -291,30 +306,31 @@ export function PublicResumeReview({
       const rect = range.getBoundingClientRect();
       const previewRect = previewRef.current.getBoundingClientRect();
       const section = common.closest('[data-section-id]') as HTMLElement | null;
+      const scale = previewZoom / 100;
       const rects = Array.from(range.getClientRects())
         .filter((item) => item.width > 0 && item.height > 0)
         .map((item) => ({
-          top: item.top - previewRect.top,
-          left: item.left - previewRect.left,
-          width: item.width,
-          height: item.height,
+          top: (item.top - previewRect.top) / scale,
+          left: (item.left - previewRect.left) / scale,
+          width: item.width / scale,
+          height: item.height / scale,
         }));
 
       setSelection({
         text,
         sectionId: section?.dataset.sectionId || null,
         anchor: {
-          x: rect.left - previewRect.left + rect.width / 2,
-          y: rect.top - previewRect.top,
-          top: rect.top - previewRect.top,
-          left: rect.left - previewRect.left,
-          width: rect.width,
-          height: rect.height,
+          x: (rect.left - previewRect.left + rect.width / 2) / scale,
+          y: (rect.top - previewRect.top) / scale,
+          top: (rect.top - previewRect.top) / scale,
+          left: (rect.left - previewRect.left) / scale,
+          width: rect.width / scale,
+          height: rect.height / scale,
           rects,
         },
       });
     }, 0);
-  }, [clearSelectionMarker, shareMeta.reviewEnabled]);
+  }, [clearSelection, clearSelectionMarker, previewZoom, shareMeta.reviewEnabled]);
 
   const createComment = async (content: string, options?: { parentCommentId?: string }) => {
     const trimmed = content.trim();
@@ -353,12 +369,48 @@ export function PublicResumeReview({
     }
   };
 
+  const createAiReviewComment = async (content: string, actionSection?: string) => {
+    const target = actionSection ? normalizeForMatch(actionSection) : '';
+    const matchedSection = Array.from(previewRef.current?.querySelectorAll<HTMLElement>('[data-section-id], [data-section]') || [])
+      .find((item) => normalizeForMatch(item.textContent || '').includes(target));
+    const anchorElement = matchedSection || previewRef.current?.querySelector<HTMLElement>('[data-section-id], [data-section]');
+    const previewRect = previewRef.current?.getBoundingClientRect();
+    const elementRect = anchorElement?.getBoundingClientRect();
+    const scale = previewZoom / 100;
+    const anchor = previewRect && elementRect ? {
+      top: (elementRect.top - previewRect.top) / scale,
+      left: (elementRect.left - previewRect.left) / scale,
+      width: Math.min(elementRect.width / scale, 560),
+      height: Math.min(elementRect.height / scale, 32),
+      rects: [{
+        top: (elementRect.top - previewRect.top) / scale,
+        left: (elementRect.left - previewRect.left) / scale,
+        width: Math.min(elementRect.width / scale, 560),
+        height: Math.min(elementRect.height / scale, 32),
+      }],
+    } : undefined;
+
+    const res = await fetch(`/api/share/${token}/comments`, {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify({
+        password: password || undefined,
+        content,
+        sectionId: anchorElement?.dataset.sectionId || undefined,
+        selectedText: actionSection ? `AI 评审分析：${actionSection}` : 'AI 评审分析',
+        anchor,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || t('submitReview'));
+    return data as ReviewComment;
+  };
+
   const submitComment = async () => {
     const created = await createComment(draft);
     if (created) {
       setDraft('');
-      setSelection(null);
-      clearSelectionMarker();
+      clearSelection();
     }
   };
 
@@ -419,6 +471,17 @@ export function PublicResumeReview({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t('aiReview'));
       setAiReview(data);
+      const aiComments = await Promise.all(
+        (data.actions || []).slice(0, 5).map((action: AIReviewResult['actions'][number]) =>
+          createAiReviewComment(
+            `AI 评审分析，仅供参考\n\n${action.priority ? `优先级：${action.priority}\n` : ''}${action.suggestion}`,
+            action.section,
+          )
+        )
+      );
+      if (aiComments.length > 0) {
+        setComments((prev) => [...aiComments, ...prev]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -580,8 +643,11 @@ export function PublicResumeReview({
                   <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{t('aiChatIntro')}</p>
                 )}
                 {aiChatMessages.map((msg, index) => (
-                  <div key={index} className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${msg.role === 'user' ? 'ml-6 bg-brand text-white' : 'mr-6 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`}>
-                    {msg.content}
+                  <div
+                    key={index}
+                    className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${msg.role === 'user' ? 'ml-6 bg-brand text-white' : 'mr-6 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`}
+                    dangerouslySetInnerHTML={{ __html: md(msg.content) }}
+                  >
                   </div>
                 ))}
                 {aiChatLoading && (
@@ -670,7 +736,9 @@ export function PublicResumeReview({
         </aside>
 
         {/* Resume */}
-        <main className="min-h-0 w-full overflow-y-auto px-4">
+        <main className="min-h-0 w-full overflow-hidden px-4" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) clearSelection();
+        }}>
           <ReviewedResumeView
             resume={resume}
             comments={rootComments}
@@ -679,6 +747,9 @@ export function PublicResumeReview({
             previewRef={previewRef}
             onResumeMouseUp={handleMouseUp}
             watermark={<ResumeSensitiveWatermark text={sensitiveWatermark} />}
+            enableZoom
+            zoom={previewZoom}
+            onZoomChange={setPreviewZoom}
           >
             {activeHighlightRects.map((rect, index) => (
               <div
@@ -710,7 +781,7 @@ export function PublicResumeReview({
         </main>
 
         {/* Right comments */}
-        <aside className="relative min-h-0 overflow-y-auto pl-4">
+        <aside className="relative min-h-0 overflow-y-auto pl-4" onMouseDown={() => clearSelection()}>
           <div className="border-l border-zinc-200 bg-white/70 pl-4 dark:border-zinc-800 dark:bg-zinc-950/40">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               <MessageSquare className="h-4 w-4 text-brand" />

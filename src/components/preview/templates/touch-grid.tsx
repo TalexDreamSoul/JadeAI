@@ -3,6 +3,7 @@
 import type { PersonalInfoContent, Resume } from '@/types/resume';
 import { isSectionEmpty } from '../utils';
 import { AvatarImage } from '../avatar-image';
+import { getPersonalInfoItems } from '../personal-info-utils';
 import { TouchSimpleSectionContent } from './touch-simple';
 
 const SIDE_TYPES = new Set(['skills', 'languages', 'certifications', 'qr_codes']);
@@ -13,7 +14,7 @@ export function TouchGridTemplate({ resume }: { resume: Resume }) {
   const sections = resume.sections.filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s));
   const sideSections = sections.filter((s) => SIDE_TYPES.has(s.type));
   const mainSections = sections.filter((s) => !SIDE_TYPES.has(s.type));
-  const contacts = [pi.email, pi.phone, pi.location, pi.website, pi.github].filter(Boolean);
+  const contacts = getPersonalInfoItems(pi);
 
   const renderSection = (section: any, compact = false) => (
     <section key={section.id} data-section data-section-id={section.id} className={compact ? '' : 'mb-5'}>

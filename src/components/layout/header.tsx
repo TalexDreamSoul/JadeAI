@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { Menu } from 'lucide-react';
+import { NotificationCenter } from '@/components/notifications/notification-center';
 import { UserMenu } from './user-menu';
 import { Link, usePathname } from '@/i18n/routing';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ export function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
+          <NotificationCenter />
           <UserMenu />
           {/* Mobile menu */}
           <div className="md:hidden">

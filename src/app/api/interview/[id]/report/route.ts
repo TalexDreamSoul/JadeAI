@@ -4,6 +4,7 @@ import { getModel, extractAIConfig, AIConfigError, getProviderOptions } from '@/
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
+import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { interviewReportSchema } from '@/lib/ai/interview-report-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { dbReady } from '@/lib/db';
@@ -44,6 +45,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const model = getModel(aiConfig, modelId);
 
     const roundsWithMessages = await interviewRepository.findAllMessagesBySessionId(sessionId);
+    const resume = session.resumeId ? await resumeRepository.findById(session.resumeId as string) : null;
+    const resumeStyle = resume ? JSON.stringify({
+      template: resume.template,
+      themeConfig: resume.themeConfig,
+      targetCompany: resume.targetCompany,
+      targetJobTitle: resume.targetJobTitle,
+    }, null, 2) : '';
 
     const conversationLog = roundsWithMessages.map(({ round, messages }) => {
       const config = round.interviewerConfig as InterviewerConfig;
@@ -66,6 +74,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
 ${session.jobDescription}
 
+# 简历呈现/画风
+
+${resumeStyle || '未提供简历视觉配置。'}
+
 # 面试对话记录
 
 ${JSON.stringify(conversationLog, null, 2)}
@@ -81,7 +93,7 @@ ${JSON.stringify(conversationLog, null, 2)}
 - 0-39：明显不满足岗位要求
 
 ## 2. 能力维度评分（6-8 个维度，每个维度 0-100）
-根据岗位要求和面试表现，选择最相关的 6-8 个评估维度（如：技术深度、系统设计、编码能力、沟通表达、团队协作、学习能力、业务理解、问题解决等）。每个维度独立评分，用于生成雷达图。
+根据岗位要求、简历画风与面试表现，选择最相关的 6-8 个评估维度（如：技术深度、系统设计、编码能力、沟通表达、团队协作、学习能力、业务理解、简历呈现与岗位定位等）。每个维度独立评分，用于生成雷达图。
 
 ## 3. 逐轮逐题评估
 对每轮面试的每个问题进行独立评估：
@@ -108,6 +120,10 @@ ${JSON.stringify(conversationLog, null, 2)}
 
 ${session.jobDescription}
 
+# Resume Presentation / Style
+
+${resumeStyle || 'No resume visual configuration provided.'}
+
 # Interview Transcripts
 
 ${JSON.stringify(conversationLog, null, 2)}
@@ -123,7 +139,7 @@ Score based on the candidate's performance across all rounds:
 - 0-39: Does not meet requirements
 
 ## 2. Competency Dimension Scores (6-8 dimensions, each 0-100)
-Select 6-8 dimensions most relevant to the role (e.g., Technical Depth, System Design, Coding Ability, Communication, Teamwork, Learning Ability, Business Acumen, Problem Solving). Score each independently for the radar chart.
+Select 6-8 dimensions most relevant to the role, resume presentation, and interview performance (e.g., Technical Depth, System Design, Coding Ability, Communication, Teamwork, Learning Ability, Business Acumen, Resume Presentation & Role Positioning). Score each independently for the radar chart.
 
 ## 3. Per-Round Per-Question Evaluation
 For each question in each round:

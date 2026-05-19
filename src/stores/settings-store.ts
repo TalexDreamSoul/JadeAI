@@ -22,6 +22,7 @@ interface SettingsStore {
   // Editor settings
   autoSave: boolean;
   autoSaveInterval: number; // in milliseconds
+  browserNotifications: boolean;
 
   // Hydration state
   _hydrated: boolean;
@@ -37,6 +38,7 @@ interface SettingsStore {
   setOpenAIEndpoint: (endpoint: OpenAIEndpoint) => void;
   setAutoSave: (enabled: boolean) => void;
   setAutoSaveInterval: (interval: number) => void;
+  setBrowserNotifications: (enabled: boolean) => void;
   hydrate: (localOnly?: boolean) => void;
 }
 
@@ -121,6 +123,7 @@ function syncToServer(state: SettingsStore) {
           openAIEndpoint: state.openAIEndpoint,
           autoSave: state.autoSave,
           autoSaveInterval: state.autoSaveInterval,
+          browserNotifications: state.browserNotifications,
         }),
       });
     } catch {
@@ -198,6 +201,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   aiCredits: 0,
   autoSave: true,
   autoSaveInterval: 500,
+  browserNotifications: false,
   _hydrated: false,
   _localOnlyHydrated: false,
   _syncing: false,
@@ -270,6 +274,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     syncToServer(get());
   },
 
+  setBrowserNotifications: (enabled) => {
+    set({ browserNotifications: enabled });
+    syncToServer(get());
+  },
+
   hydrate: async (localOnly = false) => {
     const current = get();
     if (current._hydrated && (localOnly || !current._localOnlyHydrated)) return;
@@ -305,6 +314,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           aiCredits: typeof data.aiCredits === 'number' ? data.aiCredits : 0,
           ...(typeof data.autoSave === 'boolean' && { autoSave: data.autoSave }),
           ...(typeof data.autoSaveInterval === 'number' && { autoSaveInterval: data.autoSaveInterval }),
+          ...(typeof data.browserNotifications === 'boolean' && { browserNotifications: data.browserNotifications }),
           _hydrated: true,
           _localOnlyHydrated: false,
         });

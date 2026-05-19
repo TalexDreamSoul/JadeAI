@@ -1,4 +1,4 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { asc, desc, eq, or } from 'drizzle-orm';
 import { db } from '../index';
 import { jobTemplates } from '../schema';
 import type { JobTemplate } from '@/lib/career/job-templates';
@@ -62,6 +62,25 @@ export const jobTemplateRepository = {
       .orderBy(asc(jobTemplates.sortOrder), desc(jobTemplates.updatedAt));
   },
 
+  async listVisible(userId?: string | null) {
+    const predicate = userId
+      ? or(eq(jobTemplates.enabled, true), eq(jobTemplates.ownerUserId, userId))
+      : eq(jobTemplates.enabled, true);
+    return db
+      .select()
+      .from(jobTemplates)
+      .where(predicate)
+      .orderBy(asc(jobTemplates.sortOrder), desc(jobTemplates.updatedAt));
+  },
+
+  async listByOwner(ownerUserId: string) {
+    return db
+      .select()
+      .from(jobTemplates)
+      .where(eq(jobTemplates.ownerUserId, ownerUserId))
+      .orderBy(asc(jobTemplates.sortOrder), desc(jobTemplates.updatedAt));
+  },
+
   async findById(id: string) {
     const rows = await db.select().from(jobTemplates).where(eq(jobTemplates.id, id)).limit(1);
     return rows[0] ?? null;
@@ -94,4 +113,3 @@ export const jobTemplateRepository = {
     return this.findById(id);
   },
 };
-

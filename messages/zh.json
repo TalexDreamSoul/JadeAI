@@ -147,6 +147,8 @@
       "template": "切换模板",
       "settings": "设置",
       "theme": "主题",
+      "resumeWorkspace": "简历工作台",
+      "careerWorkspace": "求职工作台",
       "autoSaved": "已自动保存",
       "saving": "保存中...",
       "unsaved": "未保存",
@@ -1210,6 +1212,14 @@
     "targetCompanyPlaceholder": "可选",
     "templateLibrary": "职位模板库",
     "selectTemplate": "选择职位模板",
+    "publicTemplate": "公共",
+    "personalTemplate": "个人",
+    "importJd": "导入 JD",
+    "editJd": "编辑 JD",
+    "jdDialogTitle": "导入职位信息",
+    "jdDialogDescription": "粘贴真实 JD，或在选择模板后补充目标公司和职位细节。",
+    "saveJd": "保存 JD",
+    "jdTemplateSaved": "JD 已保存为个人职位模板",
     "recommendedSections": "推荐简历模块",
     "jobDescription": "职位描述",
     "jobDescriptionPlaceholder": "选择模板或粘贴真实 JD",
@@ -1227,6 +1237,8 @@
     "githubTab": "GitHub 项目",
     "memoryTab": "个人记忆",
     "matchResult": "匹配结果",
+    "matchHistory": "历史匹配记录",
+    "noMatchHistory": "暂无历史匹配记录",
     "matchResultHint": "分析结果不会自动覆盖简历，建议需要手动确认应用。",
     "runAnalysis": "开始分析",
     "overallScore": "综合匹配",
@@ -1289,5 +1301,12 @@
       "skill_evidence": "技能证据",
       "interview_gap": "面试缺口"
     }
+  },
+  "notifications": {
+    "title": "通知",
+    "markAllRead": "全部已读",
+    "browserNotifications": "浏览器通知",
+    "empty": "暂无通知",
+    "defaultBody": "你有一条新的 TouchResume 通知"
   }
 }

@@ -20,7 +20,8 @@ const aiReviewSchema = z.object({
   })).default([]),
 });
 
-const SYSTEM = `You are a senior resume reviewer. Review the resume for recruiter readability, ATS quality, impact, clarity, and role alignment.
+const SYSTEM = `You are a senior resume reviewer. Review the resume for recruiter readability, ATS quality, impact, clarity, role alignment, and visual presentation fit.
+When a JD is provided, judge whether the resume's template/style/theme, information density, section order, and tone fit the target role and industry. Do not only review text; include visual and layout risks when relevant.
 Return JSON only with fields: score, summary, strengths, risks, actions. Match the resume language.`;
 
 export async function GET(
@@ -64,6 +65,8 @@ export async function POST(
       system: SYSTEM,
       prompt: JSON.stringify({
         resume: resume.sections,
+        template: resume.template,
+        themeConfig: resume.themeConfig,
         targetCompany: resume.targetCompany,
         targetJobTitle: resume.targetJobTitle,
         jobDescription: resume.jobDescription,

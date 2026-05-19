@@ -147,6 +147,8 @@
       "template": "Switch Template",
       "settings": "Settings",
       "theme": "Theme",
+      "resumeWorkspace": "Resume workbench",
+      "careerWorkspace": "Career workbench",
       "autoSaved": "Auto-saved",
       "saving": "Saving...",
       "unsaved": "Unsaved",
@@ -1210,6 +1212,14 @@
     "targetCompanyPlaceholder": "Optional",
     "templateLibrary": "Role template library",
     "selectTemplate": "Select a role template",
+    "publicTemplate": "Public",
+    "personalTemplate": "Personal",
+    "importJd": "Import JD",
+    "editJd": "Edit JD",
+    "jdDialogTitle": "Import job details",
+    "jdDialogDescription": "Paste the real JD, or add company and role details after selecting a template.",
+    "saveJd": "Save JD",
+    "jdTemplateSaved": "JD saved as a personal role template",
     "recommendedSections": "Recommended sections",
     "jobDescription": "Job description",
     "jobDescriptionPlaceholder": "Pick a template or paste a real JD",
@@ -1227,6 +1237,8 @@
     "githubTab": "GitHub projects",
     "memoryTab": "Career memory",
     "matchResult": "Match result",
+    "matchHistory": "Match history",
+    "noMatchHistory": "No match history yet",
     "matchResultHint": "Analysis never overwrites your resume; apply each suggestion explicitly.",
     "runAnalysis": "Run analysis",
     "overallScore": "Overall match",
@@ -1289,5 +1301,12 @@
       "skill_evidence": "Skill evidence",
       "interview_gap": "Interview gap"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "browserNotifications": "Browser notifications",
+    "empty": "No notifications",
+    "defaultBody": "You have a new TouchResume notification"
   }
 }

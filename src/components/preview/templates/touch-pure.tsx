@@ -14,6 +14,7 @@ import type {
   WorkExperienceContent,
 } from '@/types/resume';
 import { AvatarImage } from '../avatar-image';
+import { getPersonalInfoItems } from '../personal-info-utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 import { degreeField, isSectionEmpty, md } from '../utils';
 
@@ -29,17 +30,7 @@ function dateRange(start?: string, end?: string | null, current?: boolean, lang?
 export function TouchPureTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
   const pi = (personalInfo?.content || {}) as PersonalInfoContent;
-  const contacts = [
-    pi.email,
-    pi.phone,
-    pi.location,
-    pi.website,
-    pi.linkedin && `LinkedIn: ${pi.linkedin}`,
-    pi.github && `GitHub: ${pi.github}`,
-    pi.wechat && `WeChat: ${pi.wechat}`,
-    pi.yearsOfExperience,
-    pi.educationLevel,
-  ].filter(Boolean);
+  const contacts = getPersonalInfoItems(pi);
 
   return (
     <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: INK }}>

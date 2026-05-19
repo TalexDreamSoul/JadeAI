@@ -10,7 +10,6 @@ import {
   Cloud,
   CloudOff,
   Download,
-  FileSearch,
   FileText,
   GitBranch,
   Languages,
@@ -45,9 +44,12 @@ import { useIsLocalOnly, useSettingsStore } from '@/stores/settings-store';
 interface EditorToolbarProps {
   resumeId: string;
   onPrint?: () => void;
+  workspaceMode?: 'resume' | 'career';
+  onWorkspaceModeChange?: (mode: 'resume' | 'career') => void;
+  onOpenModal?: (modal: 'ai-review' | 'translate' | 'cover-letter' | 'grammar-check' | 'export' | 'import' | 'share') => void;
 }
 
-export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
+export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onWorkspaceModeChange, onOpenModal }: EditorToolbarProps) {
   const t = useTranslations('editor.toolbar');
   const router = useRouter();
   const { toggleThemeEditor, showThemeEditor, undo, redo, undoStack, redoStack } = useEditorStore();
@@ -60,6 +62,10 @@ export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
   const cloudDisabled = localOnly || isOfflineResume;
   const aiDisabled = false;
   const cloudActionLabel = isOfflineResume ? t('uploadToCloud') : t('switchToLocalOnly');
+  const openToolModal = (modal: Parameters<NonNullable<EditorToolbarProps['onOpenModal']>>[0]) => {
+    if (onOpenModal) onOpenModal(modal);
+    else openModal(modal);
+  };
 
   const toggleCloudSync = async () => {
     if (!currentResume) return;
@@ -123,7 +129,7 @@ export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
 
   const fileMenu = (
     <DropdownMenuContent align="end" className="w-44">
-      <DropdownMenuItem onClick={() => openModal('export')} className="cursor-pointer">
+      <DropdownMenuItem onClick={() => openToolModal('export')} className="cursor-pointer">
         <Download className="mr-2 h-4 w-4" />
         {t('exportPdf')}
       </DropdownMenuItem>
@@ -133,11 +139,11 @@ export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
           {t('print')}
         </DropdownMenuItem>
       )}
-      <DropdownMenuItem onClick={() => openModal('import')} className="cursor-pointer">
+      <DropdownMenuItem onClick={() => openToolModal('import')} className="cursor-pointer">
         <Upload className="mr-2 h-4 w-4" />
         {t('import')}
       </DropdownMenuItem>
-      <DropdownMenuItem disabled={cloudDisabled} onClick={() => openModal('share')} className="cursor-pointer">
+      <DropdownMenuItem disabled={cloudDisabled} onClick={() => openToolModal('share')} className="cursor-pointer">
         <Share2 className="mr-2 h-4 w-4" />
         {t('share')}
       </DropdownMenuItem>
@@ -159,23 +165,19 @@ export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
 
   const aiMenu = (
     <DropdownMenuContent align="end" className="w-44">
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('ai-review')} className="cursor-pointer">
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('ai-review')} className="cursor-pointer">
         <WandSparkles className="mr-2 h-4 w-4" />
         {t('aiReview')}
       </DropdownMenuItem>
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('jd-analysis')} className="cursor-pointer">
-        <FileSearch className="mr-2 h-4 w-4" />
-        {t('jdAnalysis')}
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('translate')} className="cursor-pointer">
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('translate')} className="cursor-pointer">
         <Languages className="mr-2 h-4 w-4" />
         {t('translate')}
       </DropdownMenuItem>
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('cover-letter')} className="cursor-pointer">
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('cover-letter')} className="cursor-pointer">
         <FileText className="mr-2 h-4 w-4" />
         {t('coverLetter')}
       </DropdownMenuItem>
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('grammar-check')} className="cursor-pointer">
+      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('grammar-check')} className="cursor-pointer">
         <SpellCheck className="mr-2 h-4 w-4" />
         {t('grammarCheck')}
       </DropdownMenuItem>
@@ -220,6 +222,25 @@ export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
           </Button>
         )}
       </div>
+
+      {onWorkspaceModeChange && (
+        <div className="hidden shrink-0 rounded-lg border bg-zinc-50 p-1 dark:bg-zinc-900 lg:flex">
+          <button
+            type="button"
+            onClick={() => onWorkspaceModeChange('resume')}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${workspaceMode === 'resume' ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'}`}
+          >
+            {t('resumeWorkspace')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onWorkspaceModeChange('career')}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${workspaceMode === 'career' ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'}`}
+          >
+            {t('careerWorkspace')}
+          </button>
+        </div>
+      )}
 
       <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
         <Button
@@ -276,7 +297,7 @@ export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => openModal('export')} className="cursor-pointer">
+              <DropdownMenuItem onClick={() => openToolModal('export')} className="cursor-pointer">
                 <Download className="mr-2 h-4 w-4" />
                 {t('exportPdf')}
               </DropdownMenuItem>
@@ -286,32 +307,28 @@ export function EditorToolbar({ resumeId, onPrint }: EditorToolbarProps) {
                   {t('print')}
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => openModal('import')} className="cursor-pointer">
+              <DropdownMenuItem onClick={() => openToolModal('import')} className="cursor-pointer">
                 <Upload className="mr-2 h-4 w-4" />
                 {t('import')}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={cloudDisabled} onClick={() => openModal('share')} className="cursor-pointer">
+              <DropdownMenuItem disabled={cloudDisabled} onClick={() => openToolModal('share')} className="cursor-pointer">
                 <Share2 className="mr-2 h-4 w-4" />
                 {t('share')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('ai-review')} className="cursor-pointer">
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('ai-review')} className="cursor-pointer">
                 <WandSparkles className="mr-2 h-4 w-4" />
                 {t('aiReview')}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('jd-analysis')} className="cursor-pointer">
-                <FileSearch className="mr-2 h-4 w-4" />
-                {t('jdAnalysis')}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('translate')} className="cursor-pointer">
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('translate')} className="cursor-pointer">
                 <Languages className="mr-2 h-4 w-4" />
                 {t('translate')}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('cover-letter')} className="cursor-pointer">
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('cover-letter')} className="cursor-pointer">
                 <FileText className="mr-2 h-4 w-4" />
                 {t('coverLetter')}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openModal('grammar-check')} className="cursor-pointer">
+              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('grammar-check')} className="cursor-pointer">
                 <SpellCheck className="mr-2 h-4 w-4" />
                 {t('grammarCheck')}
               </DropdownMenuItem>
