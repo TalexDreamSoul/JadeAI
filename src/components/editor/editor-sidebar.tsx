@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, GripVertical, User, FileText, Briefcase, GraduationCap, Wrench, FolderKanban, Award, Languages, LayoutList, Pencil, Github, QrCode, Palette, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Plus, GripVertical, User, FileText, Briefcase, GraduationCap, Wrench, FolderKanban, Award, Languages, LayoutList, Pencil, Github, QrCode, Palette, PanelLeftClose, PanelLeftOpen, Eye, EyeOff } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 import {
   DndContext,
@@ -47,12 +47,14 @@ function SortableSidebarItem({
   isSelected,
   onSelect,
   onRename,
+  onToggleVisibility,
   icon: Icon,
 }: {
   section: ResumeSection;
   isSelected: boolean;
   onSelect: () => void;
   onRename?: (title: string) => void;
+  onToggleVisibility: () => void;
   icon: React.ElementType;
 }) {
   const {
@@ -100,8 +102,10 @@ function SortableSidebarItem({
       className={`group/item flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-150 ${
         isSelected
           ? 'bg-brand-muted text-brand dark:bg-brand-muted dark:text-brand'
-          : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
-      }`}
+          : section.visible === false
+            ? 'text-zinc-400 hover:bg-zinc-50 dark:text-zinc-600 dark:hover:bg-zinc-800'
+            : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+      } ${section.visible === false ? 'opacity-70' : ''}`}
     >
       <GripVertical
         className="h-3 w-3 shrink-0 cursor-grab text-zinc-300 active:cursor-grabbing"
@@ -113,7 +117,7 @@ function SortableSidebarItem({
         className="flex min-w-0 flex-1 cursor-pointer items-center gap-2"
         onClick={onSelect}
       >
-        <Icon className="h-4 w-4 shrink-0" />
+        <Icon className={`h-4 w-4 shrink-0 ${section.visible === false ? 'opacity-60' : ''}`} />
         {isRenaming ? (
           <input
             ref={inputRef}
@@ -131,6 +135,24 @@ function SortableSidebarItem({
           <span className="truncate">{section.title}</span>
         )}
       </button>
+      {!isRenaming && (
+        <button
+          type="button"
+          className={`shrink-0 cursor-pointer rounded p-0.5 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200 ${
+            section.visible === false
+              ? 'text-zinc-400'
+              : 'hidden text-zinc-300 group-hover/item:block'
+          }`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleVisibility();
+          }}
+          title={section.visible === false ? '显示模块' : '隐藏模块'}
+          aria-label={section.visible === false ? '显示模块' : '隐藏模块'}
+        >
+          {section.visible === false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      )}
       {isRenamable && !isRenaming && (
         <button
           type="button"
@@ -156,7 +178,7 @@ export function EditorSidebar({ sections, onAddSection, onReorderSections, modul
   const t = useTranslations('editor');
   const toolbarT = useTranslations('editor.toolbar');
   const { selectedSectionId, selectSection, showThemeEditor, toggleThemeEditor } = useEditorStore();
-  const { updateSectionTitle } = useResumeStore();
+  const { updateSectionTitle, toggleSectionVisibility } = useResumeStore();
 
   const handleSelect = useCallback((id: string) => {
     selectSection(id);
@@ -270,6 +292,7 @@ export function EditorSidebar({ sections, onAddSection, onReorderSections, modul
                     isSelected={selectedSectionId === section.id}
                     onSelect={() => handleSelect(section.id)}
                     onRename={section.type !== 'personal_info' ? (title) => updateSectionTitle(section.id, title) : undefined}
+                    onToggleVisibility={() => toggleSectionVisibility(section.id)}
                     icon={Icon}
                   />
                 );
