@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { getModel, extractAIConfig, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { isLocalResumeId } from '@/lib/local-resumes';
 import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
 
     const resumeContext = getResumeSectionsContext(resume);
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
 
     const result = await generateText({
@@ -121,6 +123,7 @@ Based on this resume and job description, write a tailored cover letter. Use the
 
     const coverLetterData: CoverLetterOutput = parseCoverLetter(result.text);
 
+    await chargeAICredit();
     return NextResponse.json(coverLetterData);
   } catch (error) {
     if (error instanceof AIConfigError) {

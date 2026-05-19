@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { generateResumeInputSchema, type GenerateResumeOutput } from '@/lib/ai/generate-resume-schema';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
     const lang = language || 'zh';
 
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
 
     const skillsContext = skills && skills.length > 0
@@ -117,6 +119,7 @@ Respond with JSON only.`,
     const sectionTypes = ['personal_info', 'summary', 'work_experience', 'education', 'skills', 'projects'] as const;
 
     if (!user) {
+      await chargeAICredit();
       return NextResponse.json({
         resumeId: null,
         title: resumeTitle,
@@ -158,6 +161,7 @@ Respond with JSON only.`,
 
     const completeResume = await resumeRepository.findById(newResume.id);
 
+    await chargeAICredit();
     return NextResponse.json({
       resumeId: newResume.id,
       title: resumeTitle,

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Bot, FileSliders, KeyRound, Plus, RefreshCw, Save, Users } from 'lucide-react';
+import { Bot, Briefcase, FileSliders, KeyRound, Plus, RefreshCw, Save, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -57,6 +57,23 @@ interface TemplateItem {
   installCount: number;
 }
 
+type AdminJobTemplateLevel = 'intern' | 'junior' | 'mid' | 'senior';
+
+interface AdminJobTemplate {
+  id: string;
+  roleKey: string;
+  title: string;
+  level: AdminJobTemplateLevel;
+  industry: string;
+  jd: string;
+  keywords: string[];
+  interviewQuestions: string[];
+  recommendedSections: string[];
+  enabled: boolean;
+  builtin: boolean;
+  sortOrder: number;
+}
+
 const EMPTY_TEMPLATE_FORM = {
   id: '',
   name: '',
@@ -65,6 +82,32 @@ const EMPTY_TEMPLATE_FORM = {
   themeJson: '{\n  "primaryColor": "#1a1a1a",\n  "accentColor": "#3b82f6"\n}',
   customCss: '',
   isPublic: false,
+};
+
+const EMPTY_JOB_TEMPLATE_FORM: {
+  id: string;
+  roleKey: string;
+  title: string;
+  level: AdminJobTemplateLevel;
+  industry: string;
+  jd: string;
+  keywordsText: string;
+  interviewQuestionsText: string;
+  recommendedSectionsText: string;
+  enabled: boolean;
+  sortOrder: number;
+} = {
+  id: '',
+  roleKey: '',
+  title: '',
+  level: 'mid',
+  industry: '',
+  jd: '',
+  keywordsText: '',
+  interviewQuestionsText: '',
+  recommendedSectionsText: '',
+  enabled: true,
+  sortOrder: 1000,
 };
 
 function getHeaders() {
@@ -89,6 +132,7 @@ export default function AdminPage() {
   const [channels, setChannels] = useState<AIChannel[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [jobTemplates, setJobTemplates] = useState<AdminJobTemplate[]>([]);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     name: '',
@@ -107,6 +151,7 @@ export default function AdminPage() {
     googleClientSecretSet: false,
   });
   const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
+  const [jobTemplateForm, setJobTemplateForm] = useState(EMPTY_JOB_TEMPLATE_FORM);
 
   const isLoggedIn = status === 'authenticated' && !!session?.user?.email;
   const currentUser = users.find((user) => user.email && user.email === session?.user?.email);
@@ -118,21 +163,24 @@ export default function AdminPage() {
   })), [tDashboard]);
 
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
       fetch('/api/templates', { headers: getHeaders() }),
+      fetch('/api/admin/job-templates', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok) {
-      setError(channelsRes.status === 403 || authRes.status === 403 || usersRes.status === 403 ? t('forbidden') : t('loadFailed'));
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok) {
+      setError(channelsRes.status === 403 || authRes.status === 403 || usersRes.status === 403 || jobTemplatesRes.status === 403 ? t('forbidden') : t('loadFailed'));
       return;
     }
 
     setChannels(await channelsRes.json());
     setUsers(await usersRes.json());
     setTemplates(await templatesRes.json());
+    const loadedJobTemplates = await jobTemplatesRes.json();
+    setJobTemplates([...(loadedJobTemplates.builtin || []), ...(loadedJobTemplates.custom || [])]);
     const loadedAuth = await authRes.json();
     setAuthSettings({
       passwordLoginEnabled: loadedAuth.passwordLoginEnabled,
@@ -260,6 +308,68 @@ export default function AdminPage() {
     await load();
   };
 
+  const parseLines = (value: string) => value
+    .split(/[,，、;；\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const editJobTemplate = (template: AdminJobTemplate) => {
+    if (template.builtin) return;
+    setJobTemplateForm({
+      id: template.id,
+      roleKey: template.roleKey,
+      title: template.title,
+      level: template.level,
+      industry: template.industry,
+      jd: template.jd,
+      keywordsText: template.keywords.join('\n'),
+      interviewQuestionsText: template.interviewQuestions.join('\n'),
+      recommendedSectionsText: template.recommendedSections.join('\n'),
+      enabled: template.enabled,
+      sortOrder: template.sortOrder,
+    });
+  };
+
+  const saveJobTemplate = async () => {
+    const payload = {
+      roleKey: jobTemplateForm.roleKey.trim(),
+      title: jobTemplateForm.title.trim(),
+      level: jobTemplateForm.level,
+      industry: jobTemplateForm.industry.trim(),
+      jd: jobTemplateForm.jd.trim(),
+      keywords: parseLines(jobTemplateForm.keywordsText),
+      interviewQuestions: parseLines(jobTemplateForm.interviewQuestionsText),
+      recommendedSections: parseLines(jobTemplateForm.recommendedSectionsText),
+      enabled: jobTemplateForm.enabled,
+      sortOrder: Number(jobTemplateForm.sortOrder) || 1000,
+    };
+    const res = await fetch(jobTemplateForm.id ? `/api/admin/job-templates/${jobTemplateForm.id}` : '/api/admin/job-templates', {
+      method: jobTemplateForm.id ? 'PATCH' : 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      setError(t('loadFailed'));
+      return;
+    }
+    setJobTemplateForm(EMPTY_JOB_TEMPLATE_FORM);
+    await load();
+  };
+
+  const toggleJobTemplate = async (template: AdminJobTemplate) => {
+    if (template.builtin) return;
+    const res = await fetch(`/api/admin/job-templates/${template.id}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ enabled: !template.enabled }),
+    });
+    if (!res.ok) {
+      setError(t('loadFailed'));
+      return;
+    }
+    await load();
+  };
+
   if (status === 'loading' || isLoading) {
     return <div className="rounded-xl border bg-white p-6 text-sm text-zinc-500">{t('loadFailed')}...</div>;
   }
@@ -295,6 +405,7 @@ export default function AdminPage() {
           <TabsTrigger value="auth" className="gap-2"><KeyRound className="h-4 w-4" />{t('authSettings')}</TabsTrigger>
           <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
           <TabsTrigger value="templates" className="gap-2"><FileSliders className="h-4 w-4" />{t('templates')}</TabsTrigger>
+          <TabsTrigger value="jobTemplates" className="gap-2"><Briefcase className="h-4 w-4" />{t('jobTemplates')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
@@ -425,6 +536,72 @@ export default function AdminPage() {
                 <div className="flex gap-2">
                   <Button onClick={saveTemplate} disabled={!templateForm.name.trim()} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Save className="h-4 w-4" />{t('saveTemplate')}</Button>
                   <Button variant="outline" onClick={() => setTemplateForm(EMPTY_TEMPLATE_FORM)}>{t('createTemplate')}</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="jobTemplates">
+          <div className="grid gap-4 lg:grid-cols-[1fr_460px]">
+            <Card>
+              <CardHeader><CardTitle className="text-base">{t('jobTemplates')}</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {jobTemplates.length === 0 ? <p className="text-sm text-zinc-400">{t('noJobTemplates')}</p> : jobTemplates.map((template) => (
+                  <div key={template.id} className="rounded-lg border px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{template.title}</span>
+                          <Badge variant={template.builtin ? 'secondary' : 'outline'}>{template.builtin ? t('builtin') : t('custom')}</Badge>
+                          <Badge variant="outline">{template.level}</Badge>
+                          {!template.enabled && <Badge variant="outline">{t('disabled')}</Badge>}
+                        </div>
+                        <p className="mt-1 truncate text-xs text-zinc-500">{template.roleKey} · {template.industry}</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {template.keywords.slice(0, 8).map((keyword) => <Badge key={keyword} variant="secondary">{keyword}</Badge>)}
+                        </div>
+                      </div>
+                      {!template.builtin && (
+                        <div className="flex shrink-0 gap-2">
+                          <Button variant="outline" size="sm" onClick={() => editJobTemplate(template)}>{t('edit')}</Button>
+                          <Button variant="outline" size="sm" onClick={() => toggleJobTemplate(template)}>
+                            {template.enabled ? t('disable') : t('enable')}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">{jobTemplateForm.id ? t('saveJobTemplate') : t('createJobTemplate')}</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Input value={jobTemplateForm.roleKey} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, roleKey: e.target.value })} placeholder={t('jobTemplateRoleKey')} />
+                  <Input value={jobTemplateForm.title} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, title: e.target.value })} placeholder={t('jobTemplateTitle')} />
+                </div>
+                <div className="grid gap-2 md:grid-cols-[1fr_120px]">
+                  <Input value={jobTemplateForm.industry} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, industry: e.target.value })} placeholder={t('jobTemplateIndustry')} />
+                  <select value={jobTemplateForm.level} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, level: e.target.value as AdminJobTemplateLevel })} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
+                    <option value="intern">intern</option>
+                    <option value="junior">junior</option>
+                    <option value="mid">mid</option>
+                    <option value="senior">senior</option>
+                  </select>
+                </div>
+                <Textarea value={jobTemplateForm.jd} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, jd: e.target.value })} placeholder={t('jobTemplateJd')} className="min-h-44" />
+                <Textarea value={jobTemplateForm.keywordsText} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, keywordsText: e.target.value })} placeholder={t('jobTemplateKeywords')} className="min-h-20" />
+                <Textarea value={jobTemplateForm.recommendedSectionsText} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, recommendedSectionsText: e.target.value })} placeholder={t('jobTemplateSections')} className="min-h-20" />
+                <Textarea value={jobTemplateForm.interviewQuestionsText} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, interviewQuestionsText: e.target.value })} placeholder={t('jobTemplateQuestions')} className="min-h-24" />
+                <div className="grid gap-2 md:grid-cols-[1fr_120px]">
+                  <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"><span>{t('enabled')}</span><Switch checked={jobTemplateForm.enabled} onCheckedChange={(checked) => setJobTemplateForm({ ...jobTemplateForm, enabled: checked })} /></label>
+                  <Input type="number" value={jobTemplateForm.sortOrder} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, sortOrder: Number(e.target.value) || 1000 })} placeholder={t('sortOrder')} />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={saveJobTemplate} disabled={!jobTemplateForm.roleKey.trim() || !jobTemplateForm.title.trim()} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Save className="h-4 w-4" />{t('saveJobTemplate')}</Button>
+                  <Button variant="outline" onClick={() => setJobTemplateForm(EMPTY_JOB_TEMPLATE_FORM)}>{t('createJobTemplate')}</Button>
                 </div>
               </CardContent>
             </Card>

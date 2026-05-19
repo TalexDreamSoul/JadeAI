@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { extractJson } from '@/lib/ai/extract-json';
 import { aiReviewRepository } from '@/lib/db/repositories/ai-review.repository';
@@ -57,6 +58,7 @@ export async function POST(
 
     const body = await request.json().catch(() => ({}));
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const result = await generateText({
       model: getModel(aiConfig),
       system: SYSTEM,
@@ -86,6 +88,7 @@ export async function POST(
       title: 'AI review completed',
       metadata: { score: review.score, reviewId: saved?.id },
     });
+    await chargeAICredit();
     return NextResponse.json({ ...review, historyId: saved?.id });
   } catch (error) {
     if (error instanceof AIConfigError) {

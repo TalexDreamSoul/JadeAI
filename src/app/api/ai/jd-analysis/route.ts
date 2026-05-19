@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { isLocalResumeId } from '@/lib/local-resumes';
 import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
@@ -18,8 +19,16 @@ Your analysis should be thorough and actionable. You MUST return a JSON object w
 - keywordMatches (string[]): Keywords from the JD that ARE present in the resume
 - missingKeywords (string[]): Important keywords from the JD that are NOT in the resume
 - suggestions (array of {section, current, suggested}): Actionable improvement suggestions
+- applicableSuggestions (array of {sectionType, targetField, current, suggested, reason, evidenceRequired}): Safe section-level changes the user can apply after confirmation
 - atsScore (number 0-100): ATS compatibility rating
 - summary (string): Concise overall assessment
+
+Rules for applicableSuggestions:
+- Only suggest changes that are supported by existing resume facts or clearly mark evidenceRequired=true.
+- Use sectionType values from the resume when possible: summary, skills, projects, work_experience.
+- Use targetField=text for summary, categories for skills, items/highlights for projects and work_experience.
+- suggested must be concrete final resume text, not advice.
+- Do not fabricate employers, dates, degrees, metrics, or repository facts.
 
 CRITICAL: You are a JSON API. Your entire response must be a single valid JSON object starting with { and ending with }. Do NOT use markdown syntax. Do NOT wrap in code fences. Do NOT add any text before or after the JSON.`;
 
@@ -61,6 +70,7 @@ export async function POST(request: NextRequest) {
 
     const resumeContext = getResumeSectionsContext(resume);
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
 
     const result = await generateText({
@@ -91,6 +101,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await chargeAICredit();
     return NextResponse.json({ ...analysisData, historyId });
   } catch (error) {
     if (error instanceof AIConfigError) {

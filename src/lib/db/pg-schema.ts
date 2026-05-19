@@ -109,6 +109,36 @@ export const chatMessages = pgTable('chat_messages', {
   createdAt: integer('created_at').notNull().default(epochNow),
 });
 
+export const userProfileMemories = pgTable('user_profile_memories', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  type: text('type').notNull().default('profile'),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  source: text('source').notNull().default('manual'),
+  confidence: integer('confidence').notNull().default(80),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const jobTemplates = pgTable('job_templates', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ownerUserId: text('owner_user_id').notNull(),
+  roleKey: text('role_key').notNull().unique(),
+  title: text('title').notNull(),
+  level: text('level').notNull().default('mid'),
+  industry: text('industry').notNull().default(''),
+  jd: text('jd').notNull().default(''),
+  keywords: text('keywords').notNull().default('[]'),
+  interviewQuestions: text('interview_questions').notNull().default('[]'),
+  recommendedSections: text('recommended_sections').notNull().default('[]'),
+  enabled: integer('enabled').notNull().default(1),
+  sortOrder: integer('sort_order').notNull().default(1000),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
 export const resumeShares = pgTable('resume_shares', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   resumeId: text('resume_id').notNull(),

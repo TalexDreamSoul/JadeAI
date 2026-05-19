@@ -110,7 +110,8 @@ export const userRepository = {
       .set({ aiCredits: sql`${users.aiCredits} - 1`, updatedAt: new Date() })
       .where(and(eq(users.id, id), gt(users.aiCredits, 0)));
 
-    const changes = (result as { changes?: number; rowCount?: number }).changes ?? (result as { changes?: number; rowCount?: number }).rowCount ?? 0;
+    const outcome = result as { changes?: number; rowCount?: number; count?: number | string | bigint };
+    const changes = Number(outcome.changes ?? outcome.rowCount ?? outcome.count ?? 0);
     return changes > 0;
   },
 

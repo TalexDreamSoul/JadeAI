@@ -64,6 +64,20 @@
       "when": 1779041375943,
       "tag": "0008_review_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1780000000000,
+      "tag": "0009_user_profile_memories",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1780000001000,
+      "tag": "0010_job_templates",
+      "breakpoints": true
     }
   ]
 }

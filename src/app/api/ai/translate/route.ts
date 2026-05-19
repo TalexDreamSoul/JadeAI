@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { generateText, Output, type LanguageModel } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError, type AIConfig } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { isLocalResumeId } from '@/lib/local-resumes';
 import { normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
@@ -197,6 +198,7 @@ export async function POST(request: NextRequest) {
     });
 
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
     const encoder = new TextEncoder();
 
@@ -265,6 +267,7 @@ export async function POST(request: NextRequest) {
           if (!localResume) {
             await resumeRepository.update(targetResumeId, { language: targetLanguage });
           }
+          await chargeAICredit();
         } catch (err) {
           console.error('Unexpected error during translation:', err);
         }

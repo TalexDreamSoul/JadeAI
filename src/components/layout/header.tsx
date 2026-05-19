@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 
 const NAV_ITEMS: { href: string; i18nKey: string; match: string; tourId?: string }[] = [
   { href: '/dashboard', i18nKey: 'dashboard.nav', match: '/dashboard' },
+  { href: '/career', i18nKey: 'career.nav', match: '/career' },
   { href: '/templates', i18nKey: 'templates.nav', match: '/templates', tourId: 'dash-templates' },
   { href: '/knowledge', i18nKey: 'knowledge.nav', match: '/knowledge' },
   { href: '/interview', i18nKey: 'interview.nav', match: '/interview' },

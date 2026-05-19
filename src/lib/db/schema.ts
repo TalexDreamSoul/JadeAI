@@ -102,6 +102,36 @@ export const chatMessages = sqliteTable('chat_messages', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
+export const userProfileMemories = sqliteTable('user_profile_memories', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type').notNull().default('profile'),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  source: text('source').notNull().default('manual'),
+  confidence: integer('confidence').notNull().default(80),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const jobTemplates = sqliteTable('job_templates', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ownerUserId: text('owner_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  roleKey: text('role_key').notNull().unique(),
+  title: text('title').notNull(),
+  level: text('level').notNull().default('mid'),
+  industry: text('industry').notNull().default(''),
+  jd: text('jd').notNull().default(''),
+  keywords: text('keywords', { mode: 'json' }).notNull().default('[]'),
+  interviewQuestions: text('interview_questions', { mode: 'json' }).notNull().default('[]'),
+  recommendedSections: text('recommended_sections', { mode: 'json' }).notNull().default('[]'),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(1000),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
 export const resumeShares = sqliteTable('resume_shares', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   resumeId: text('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),

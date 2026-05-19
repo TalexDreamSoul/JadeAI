@@ -213,7 +213,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
           maxOutputTokens: 8192,
           system: `You are an expert resume analyst. Analyze the match between the resume and job description. Be specific and actionable.
 CRITICAL: You are a JSON API. Your entire response must be a single valid JSON object starting with { and ending with }. Do NOT use markdown syntax. Do NOT wrap in code fences.`,
-          prompt: `## Resume Data\n${resumeContext}\n\n## Job Description\n${jobDescription}\n\nReturn a JSON object with: overallScore (0-100), keywordMatches (string[]), missingKeywords (string[]), suggestions ([{section, current, suggested}]), atsScore (0-100), summary (string).`,
+          prompt: `## Resume Data\n${resumeContext}\n\n## Job Description\n${jobDescription}\n\nReturn a JSON object with: overallScore (0-100), keywordMatches (string[]), missingKeywords (string[]), suggestions ([{section, current, suggested}]), applicableSuggestions ([{sectionType, targetField, current, suggested, reason, evidenceRequired}]), atsScore (0-100), summary (string).`,
           providerOptions: getProviderOptions(aiConfig),
           output: Output.json(),
         });

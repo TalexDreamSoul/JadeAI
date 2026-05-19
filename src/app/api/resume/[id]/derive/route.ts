@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { extractJson } from '@/lib/ai/extract-json';
 import { extractAIConfig, getModel, getProviderOptions } from '@/lib/ai/provider';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
@@ -28,9 +29,9 @@ const tailoringSchema = z.object({
 });
 
 async function tailorDerivedResume(request: NextRequest, resume: Awaited<ReturnType<typeof resumeRepository.findById>>, jobDescription: string) {
-  if (!resume || !jobDescription) return;
+  if (!resume || !jobDescription) return false;
   const aiConfig = await extractAIConfig(request);
-  if (!aiConfig.apiKey) return;
+  if (!aiConfig.apiKey) return false;
 
   const result = await generateText({
     model: getModel(aiConfig),
@@ -56,6 +57,7 @@ async function tailorDerivedResume(request: NextRequest, resume: Awaited<ReturnT
       await resumeRepository.updateSection(section.id, { content: tailored.projects });
     }
   }
+  return aiConfig.mode === 'server';
 }
 
 export async function POST(
@@ -89,9 +91,11 @@ export async function POST(
 
     if (!derived) return NextResponse.json({ error: 'Failed to derive resume' }, { status: 500 });
 
+    let shouldChargeAICredit = false;
     if (jobDescription) {
-      await tailorDerivedResume(request, derived, jobDescription).catch((error) => {
+      shouldChargeAICredit = await tailorDerivedResume(request, derived, jobDescription).catch((error) => {
         console.error('Failed to tailor derived resume:', error);
+        return false;
       });
     }
 
@@ -107,6 +111,9 @@ export async function POST(
     });
     await resumeRepository.createVersion(derived.id, 'jd-v1', tailoredDerived || derived, 'jd');
 
+    if (shouldChargeAICredit) {
+      await userRepository.consumeAICredit(user.id);
+    }
     return NextResponse.json(tailoredDerived || derived, { status: 201 });
   } catch (error) {
     console.error('POST /api/resume/[id]/derive error:', error);

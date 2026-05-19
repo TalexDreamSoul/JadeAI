@@ -4,6 +4,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import { auth } from '@/lib/auth/config';
+import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { hasServerAIConfig, selectServerAIConfig, type OpenAIEndpoint } from './server-config';
 
@@ -25,13 +26,17 @@ export async function extractAIConfig(request: NextRequest): Promise<AIConfig> {
   const wantsServerAI = requestedMode !== 'custom';
 
   if (wantsServerAI) {
+    await dbReady;
     const session = await auth();
     const userId = session?.user?.id;
     if (!userId || !session.user?.email) {
       throw new AIConfigError('Please log in to use the system AI, or switch to a custom API key in Settings.');
     }
-    const hasCredit = await userRepository.consumeAICredit(userId);
-    if (!hasCredit) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new AIConfigError('Please log in to use the system AI, or switch to a custom API key in Settings.');
+    }
+    if (user.role !== 'admin' && user.aiCredits <= 0) {
       throw new AIConfigError('AI credits exhausted. Please contact an administrator or switch to a custom API key.');
     }
 

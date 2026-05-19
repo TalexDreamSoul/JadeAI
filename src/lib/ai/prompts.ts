@@ -1,12 +1,15 @@
-export function getSystemPrompt(resumeContext: string): string {
+export function getSystemPrompt(resumeContext: string, memoryContext = ''): string {
   // Parse sections to build an explicit list for the AI
   let sectionList = '';
   if (resumeContext) {
     try {
-      const sections = JSON.parse(resumeContext);
+      const sections = JSON.parse(resumeContext) as unknown;
       if (Array.isArray(sections)) {
         sectionList = sections
-          .map((s: any) => `  - [${s.type}] "${s.title}" (sectionId: ${s.id})`)
+          .map((section) => {
+            const item = section as Partial<{ type: string; title: string; id: string }>;
+            return `  - [${item.type || 'unknown'}] "${item.title || ''}" (sectionId: ${item.id || ''})`;
+          })
           .join('\n');
       }
     } catch { /* ignore parse errors */ }
@@ -41,5 +44,6 @@ When using tools:
 - When the user asks you to fill, generate, or populate the resume, you MUST update EVERY section listed below — no exceptions.
 - Do NOT stop after a few sections. Continue calling updateSection until ALL sections have been populated.
 ${sectionList ? `\nThe resume currently has these sections (you MUST fill ALL of them):\n${sectionList}\n` : ''}
+${memoryContext ? `\n## User Career Memory\nUse these user-approved career facts and preferences when relevant. Do not invent beyond them.\n${memoryContext}\n` : ''}
 ${resumeContext ? `## Current Resume Data\n${resumeContext}` : 'No resume context provided.'}`;
 }

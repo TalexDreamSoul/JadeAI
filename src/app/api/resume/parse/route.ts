@@ -3,6 +3,7 @@ import { generateText, Output } from 'ai';
 import type { ModelMessage } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import type { ParsedResume } from '@/lib/ai/parse-schema';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
 
     // Build messages based on file type
@@ -154,6 +156,7 @@ export async function POST(request: NextRequest) {
     }
 
     const fullResume = await resumeRepository.findById(resume.id);
+    await chargeAICredit();
     return NextResponse.json(fullResume, { status: 201 });
   } catch (error) {
     if (error instanceof AIConfigError) {

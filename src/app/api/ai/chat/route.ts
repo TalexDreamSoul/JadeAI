@@ -2,12 +2,14 @@ import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { chatRepository } from '@/lib/db/repositories/chat.repository';
 import { isLocalResumeId } from '@/lib/local-resumes';
 import { getResumeSectionsContext, normalizeResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { getSystemPrompt } from '@/lib/ai/prompts';
 import { createExecutableTools } from '@/lib/ai/tools';
+import { userProfileMemoryRepository } from '@/lib/db/repositories/user-profile-memory.repository';
 
 const MAX_ROUNDS = 10;
 const MAX_MESSAGES = MAX_ROUNDS * 2; // 10 rounds = 20 messages (user + assistant)
@@ -19,6 +21,12 @@ type ToolCallLike = {
 
 type ToolResultLike = {
   output?: unknown;
+};
+
+type ProfileMemoryLike = {
+  type: string;
+  title: string;
+  content: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -80,14 +88,25 @@ export async function POST(request: NextRequest) {
 
     const tools = resumeId && !localResume ? createExecutableTools(resumeId, aiConfig) : undefined;
 
+    let memoryContext = '';
+    if (user && !localResume) {
+      const memories = await userProfileMemoryRepository.listByUserId(user.id, 12).catch(() => []);
+      memoryContext = memories
+        .map((memory: ProfileMemoryLike) => `- [${memory.type}] ${memory.title}: ${memory.content}`)
+        .join('\n');
+    }
+
     const result = streamText({
       model,
-      system: getSystemPrompt(resumeContext),
+      system: getSystemPrompt(resumeContext, memoryContext),
       messages: truncatedMessages,
       tools,
       stopWhen: tools ? stepCountIs(25) : undefined,
       providerOptions: getProviderOptions(aiConfig),
       onFinish: async ({ text, steps }) => {
+        if (user && aiConfig.mode === 'server') {
+          await userRepository.consumeAICredit(user.id);
+        }
         if (localResume || !sessionId) return;
 
         // Build ordered parts array preserving the interleaving of text and tool calls

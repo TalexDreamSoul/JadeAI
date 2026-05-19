@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
@@ -59,6 +60,7 @@ export async function POST(
     const resume = sanitizeResumeForShare(rawResume, !!result.share!.hideSensitiveInfo);
 
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const aiResult = await generateText({
       model: getModel(aiConfig),
       maxOutputTokens: 8192,
@@ -68,6 +70,7 @@ export async function POST(
       output: Output.json(),
     });
 
+    await chargeAICredit();
     return NextResponse.json(extractJson(aiResult.text, jdAnalysisOutputSchema));
   } catch (error) {
     if (error instanceof AIConfigError) {

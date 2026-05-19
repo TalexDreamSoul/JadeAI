@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, AIConfigError, getProviderOptions } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { interviewReportSchema } from '@/lib/ai/interview-report-schema';
 import { extractJson } from '@/lib/ai/extract-json';
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { model: modelId, locale = 'zh' } = await request.json();
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig, modelId);
 
     const roundsWithMessages = await interviewRepository.findAllMessagesBySessionId(sessionId);
@@ -172,6 +174,7 @@ DO NOT use alternative names like "comprehensiveScore", "capabilityScores", "dir
       improvementPlan: report.improvementPlan,
     });
 
+    await chargeAICredit();
     return NextResponse.json(saved);
   } catch (error) {
     if (error instanceof AIConfigError) {

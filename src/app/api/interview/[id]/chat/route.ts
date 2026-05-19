@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { buildInterviewSystemPrompt } from '@/lib/ai/interview-prompts';
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig, modelId);
     const modelMessages = await convertToModelMessages(messages);
 
@@ -77,6 +79,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       providerOptions: getProviderOptions(aiConfig),
       onFinish: async ({ text }) => {
         if (!text) return;
+        await chargeAICredit();
 
         await interviewRepository.addMessage({
           roundId,

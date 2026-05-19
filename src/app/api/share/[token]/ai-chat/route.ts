@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { userRepository } from '@/lib/db/repositories/user.repository';
 import { extractAIConfig, getModel, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
@@ -46,6 +47,7 @@ export async function POST(
     if (!rawResume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const resume = sanitizeResumeForShare(rawResume, !!result.share!.hideSensitiveInfo);
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
 
     const aiResult = await generateText({
@@ -60,6 +62,7 @@ export async function POST(
       providerOptions: getProviderOptions(aiConfig),
     });
 
+    await chargeAICredit();
     return NextResponse.json({ message: aiResult.text });
   } catch (error) {
     if (error instanceof AIConfigError) {

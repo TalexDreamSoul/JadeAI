@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { userRepository } from '@/lib/db/repositories/user.repository';
+import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { extractJson } from '@/lib/ai/extract-json';
 import { getResumeSectionsContext, normalizeResumeSnapshot } from '@/lib/ai/resume-snapshot';
 
@@ -28,7 +30,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Resume snapshot is required' }, { status: 400 });
     }
 
+    const user = await resolveUser(getUserIdFromRequest(request));
     const aiConfig = await extractAIConfig(request);
+    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const result = await generateText({
       model: getModel(aiConfig),
       system: SYSTEM,
@@ -45,6 +49,7 @@ export async function POST(request: NextRequest) {
     });
 
     const review = extractJson(result.text, aiReviewSchema);
+    await chargeAICredit();
     return NextResponse.json(review);
   } catch (error) {
     if (error instanceof AIConfigError) {
