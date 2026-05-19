@@ -14,7 +14,7 @@ import type {
   WorkExperienceContent,
 } from '@/types/resume';
 import { AvatarImage } from '../avatar-image';
-import { getPersonalInfoItems } from '../personal-info-utils';
+import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 import { degreeField, isSectionEmpty, md } from '../utils';
 
@@ -30,7 +30,7 @@ function dateRange(start?: string, end?: string | null, current?: boolean, lang?
 export function TouchPureTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
   const pi = (personalInfo?.content || {}) as PersonalInfoContent;
-  const contacts = getPersonalInfoItems(pi);
+  const contacts = getPersonalInfoPreviewItems(pi);
 
   return (
     <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: INK }}>
@@ -42,7 +42,7 @@ export function TouchPureTemplate({ resume }: { resume: Resume }) {
             {pi.jobTitle && <p className="mt-1 text-base font-medium" style={{ color: ACCENT }}>{pi.jobTitle}</p>}
             {contacts.length > 0 && (
               <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
-                {contacts.map((item, index) => <span key={index}>{item}</span>)}
+                {contacts.map(({ key, value, Icon }) => <span key={key} className="inline-flex items-center gap-1"><Icon className="h-3 w-3 shrink-0" />{value}</span>)}
               </p>
             )}
           </div>

@@ -17,6 +17,17 @@ type ProjectDraft = {
   description: string;
   technologies: string[];
   highlights: string[];
+  source?: string;
+  githubRepo?: {
+    provider: 'github';
+    fullName: string;
+    url: string;
+    stars: number;
+    language: string;
+    languages: Record<string, number>;
+    defaultBranch: string;
+    topics: string[];
+  };
 };
 
 const inputSchema = z.object({
@@ -155,6 +166,17 @@ export async function POST(request: NextRequest) {
       description: summary.description || repo.description || '',
       technologies: summary.technologies?.length ? summary.technologies : Object.keys(repo.languages || {}).slice(0, 8),
       highlights: summary.highlights || [],
+      source: 'github',
+      githubRepo: {
+        provider: 'github',
+        fullName: repo.name,
+        url: repo.url,
+        stars: repo.stars,
+        language: repo.language,
+        languages: repo.languages,
+        defaultBranch: repo.defaultBranch,
+        topics: repo.topics,
+      },
     };
     items.push(project);
 

@@ -2,6 +2,7 @@
 
 import type { Resume, PersonalInfoContent, SummaryContent, WorkExperienceContent, EducationContent, SkillsContent, ProjectsContent, CertificationsContent, LanguagesContent, CustomContent, GitHubContent } from '@/types/resume';
 import { AvatarImage } from '../avatar-image';
+import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { isSectionEmpty, md, degreeField } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
@@ -10,6 +11,7 @@ const LEFT_TYPES = new Set(['skills', 'languages', 'certifications', 'custom']);
 export function CompactTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
   const pi = (personalInfo?.content || {}) as PersonalInfoContent;
+  const contacts = getPersonalInfoPreviewItems(pi);
 
   const visibleSections = resume.sections.filter(
     (s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s)
@@ -27,19 +29,12 @@ export function CompactTemplate({ resume }: { resume: Resume }) {
             <h1 className="text-xl font-bold text-zinc-900">{pi.fullName || 'Your Name'}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-500">
               {pi.jobTitle && <span className="font-medium text-zinc-700">{pi.jobTitle}</span>}
-              {pi.age && <><span className="text-zinc-300">|</span><span>{pi.age}</span></>}
-              {pi.politicalStatus && <><span className="text-zinc-300">|</span><span>{pi.politicalStatus}</span></>}
-              {pi.gender && <><span className="text-zinc-300">|</span><span>{pi.gender}</span></>}
-              {pi.ethnicity && <><span className="text-zinc-300">|</span><span>{pi.ethnicity}</span></>}
-              {pi.hometown && <><span className="text-zinc-300">|</span><span>{pi.hometown}</span></>}
-              {pi.maritalStatus && <><span className="text-zinc-300">|</span><span>{pi.maritalStatus}</span></>}
-              {pi.yearsOfExperience && <><span className="text-zinc-300">|</span><span>{pi.yearsOfExperience}</span></>}
-              {pi.educationLevel && <><span className="text-zinc-300">|</span><span>{pi.educationLevel}</span></>}
-              {pi.email && <><span className="text-zinc-300">|</span><span>{pi.email}</span></>}
-              {pi.phone && <><span className="text-zinc-300">|</span><span>{pi.phone}</span></>}
-              {pi.wechat && <><span className="text-zinc-300">|</span><span>{pi.wechat}</span></>}
-              {pi.location && <><span className="text-zinc-300">|</span><span>{pi.location}</span></>}
-              {pi.website && <><span className="text-zinc-300">|</span><span>{pi.website}</span></>}
+              {contacts.map(({ key, value, Icon }) => (
+                <span key={key} className="inline-flex items-center gap-1">
+                  <Icon className="h-3 w-3 shrink-0 text-zinc-400" />
+                  {value}
+                </span>
+              ))}
             </div>
           </div>
         </div>
@@ -158,9 +153,10 @@ function CompactRightContent({ section, resume }: { section: any; resume: Resume
 
   if (section.type === 'work_experience') {
     return (
-      <div className="space-y-2.5">
+      <div className="relative space-y-3 border-l border-zinc-200 pl-4">
         {((content as WorkExperienceContent).items || []).map((item: any) => (
-          <div key={item.id}>
+          <div key={item.id} className="relative">
+            <span className="absolute -left-[19px] top-1.5 h-2 w-2 rounded-full border border-zinc-300 bg-white" />
             <div className="flex items-baseline justify-between">
               <div>
                 <span className="text-xs font-bold text-zinc-800">{item.position}</span>
@@ -211,9 +207,10 @@ function CompactRightContent({ section, resume }: { section: any; resume: Resume
 
   if (section.type === 'projects') {
     return (
-      <div className="space-y-2">
+      <div className="relative space-y-3 border-l border-zinc-200 pl-4">
         {((content as ProjectsContent).items || []).map((item: any) => (
-          <div key={item.id}>
+          <div key={item.id} className="relative">
+            <span className="absolute -left-[19px] top-1.5 h-2 w-2 rounded-full border border-zinc-300 bg-white" />
             <div className="flex items-baseline justify-between">
               <span className="text-xs font-bold text-zinc-800">{item.name}</span>
               {item.startDate && <span className="shrink-0 text-[10px] text-zinc-400">{item.startDate} – {item.endDate || (resume.language === 'zh' ? '至今' : 'Present')}</span>}

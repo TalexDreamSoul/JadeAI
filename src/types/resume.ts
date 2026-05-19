@@ -86,6 +86,17 @@ export interface ProjectItem {
   description: string;
   technologies: string[];
   highlights: string[];
+  source?: string;
+  githubRepo?: {
+    provider: 'github';
+    fullName: string;
+    url: string;
+    stars: number;
+    language: string;
+    languages: Record<string, number>;
+    defaultBranch: string;
+    topics: string[];
+  };
 }
 
 export interface ProjectsContent {

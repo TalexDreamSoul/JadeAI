@@ -641,7 +641,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
           keywords: selectedTemplate?.keywords || [],
           interviewQuestions: selectedTemplate?.interviewQuestions || [],
           recommendedSections: selectedTemplate?.recommendedSections || ['个人简介', '工作经历', '项目经历', '技能特长'],
-          enabled: false,
+          enabled: true,
         }),
       });
       if (res.ok) {

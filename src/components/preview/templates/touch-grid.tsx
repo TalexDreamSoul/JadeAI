@@ -3,7 +3,7 @@
 import type { PersonalInfoContent, Resume } from '@/types/resume';
 import { isSectionEmpty } from '../utils';
 import { AvatarImage } from '../avatar-image';
-import { getPersonalInfoItems } from '../personal-info-utils';
+import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { TouchSimpleSectionContent } from './touch-simple';
 
 const SIDE_TYPES = new Set(['skills', 'languages', 'certifications', 'qr_codes']);
@@ -14,7 +14,7 @@ export function TouchGridTemplate({ resume }: { resume: Resume }) {
   const sections = resume.sections.filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s));
   const sideSections = sections.filter((s) => SIDE_TYPES.has(s.type));
   const mainSections = sections.filter((s) => !SIDE_TYPES.has(s.type));
-  const contacts = getPersonalInfoItems(pi);
+  const contacts = getPersonalInfoPreviewItems(pi);
 
   const renderSection = (section: any, compact = false) => (
     <section key={section.id} data-section data-section-id={section.id} className={compact ? '' : 'mb-5'}>
@@ -29,7 +29,7 @@ export function TouchGridTemplate({ resume }: { resume: Resume }) {
         {pi.avatar && <AvatarImage src={pi.avatar} avatarStyle={resume.themeConfig?.avatarStyle} size={72} className="mb-4 border border-zinc-200" />}
         <h1 className="text-2xl font-bold tracking-tight text-zinc-950">{pi.fullName || 'Your Name'}</h1>
         {pi.jobTitle && <p className="mt-1 text-sm font-medium text-zinc-600">{pi.jobTitle}</p>}
-        {contacts.length > 0 && <div className="mt-4 space-y-1 text-xs text-zinc-500">{contacts.map((item, index) => <p key={index}>{item}</p>)}</div>}
+        {contacts.length > 0 && <div className="mt-4 space-y-1 text-xs text-zinc-500">{contacts.map(({ key, value, Icon }) => <p key={key} className="flex items-center gap-1.5"><Icon className="h-3 w-3 shrink-0" /><span className="break-all">{value}</span></p>)}</div>}
         <div className="mt-6 space-y-5">{sideSections.map((s) => renderSection(s, true))}</div>
       </aside>
       <main className="p-7">{mainSections.map((s) => renderSection(s))}</main>
