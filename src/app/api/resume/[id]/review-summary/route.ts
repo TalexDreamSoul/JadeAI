@@ -30,7 +30,10 @@ export async function GET(
           lastCommentAt: share.lastCommentAt || null,
           createdAt: share.createdAt,
           updatedAt: share.updatedAt,
-          comments,
+          comments: comments.map((comment: Awaited<ReturnType<typeof shareRepository.findCommentsByShareId>>[number]) => ({
+            ...comment,
+            shareToken: share.token,
+          })),
         };
       })
     );
@@ -39,6 +42,7 @@ export async function GET(
       share.comments.map((comment: Awaited<ReturnType<typeof shareRepository.findCommentsByShareId>>[number]) => ({
         ...comment,
         shareId: share.id,
+        shareToken: share.token,
         shareLabel: share.label,
       }))
     ).sort((a, b) => new Date(b.updatedAt as string | Date).getTime() - new Date(a.updatedAt as string | Date).getTime());

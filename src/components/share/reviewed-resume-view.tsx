@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MessageSquare, ZoomIn, ZoomOut } from 'lucide-react';
 import { ResumePreview } from '@/components/preview/resume-preview';
 import { Button } from '@/components/ui/button';
@@ -166,8 +166,10 @@ export function ReviewedResumeView({
   onZoomChange,
 }: ReviewedResumeViewProps) {
   const internalPreviewRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const pinchStartRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const safariGestureStartScaleRef = useRef(1);
   const previewRef = externalPreviewRef || internalPreviewRef;
   const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null);
   const [liveRectsByCommentId, setLiveRectsByCommentId] = useState<Record<string, ReviewHighlightRect[]>>({});
@@ -206,6 +208,35 @@ export function ReviewedResumeView({
       pinchStartRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!enableZoom || !scroll) return;
+
+    const handleNativeWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      setZoom((current) => current - event.deltaY / 8);
+    };
+    const handleGestureStart = (event: Event) => {
+      event.preventDefault();
+      safariGestureStartScaleRef.current = zoom / 100;
+    };
+    const handleGestureChange = (event: Event) => {
+      event.preventDefault();
+      const scaleValue = Number((event as Event & { scale?: number }).scale || 1);
+      setZoom(safariGestureStartScaleRef.current * scaleValue * 100);
+    };
+
+    scroll.addEventListener('wheel', handleNativeWheel, { passive: false });
+    scroll.addEventListener('gesturestart', handleGestureStart, { passive: false });
+    scroll.addEventListener('gesturechange', handleGestureChange, { passive: false });
+    return () => {
+      scroll.removeEventListener('wheel', handleNativeWheel);
+      scroll.removeEventListener('gesturestart', handleGestureStart);
+      scroll.removeEventListener('gesturechange', handleGestureChange);
+    };
+  }, [enableZoom, setZoom, zoom]);
   const anchoredComments = useMemo(
     () => comments.filter((comment) => comment.anchor?.top !== undefined && comment.status !== 'resolved'),
     [comments]
@@ -238,11 +269,38 @@ export function ReviewedResumeView({
     });
   }, [comments, previewRef, resume, scale]);
 
+  useEffect(() => {
+    const root = contentRef.current;
+    const preview = previewRef.current;
+    const scroll = scrollRef.current;
+    if (!root || !preview || !scroll) return;
+
+    const measure = () => {
+      const nextPreviewWidth = preview.clientWidth || 0;
+      const measured: Record<string, ReviewHighlightRect[]> = {};
+      for (const comment of comments) {
+        if (!comment.selectedText || comment.status === 'resolved') continue;
+        const rects = findTextRects(root, preview, comment.selectedText, scale);
+        if (rects.length > 0) measured[comment.id] = rects;
+      }
+      window.requestAnimationFrame(() => {
+        setPreviewWidth(nextPreviewWidth);
+        setLiveRectsByCommentId(measured);
+      });
+    };
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    observer.observe(preview);
+    observer.observe(scroll);
+    return () => observer.disconnect();
+  }, [comments, previewRef, resume, scale]);
+
   return (
-    <div className={enableZoom ? `flex h-full min-w-0 flex-col ${className || ''}` : className}>
+    <div className={enableZoom ? `relative flex h-full min-w-0 flex-col ${className || ''}` : className}>
       {enableZoom && (
-        <div className="sticky top-0 z-30 flex shrink-0 items-center justify-end border-b border-zinc-200 bg-white/90 px-3 py-2 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
-          <div className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="pointer-events-none absolute bottom-4 right-4 z-30 flex items-center justify-end">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-zinc-200 bg-white/95 p-1 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
             <Button
               type="button"
               variant="ghost"
@@ -270,6 +328,7 @@ export function ReviewedResumeView({
         </div>
       )}
       <div
+        ref={scrollRef}
         className={enableZoom ? 'min-h-0 flex-1 overflow-auto overscroll-contain' : undefined}
         style={enableZoom ? { touchAction: 'pan-x pan-y' } : undefined}
         onWheel={handleWheel}

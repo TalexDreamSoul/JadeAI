@@ -14,7 +14,6 @@ import {
   GitBranch,
   Languages,
   MoreHorizontal,
-  Palette,
   Pencil,
   Printer,
   Redo2,
@@ -52,7 +51,7 @@ interface EditorToolbarProps {
 export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onWorkspaceModeChange, onOpenModal }: EditorToolbarProps) {
   const t = useTranslations('editor.toolbar');
   const router = useRouter();
-  const { toggleThemeEditor, showThemeEditor, undo, redo, undoStack, redoStack } = useEditorStore();
+  const { undo, redo, undoStack, redoStack } = useEditorStore();
   const { isSaving, isDirty, currentResume, reorderSections, save, setTitle, enableCloudSync, disableCloudSync } = useResumeStore();
   const { openModal } = useUIStore();
   const autoSave = useSettingsStore((s) => s.autoSave);
@@ -349,18 +348,6 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
           </DropdownMenu>
         </div>
 
-        <Separator orientation="vertical" className="hidden h-6 sm:block" />
-        <Button
-          data-tour="theme"
-          variant={showThemeEditor ? 'secondary' : 'ghost'}
-          size="icon"
-          onClick={toggleThemeEditor}
-          className="h-8 w-8 cursor-pointer sm:w-auto sm:px-3"
-          title={t('theme')}
-        >
-          <Palette className="h-4 w-4" />
-          <span className="ml-1 hidden text-xs sm:inline">{t('theme')}</span>
-        </Button>
       </div>
 
       <RenameTitleDialog

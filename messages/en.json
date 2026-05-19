@@ -199,7 +199,14 @@
       "refresh": "Refresh",
       "noComments": "No review comments yet",
       "noAnchor": "This comment is not linked to selected resume text, so no underline is shown. Select text on the share page before submitting a comment.",
-      "resolved": "Resolved"
+      "resolved": "Resolved",
+      "resolve": "Resolve",
+      "reopen": "Reopen",
+      "status": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "all": "All"
+      }
     },
     "versionPreview": {
       "history": "Saved versions",
@@ -258,6 +265,9 @@
       "wechat": "WeChat",
       "location": "Location",
       "website": "Website",
+      "fieldIcons": "Field icons",
+      "defaultIcon": "Default",
+      "hideIcon": "Hide",
       "company": "Company",
       "position": "Position",
       "startDate": "Start Date",
@@ -307,7 +317,12 @@
         "11": "Nov",
         "12": "Dec"
       },
-      "generateProjectIntro": "Generate project intro"
+      "generateProjectIntro": "Generate project intro",
+      "quickImport": "Quick import",
+      "githubTokenOptional": "Token (optional)",
+      "missingRepoUrl": "Enter a GitHub repository URL",
+      "githubImportDone": "GitHub project imported into Projects",
+      "githubImportFailed": "Failed to import GitHub project"
     }
   },
   "ai": {
@@ -1200,9 +1215,10 @@
     "nav": "Career",
     "eyebrow": "Role-driven optimization",
     "title": "Career Workbench",
-    "subtitle": "Connect a base resume, target JD, GitHub projects, and long-term career memory into one workflow: match, tailor, then prepare.",
+    "subtitle": "Connect target JDs, saved analysis, and long-term career memory into one workflow: match, tailor, then prepare.",
     "openKnowledge": "Knowledge",
     "openInterview": "Mock interview",
+    "quickActions": "Quick actions",
     "resumeContext": "Resume context",
     "baseResume": "Base resume",
     "selectResume": "Select resume",
@@ -1231,13 +1247,17 @@
     "buildKnowledgeHint": "Write JD gaps into the knowledge graph",
     "createInterview": "Create interview",
     "createInterviewHint": "Generate a multi-round mock interview from this JD",
+    "cloudAnalyze": "Cloud analysis",
+    "cloudAnalyzeHint": "Use server AI and save the result into history",
     "openEditor": "Open editor",
     "openEditorHint": "Continue editing the selected resume",
     "matchTab": "JD match",
-    "githubTab": "GitHub projects",
+    "historyTab": "Analysis history",
     "memoryTab": "Career memory",
     "matchResult": "Match result",
     "matchHistory": "Match history",
+    "historyHint": "Review saved cloud JD match analyses. Open one to restore it into this workspace.",
+    "refreshHistory": "Refresh history",
     "noMatchHistory": "No match history yet",
     "matchResultHint": "Analysis never overwrites your resume; apply each suggestion explicitly.",
     "runAnalysis": "Run analysis",
@@ -1275,6 +1295,7 @@
     "loadFailed": "Failed to load career workbench",
     "missingResumeOrJd": "Select a resume and provide a JD first",
     "analysisDone": "JD match analysis complete",
+    "cloudAnalysisDone": "Cloud analysis complete and saved to history",
     "analysisFailed": "JD match analysis failed",
     "deriveDone": "Role-specific resume created",
     "deriveFailed": "Failed to create role-specific resume",

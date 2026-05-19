@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CheckCircle2, Clock3, Loader2, MessageSquareText, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Clock3, Loader2, MessageSquareText, RefreshCw, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ReviewedResumeView, type ReviewAnchorForPreview, type ReviewCommentForPreview } from '@/components/share/reviewed-resume-view';
@@ -12,6 +12,7 @@ import type { Resume } from '@/types/resume';
 type ReviewComment = {
   id: string;
   shareId: string;
+  shareToken?: string;
   shareLabel?: string;
   parentCommentId?: string | null;
   authorName: string;
@@ -48,6 +49,8 @@ type ReviewSummaryResponse = {
   };
 };
 
+type ReviewStatusFilter = 'open' | 'resolved' | 'all';
+
 export type ReviewOption = {
   id: string;
   label: string;
@@ -83,6 +86,9 @@ export function ReviewPreviewPanel({
   const [data, setData] = useState<ReviewSummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [previewZoom, setPreviewZoom] = useState(80);
+  const [statusFilter, setStatusFilter] = useState<ReviewStatusFilter>('open');
+  const [updatingCommentId, setUpdatingCommentId] = useState<string | null>(null);
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
@@ -123,6 +129,10 @@ export function ReviewPreviewPanel({
   }, [data, selectedReviewId]);
 
   const rootComments = useMemo(() => (selected?.comments || []).filter((comment) => !comment.parentCommentId), [selected]);
+  const filteredRootComments = useMemo(() => {
+    if (statusFilter === 'all') return rootComments;
+    return rootComments.filter((comment) => (comment.status === 'resolved') === (statusFilter === 'resolved'));
+  }, [rootComments, statusFilter]);
   const previewComments = useMemo<ReviewCommentForPreview[]>(
     () => rootComments.map((comment) => ({
       ...comment,
@@ -140,6 +150,34 @@ export function ReviewPreviewPanel({
     }
     return map;
   }, [selected]);
+  const updateCommentStatus = useCallback(async (comment: ReviewComment, status: 'open' | 'resolved') => {
+    if (!comment.shareToken) return;
+    setUpdatingCommentId(comment.id);
+    try {
+      const res = await fetch(`/api/share/${comment.shareToken}/comments/${comment.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getHeaders() || {}),
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json() as ReviewComment;
+      setData((current) => {
+        if (!current) return current;
+        const updateList = (comments: ReviewComment[]) => comments.map((item) => (
+          item.id === comment.id ? { ...item, ...updated, shareToken: item.shareToken, shareLabel: item.shareLabel } : item
+        ));
+        return {
+          shares: current.shares.map((share) => ({ ...share, comments: updateList(share.comments) })),
+          aggregate: { ...current.aggregate, comments: updateList(current.aggregate.comments) },
+        };
+      });
+    } finally {
+      setUpdatingCommentId(null);
+    }
+  }, []);
 
   return (
     <div className="flex h-full min-w-0 border-l bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
@@ -155,13 +193,17 @@ export function ReviewPreviewPanel({
               comments={previewComments}
               activeCommentId={activeCommentId}
               onActiveCommentChange={setActiveCommentId}
-              className="mx-auto w-fit"
+              className="h-full"
+              enableZoom
+              zoom={previewZoom}
+              onZoomChange={setPreviewZoom}
             />
           )}
         </div>
 
         <aside className="min-h-0 overflow-y-auto border-l bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/70">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="sticky top-0 z-10 border-b bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{selected?.label || t('aggregate')}</div>
               <div className="text-xs text-zinc-500">{t('commentCount')}: {selected?.commentCount || 0}</div>
@@ -170,23 +212,41 @@ export function ReviewPreviewPanel({
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {t('refresh')}
             </Button>
+            </div>
+            <div className="mt-3 grid grid-cols-3 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
+              {(['open', 'resolved', 'all'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setStatusFilter(filter)}
+                  className={cn(
+                    'cursor-pointer rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                    statusFilter === filter
+                      ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  )}
+                >
+                  {t(`status.${filter}`)}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-3 p-4">
-            {rootComments.length === 0 ? (
+            {filteredRootComments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-400">
                 <MessageSquareText className="mb-3 h-10 w-10" />
                 <p className="text-sm">{t('noComments')}</p>
               </div>
             ) : (
-              rootComments.map((comment) => (
-                <button
+              filteredRootComments.map((comment) => (
+                <div
                   key={comment.id}
-                  type="button"
                   onClick={() => setActiveCommentId(comment.id)}
                   className={cn(
-                    'w-full rounded-xl border bg-white p-4 text-left shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-900',
-                    activeCommentId === comment.id && 'border-brand bg-brand-muted/40 dark:border-brand'
+                    'w-full cursor-pointer rounded-xl border bg-white p-4 text-left shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-900',
+                    activeCommentId === comment.id && 'border-brand bg-brand-muted/40 dark:border-brand',
+                    comment.status === 'resolved' && 'opacity-70'
                   )}
                 >
                   <div className="mb-2 flex items-start justify-between gap-3">
@@ -205,16 +265,32 @@ export function ReviewPreviewPanel({
                         {formatDate(comment.updatedAt || comment.createdAt)}
                       </div>
                     </div>
+                    <Button
+                      type="button"
+                      variant={comment.status === 'resolved' ? 'outline' : 'secondary'}
+                      size="sm"
+                      disabled={updatingCommentId === comment.id}
+                      className="h-7 shrink-0 cursor-pointer gap-1 px-2 text-xs"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        updateCommentStatus(comment, comment.status === 'resolved' ? 'open' : 'resolved');
+                      }}
+                    >
+                      {updatingCommentId === comment.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : comment.status === 'resolved' ? (
+                        <RotateCcw className="h-3 w-3" />
+                      ) : (
+                        <CheckCircle2 className="h-3 w-3" />
+                      )}
+                      {comment.status === 'resolved' ? t('reopen') : t('resolve')}
+                    </Button>
                   </div>
                   {comment.selectedText ? (
-                    <blockquote className="mb-3 rounded-lg border-l-2 border-brand bg-brand-muted/40 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">
+                    <blockquote className="mb-3 rounded-lg border border-dashed border-brand/50 bg-brand-muted/30 px-3 py-2 text-xs text-zinc-600 dark:border-brand/60 dark:text-zinc-300">
                       {comment.selectedText}
                     </blockquote>
-                  ) : (
-                    <div className="mb-3 rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-                      {t('noAnchor')}
-                    </div>
-                  )}
+                  ) : null}
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">{comment.content}</p>
                   {(repliesByParent.get(comment.id) || []).length > 0 && (
                     <div className="mt-3 space-y-2 border-l pl-3 dark:border-zinc-700">
@@ -226,7 +302,7 @@ export function ReviewPreviewPanel({
                       ))}
                     </div>
                   )}
-                </button>
+                </div>
               ))
             )}
           </div>

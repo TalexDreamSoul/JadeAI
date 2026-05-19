@@ -7,6 +7,7 @@ export interface QrCodeItem {
 export interface PersonalInfoContent {
   fullName: string;
   jobTitle: string;
+  personalInfoIcons?: Record<string, string>;
   age?: string;
   gender?: string;
   politicalStatus?: string;

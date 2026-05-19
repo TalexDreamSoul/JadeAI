@@ -26,7 +26,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { useAuth } from '@/hooks/use-auth';
 
 interface SettingsLauncherProps {
-  variant?: 'icon' | 'profile';
+  variant?: 'icon' | 'profile' | 'sidebar';
 }
 
 export function SettingsLauncher({ variant = 'icon' }: SettingsLauncherProps) {
@@ -63,6 +63,25 @@ export function SettingsLauncher({ variant = 'icon' }: SettingsLauncherProps) {
         </AvatarFallback>
       </Avatar>
       <span className="hidden min-w-0 flex-col leading-tight sm:flex">
+        <span className="truncate text-sm font-medium">{displayName}</span>
+        <span className="truncate text-[11px] text-zinc-400">{user ? authT('settings') : authT('localOnlyHint')}</span>
+      </span>
+      <Settings className="h-4 w-4 shrink-0 text-zinc-400" />
+    </button>
+  ) : variant === 'sidebar' ? (
+    <button
+      type="button"
+      className="flex h-13 w-full cursor-pointer items-center gap-2 rounded-xl border bg-white px-2.5 text-left text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      aria-label={displayName}
+      title={displayName}
+    >
+      <Avatar className="h-8 w-8 shrink-0">
+        {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={displayName} />}
+        <AvatarFallback className="bg-brand-muted text-brand">
+          {user ? (displayName.slice(0, 1).toUpperCase()) : <CloudOff className="h-4 w-4" />}
+        </AvatarFallback>
+      </Avatar>
+      <span className="flex min-w-0 flex-1 flex-col leading-tight">
         <span className="truncate text-sm font-medium">{displayName}</span>
         <span className="truncate text-[11px] text-zinc-400">{user ? authT('settings') : authT('localOnlyHint')}</span>
       </span>

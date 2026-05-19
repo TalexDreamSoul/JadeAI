@@ -10,7 +10,6 @@ import {
   ExternalLink,
   FileText,
   GitBranch,
-  Github,
   Loader2,
   MessageSquareText,
   Network,
@@ -43,8 +42,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { SettingsLauncher } from '@/components/layout/settings-launcher';
 import { useFingerprint } from '@/hooks/use-fingerprint';
 import { Link, useRouter } from '@/i18n/routing';
 import { getAIHeaders } from '@/stores/settings-store';
@@ -58,7 +57,7 @@ type CareerWorkbenchProps = {
   onResumeChanged?: () => void | Promise<void>;
 };
 
-export type CareerWorkbenchTab = 'match' | 'github' | 'memory';
+export type CareerWorkbenchTab = 'match' | 'history' | 'memory';
 
 type JobTemplate = {
   id?: string;
@@ -140,7 +139,7 @@ function scoreTone(score?: number) {
 
 export const CAREER_WORKBENCH_TABS: { value: CareerWorkbenchTab; icon: React.ElementType; labelKey: string }[] = [
   { value: 'match', icon: Target, labelKey: 'matchTab' },
-  { value: 'github', icon: Github, labelKey: 'githubTab' },
+  { value: 'history', icon: FileText, labelKey: 'historyTab' },
   { value: 'memory', icon: Brain, labelKey: 'memoryTab' },
 ];
 
@@ -153,32 +152,48 @@ export function CareerWorkbenchNav({
 }) {
   const t = useTranslations('career');
   return (
-    <div className="w-56 shrink-0 border-r bg-white dark:border-zinc-800 dark:bg-zinc-900 max-md:w-full max-md:border-r-0">
+    <div className="flex h-full w-56 shrink-0 flex-col border-r bg-white dark:border-zinc-800 dark:bg-zinc-900 max-md:w-full max-md:border-r-0">
       <div className="p-3">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
           {t('nav')}
         </h3>
       </div>
-      <div className="space-y-0.5 px-2">
-        {CAREER_WORKBENCH_TABS.map((item) => {
-          const Icon = item.icon;
-          const active = activeTab === item.value;
-          return (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => onActiveTabChange(item.value)}
-              className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-150 ${
-                active
-                  ? 'bg-brand-muted text-brand dark:bg-brand-muted dark:text-brand'
-                  : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
-              }`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{t(item.labelKey)}</span>
-            </button>
-          );
-        })}
+      <div className="min-h-0 flex-1 space-y-3 px-2">
+        <div className="space-y-0.5">
+          {CAREER_WORKBENCH_TABS.map((item) => {
+            const Icon = item.icon;
+            const active = activeTab === item.value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => onActiveTabChange(item.value)}
+                className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-150 ${
+                  active
+                    ? 'bg-brand-muted text-brand dark:bg-brand-muted dark:text-brand'
+                    : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{t(item.labelKey)}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="border-t pt-3 dark:border-zinc-800">
+          <p className="mb-1.5 px-2 text-xs text-zinc-400">{t('quickActions')}</p>
+          <Link href="/knowledge" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
+            <Network className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t('openKnowledge')}</span>
+          </Link>
+          <Link href="/interview" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
+            <MessageSquareText className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t('openInterview')}</span>
+          </Link>
+        </div>
+      </div>
+      <div className="space-y-2 border-t p-2 dark:border-zinc-800">
+        <SettingsLauncher variant="sidebar" />
       </div>
     </div>
   );
@@ -198,8 +213,6 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
   const [jobTitle, setJobTitle] = useState('');
   const [targetCompany, setTargetCompany] = useState('');
   const [jobDescription, setJobDescription] = useState('');
-  const [repoUrl, setRepoUrl] = useState('');
-  const [repoToken, setRepoToken] = useState('');
   const [memoryForm, setMemoryForm] = useState({ type: 'profile', title: '', content: '' });
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [jdDialogOpen, setJdDialogOpen] = useState(false);
@@ -288,16 +301,30 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     setAppliedSuggestions({});
   };
 
-  const runAnalysis = async () => {
+  const openHistoryItem = async (item: JdHistoryItem) => {
+    const res = await fetch(`/api/ai/jd-analysis/history?resumeId=${selectedResumeId}&id=${item.id}`, { headers: getRequestHeaders() });
+    if (!res.ok) return;
+    const detail = await res.json();
+    setJobDescription(detail.jobDescription || '');
+    setAnalysis({ ...detail.result, historyId: detail.id });
+    setAppliedSuggestions({});
+    setCurrentTab('match');
+  };
+
+  const runAnalysis = async (mode: 'current' | 'cloud' = 'current') => {
     if (!selectedResumeId || !jobDescription.trim()) {
       toast.error(t('missingResumeOrJd'));
       return;
     }
-    setBusy('analysis');
+    const busyKey = mode === 'cloud' ? 'cloud-analysis' : 'analysis';
+    setBusy(busyKey);
     try {
+      const headers = mode === 'cloud'
+        ? { ...getHeaders(), 'x-ai-mode': 'server' }
+        : getRequestHeaders(true);
       const res = await fetch('/api/ai/jd-analysis', {
         method: 'POST',
-        headers: getRequestHeaders(true),
+        headers,
         body: JSON.stringify({ resumeId: selectedResumeId, jobDescription }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -305,7 +332,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       setAnalysis(data);
       setAppliedSuggestions({});
       await loadJdHistory();
-      toast.success(t('analysisDone'));
+      toast.success(mode === 'cloud' ? t('cloudAnalysisDone') : t('analysisDone'));
     } catch (error) {
       console.error(error);
       toast.error(t('analysisFailed'));
@@ -401,37 +428,6 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     } catch (error) {
       console.error(error);
       toast.error(t('undoFailed'));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const importGithubProject = async () => {
-    if (!selectedResumeId || !repoUrl.trim()) {
-      toast.error(t('missingRepo'));
-      return;
-    }
-    setBusy('github');
-    try {
-      const res = await fetch('/api/career/github-project', {
-        method: 'POST',
-        headers: getRequestHeaders(true),
-        body: JSON.stringify({
-          resumeId: selectedResumeId,
-          repoUrl,
-          token: repoToken.trim() || undefined,
-          targetRole: jobTitle || selectedTemplate?.title || '',
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setRepoUrl('');
-      setRepoToken('');
-      await load();
-      await onResumeChanged?.();
-      toast.success(t('githubDone'));
-    } catch (error) {
-      console.error(error);
-      toast.error(t('githubFailed'));
     } finally {
       setBusy(null);
     }
@@ -792,11 +788,40 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
         </Dialog>
 
         <main className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-4">
-            <button type="button" onClick={runAnalysis} disabled={busy === 'analysis'} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand dark:bg-zinc-900">
+          {!embedded && (
+            <div className="flex flex-wrap gap-2 rounded-lg border bg-white p-2 dark:bg-zinc-900">
+              {CAREER_WORKBENCH_TABS.map((item) => {
+                const Icon = item.icon;
+                const active = currentTab === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setCurrentTab(item.value)}
+                    className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                      active
+                        ? 'bg-brand-muted text-brand'
+                        : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {t(item.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <button type="button" onClick={() => runAnalysis()} disabled={busy === 'analysis'} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand dark:bg-zinc-900">
               <Target className="mb-3 h-5 w-5 text-brand" />
               <p className="text-sm font-semibold">{t('analyze')}</p>
               <p className="mt-1 text-xs text-zinc-500">{t('analyzeHint')}</p>
+            </button>
+            <button type="button" onClick={() => runAnalysis('cloud')} disabled={busy === 'cloud-analysis' || !jobDescription.trim()} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-900">
+              {busy === 'cloud-analysis' ? <Loader2 className="mb-3 h-5 w-5 animate-spin text-brand" /> : <Sparkles className="mb-3 h-5 w-5 text-brand" />}
+              <p className="text-sm font-semibold">{t('cloudAnalyze')}</p>
+              <p className="mt-1 text-xs text-zinc-500">{t('cloudAnalyzeHint')}</p>
             </button>
             <button type="button" onClick={deriveResume} disabled={busy === 'derive'} className="rounded-lg border bg-white p-4 text-left transition hover:border-brand dark:bg-zinc-900">
               <GitBranch className="mb-3 h-5 w-5 text-brand" />
@@ -823,16 +848,98 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
             <ExternalLink className="h-5 w-5 text-brand" />
           </Link>}
 
-          <Tabs value={currentTab} onValueChange={(value) => setCurrentTab(value as CareerWorkbenchTab)} className="space-y-4">
-            {!embedded && (
-              <TabsList>
-                <TabsTrigger value="match">{t('matchTab')}</TabsTrigger>
-                <TabsTrigger value="github">{t('githubTab')}</TabsTrigger>
-                <TabsTrigger value="memory">{t('memoryTab')}</TabsTrigger>
-              </TabsList>
-            )}
-
-            <TabsContent value="match" className="space-y-4">
+          {currentTab === 'history' ? (
+            <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">{t('historyTab')}</h2>
+                  <p className="mt-1 text-xs text-zinc-500">{t('historyHint')}</p>
+                </div>
+                <Button variant="outline" onClick={() => loadJdHistory()} className="gap-2">
+                  <RotateCcw className="h-4 w-4" />
+                  {t('refreshHistory')}
+                </Button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {jdHistory.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-sm text-zinc-400 md:col-span-2">{t('noMatchHistory')}</div>
+                ) : jdHistory.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => openHistoryItem(item)}
+                    className="rounded-md border bg-white p-3 text-left transition hover:border-brand dark:bg-zinc-900"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm font-medium">{item.jobDescription}</span>
+                      <Badge variant="secondary">{item.overallScore}</Badge>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-xs text-zinc-500">
+                      <span>ATS {item.atsScore}</span>
+                      <span>{new Date(item.createdAt).toLocaleString()}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : currentTab === 'memory' ? (
+            <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
+              <div className="mb-4 flex items-center gap-2">
+                <Brain className="h-4 w-4 text-brand" />
+                <h2 className="text-sm font-semibold">{t('careerMemory')}</h2>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[160px_1fr]">
+                <Select value={memoryForm.type} onValueChange={(type) => setMemoryForm((current) => ({ ...current, type }))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="profile">{t('memoryTypes.profile')}</SelectItem>
+                    <SelectItem value="preference">{t('memoryTypes.preference')}</SelectItem>
+                    <SelectItem value="project_fact">{t('memoryTypes.project_fact')}</SelectItem>
+                    <SelectItem value="skill_evidence">{t('memoryTypes.skill_evidence')}</SelectItem>
+                    <SelectItem value="interview_gap">{t('memoryTypes.interview_gap')}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input value={memoryForm.title} onChange={(event) => setMemoryForm((current) => ({ ...current, title: event.target.value }))} placeholder={t('memoryTitle')} />
+                <Textarea value={memoryForm.content} onChange={(event) => setMemoryForm((current) => ({ ...current, content: event.target.value }))} placeholder={t('memoryContent')} className="md:col-span-2" />
+                <div className="md:col-span-2">
+                  <Button onClick={saveMemory} disabled={busy === 'memory'} className="gap-2 bg-brand hover:bg-brand-hover">
+                    {busy === 'memory' ? <Loader2 className="h-4 w-4 animate-spin" /> : editingMemoryId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {editingMemoryId ? t('updateMemory') : t('saveMemory')}
+                  </Button>
+                  {editingMemoryId && (
+                    <Button variant="outline" onClick={cancelMemoryEdit} className="ml-2 gap-2">
+                      <X className="h-4 w-4" />
+                      {t('cancel')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {memories.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-sm text-zinc-400 md:col-span-2">{t('noMemories')}</div>
+                ) : memories.map((memory) => (
+                  <div key={memory.id} className="rounded-md border p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="truncate text-sm font-semibold">{memory.title}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary">{t(`memoryTypes.${memory.type}`)}</Badge>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => editMemory(memory)} title={t('editMemory')}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => deleteMemory(memory.id)} disabled={busy === `memory-delete-${memory.id}`} title={t('deleteMemory')}>
+                          {busy === `memory-delete-${memory.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-600 dark:text-zinc-300">{memory.content || t('emptyMemory')}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <div className="space-y-4">
               <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
                 <h2 className="text-sm font-semibold">{t('matchHistory')}</h2>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -842,14 +949,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
                     <button
                       key={item.id}
                       type="button"
-                      onClick={async () => {
-                        const res = await fetch(`/api/ai/jd-analysis/history?resumeId=${selectedResumeId}&id=${item.id}`, { headers: getRequestHeaders() });
-                        if (!res.ok) return;
-                        const detail = await res.json();
-                        setJobDescription(detail.jobDescription || '');
-                        setAnalysis({ ...detail.result, historyId: detail.id });
-                        setCurrentTab('match');
-                      }}
+                      onClick={() => openHistoryItem(item)}
                       className="rounded-md border p-3 text-left transition hover:border-brand"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -868,10 +968,16 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
                     <h2 className="text-sm font-semibold">{t('matchResult')}</h2>
                     <p className="mt-1 text-xs text-zinc-500">{t('matchResultHint')}</p>
                   </div>
-                  <Button onClick={runAnalysis} disabled={busy === 'analysis'} className="gap-2 bg-brand hover:bg-brand-hover">
-                    {busy === 'analysis' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                    {t('runAnalysis')}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => runAnalysis()} disabled={busy === 'analysis'} className="gap-2 bg-brand hover:bg-brand-hover">
+                      {busy === 'analysis' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                      {t('runAnalysis')}
+                    </Button>
+                    <Button variant="outline" onClick={() => runAnalysis('cloud')} disabled={busy === 'cloud-analysis' || !jobDescription.trim()} className="gap-2">
+                      {busy === 'cloud-analysis' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {t('cloudAnalyze')}
+                    </Button>
+                  </div>
                 </div>
 
                 {analysis ? (
@@ -963,84 +1069,8 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
                   ))}
                 </div>
               </section>
-            </TabsContent>
-
-            <TabsContent value="github" className="space-y-4">
-              <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
-                <div className="mb-4 flex items-center gap-2">
-                  <Github className="h-4 w-4 text-brand" />
-                  <h2 className="text-sm font-semibold">{t('githubImport')}</h2>
-                </div>
-                <div className="grid gap-3 md:grid-cols-[1fr_260px_auto]">
-                  <Input value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} placeholder="https://github.com/owner/repo" />
-                  <Input value={repoToken} onChange={(event) => setRepoToken(event.target.value)} placeholder={t('githubTokenPlaceholder')} type="password" autoComplete="off" />
-                  <Button onClick={importGithubProject} disabled={busy === 'github'} className="gap-2 bg-brand hover:bg-brand-hover">
-                    {busy === 'github' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    {t('importProject')}
-                  </Button>
-                </div>
-                <p className="mt-3 text-xs leading-5 text-zinc-500">{t('githubHint')}</p>
-              </section>
-            </TabsContent>
-
-            <TabsContent value="memory" className="space-y-4">
-              <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
-                <div className="mb-4 flex items-center gap-2">
-                  <Brain className="h-4 w-4 text-brand" />
-                  <h2 className="text-sm font-semibold">{t('careerMemory')}</h2>
-                </div>
-                <div className="grid gap-3 md:grid-cols-[160px_1fr]">
-                  <Select value={memoryForm.type} onValueChange={(type) => setMemoryForm((current) => ({ ...current, type }))}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="profile">{t('memoryTypes.profile')}</SelectItem>
-                      <SelectItem value="preference">{t('memoryTypes.preference')}</SelectItem>
-                      <SelectItem value="project_fact">{t('memoryTypes.project_fact')}</SelectItem>
-                      <SelectItem value="skill_evidence">{t('memoryTypes.skill_evidence')}</SelectItem>
-                      <SelectItem value="interview_gap">{t('memoryTypes.interview_gap')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input value={memoryForm.title} onChange={(event) => setMemoryForm((current) => ({ ...current, title: event.target.value }))} placeholder={t('memoryTitle')} />
-                  <Textarea value={memoryForm.content} onChange={(event) => setMemoryForm((current) => ({ ...current, content: event.target.value }))} placeholder={t('memoryContent')} className="md:col-span-2" />
-                  <div className="md:col-span-2">
-                    <Button onClick={saveMemory} disabled={busy === 'memory'} className="gap-2 bg-brand hover:bg-brand-hover">
-                      {busy === 'memory' ? <Loader2 className="h-4 w-4 animate-spin" /> : editingMemoryId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                      {editingMemoryId ? t('updateMemory') : t('saveMemory')}
-                    </Button>
-                    {editingMemoryId && (
-                      <Button variant="outline" onClick={cancelMemoryEdit} className="ml-2 gap-2">
-                        <X className="h-4 w-4" />
-                        {t('cancel')}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {memories.length === 0 ? (
-                    <div className="rounded-md border border-dashed p-6 text-sm text-zinc-400 md:col-span-2">{t('noMemories')}</div>
-                  ) : memories.map((memory) => (
-                    <div key={memory.id} className="rounded-md border p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <h3 className="truncate text-sm font-semibold">{memory.title}</h3>
-                        <div className="flex items-center gap-1.5">
-                          <Badge variant="secondary">{t(`memoryTypes.${memory.type}`)}</Badge>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => editMemory(memory)} title={t('editMemory')}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => deleteMemory(memory.id)} disabled={busy === `memory-delete-${memory.id}`} title={t('deleteMemory')}>
-                            {busy === `memory-delete-${memory.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                          </Button>
-                        </div>
-                      </div>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-600 dark:text-zinc-300">{memory.content || t('emptyMemory')}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </main>
       </div>
     </div>

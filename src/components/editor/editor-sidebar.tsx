@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, GripVertical, User, FileText, Briefcase, GraduationCap, Wrench, FolderKanban, Award, Languages, LayoutList, Pencil, Github, QrCode } from 'lucide-react';
+import { Plus, GripVertical, User, FileText, Briefcase, GraduationCap, Wrench, FolderKanban, Award, Languages, LayoutList, Pencil, Github, QrCode, Palette, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 import {
   DndContext,
@@ -24,6 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useEditorStore } from '@/stores/editor-store';
 import { useResumeStore } from '@/stores/resume-store';
+import { SettingsLauncher } from '@/components/layout/settings-launcher';
 import type { ResumeSection } from '@/types/resume';
 import { SECTION_TYPES, type SectionType } from '@/lib/constants';
 
@@ -147,11 +148,14 @@ interface EditorSidebarProps {
   sections: ResumeSection[];
   onAddSection: (section: ResumeSection) => void;
   onReorderSections: (sections: ResumeSection[]) => void;
+  modulesCollapsed?: boolean;
+  onModulesCollapsedChange?: (collapsed: boolean) => void;
 }
 
-export function EditorSidebar({ sections, onAddSection, onReorderSections }: EditorSidebarProps) {
+export function EditorSidebar({ sections, onAddSection, onReorderSections, modulesCollapsed = false, onModulesCollapsedChange }: EditorSidebarProps) {
   const t = useTranslations('editor');
-  const { selectedSectionId, selectSection } = useEditorStore();
+  const toolbarT = useTranslations('editor.toolbar');
+  const { selectedSectionId, selectSection, showThemeEditor, toggleThemeEditor } = useEditorStore();
   const { updateSectionTitle } = useResumeStore();
 
   const handleSelect = useCallback((id: string) => {
@@ -227,13 +231,26 @@ export function EditorSidebar({ sections, onAddSection, onReorderSections }: Edi
   };
 
   return (
-    <div data-tour="sidebar" className="w-56 shrink-0 border-r bg-white dark:bg-zinc-900 dark:border-zinc-800 max-md:w-full max-md:border-r-0">
+    <div data-tour="sidebar" className="flex h-full w-56 shrink-0 flex-col border-r bg-white dark:bg-zinc-900 dark:border-zinc-800 max-md:w-full max-md:border-r-0">
       <div className="p-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          {t('sidebar.sections')}
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            {t('sidebar.sections')}
+          </h3>
+          {onModulesCollapsedChange && (
+            <button
+              type="button"
+              className="hidden h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-400 hover:text-zinc-700 md:flex dark:border-zinc-800 dark:bg-zinc-900 dark:hover:text-zinc-200"
+              onClick={() => onModulesCollapsedChange(!modulesCollapsed)}
+              aria-label={modulesCollapsed ? '展开简历模块内容' : '收起简历模块内容'}
+              title={modulesCollapsed ? '展开简历模块内容' : '收起简历模块内容'}
+            >
+              {modulesCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
       </div>
-      <ScrollArea className="h-[calc(100vh-7rem)] max-md:h-[calc(100vh-5rem)]">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-0.5 px-2">
           <DndContext
             sensors={sensors}
@@ -287,6 +304,23 @@ export function EditorSidebar({ sections, onAddSection, onReorderSections }: Edi
           </>
         )}
       </ScrollArea>
+      <div className="space-y-2 border-t p-2 dark:border-zinc-800">
+        <button
+          type="button"
+          data-tour="theme"
+          onClick={toggleThemeEditor}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+            showThemeEditor
+              ? 'bg-brand-muted text-brand'
+              : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200'
+          }`}
+          title={toolbarT('theme')}
+        >
+          <Palette className="h-4 w-4 shrink-0" />
+          <span className="truncate">{toolbarT('theme')}</span>
+        </button>
+        <SettingsLauncher variant="sidebar" />
+      </div>
     </div>
   );
 }

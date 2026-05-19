@@ -2,16 +2,28 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { Plus, X, RefreshCw, Star, Code2, Loader2, WandSparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { EditableText } from '../fields/editable-text';
 import { EditableRichText } from '../fields/editable-rich-text';
 import { generateId } from '@/lib/utils';
 import { getAIHeaders } from '@/stores/settings-store';
+import { useResumeStore } from '@/stores/resume-store';
 import type { ResumeSection, GitHubContent, GitHubRepoItem } from '@/types/resume';
 
 const GITHUB_REPO_RE = /github\.com\/[^/]+\/[^/]+/;
+
+function getJsonHeaders(includeAI = false) {
+  const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
+  return {
+    'Content-Type': 'application/json',
+    ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}),
+    ...(includeAI ? getAIHeaders() : {}),
+  };
+}
 
 interface Props {
   section: ResumeSection;
@@ -24,6 +36,11 @@ export function GitHubSection({ section, onUpdate }: Props) {
   const items = content.items || [];
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [summaryIds, setSummaryIds] = useState<Set<string>>(new Set());
+  const [importUrl, setImportUrl] = useState('');
+  const [importToken, setImportToken] = useState('');
+  const [importing, setImporting] = useState(false);
+  const currentResume = useResumeStore((state) => state.currentResume);
+  const setResume = useResumeStore((state) => state.setResume);
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // Keep a ref to always access the latest items, avoiding stale closures in setTimeout
   const itemsRef = useRef(items);
@@ -131,6 +148,39 @@ export function GitHubSection({ section, onUpdate }: Props) {
     }
   };
 
+  const importProject = async () => {
+    const repoUrl = importUrl.trim();
+    if (!currentResume?.id || !repoUrl) {
+      toast.error(t('missingRepoUrl'));
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const res = await fetch('/api/career/github-project', {
+        method: 'POST',
+        headers: getJsonHeaders(true),
+        body: JSON.stringify({
+          resumeId: currentResume.id,
+          repoUrl,
+          token: importToken.trim() || undefined,
+          targetRole: currentResume.targetJobTitle || '',
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (data.resume) setResume(data.resume);
+      setImportUrl('');
+      setImportToken('');
+      toast.success(t('githubImportDone'));
+    } catch (error) {
+      console.error(error);
+      toast.error(t('githubImportFailed'));
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // Auto-refresh stars for all repos on mount
   const didAutoRefresh = useRef(false);
   useEffect(() => {
@@ -150,6 +200,34 @@ export function GitHubSection({ section, onUpdate }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-dashed border-brand/35 bg-brand-muted/30 p-3 dark:border-brand/40">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,180px)_auto]">
+          <Input
+            value={importUrl}
+            onChange={(event) => setImportUrl(event.target.value)}
+            placeholder="https://github.com/owner/repo"
+            className="h-9 bg-white dark:bg-zinc-900"
+          />
+          <Input
+            value={importToken}
+            onChange={(event) => setImportToken(event.target.value)}
+            placeholder={t('githubTokenOptional')}
+            type="password"
+            autoComplete="off"
+            className="h-9 bg-white dark:bg-zinc-900"
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={importProject}
+            disabled={importing}
+            className="h-9 cursor-pointer gap-1.5 bg-brand hover:bg-brand-hover"
+          >
+            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            {t('quickImport')}
+          </Button>
+        </div>
+      </div>
       {items.map((item, index) => (
         <div key={item.id || `gh-${index}`}>
           {index > 0 && <Separator className="mb-4" />}

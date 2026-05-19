@@ -199,7 +199,14 @@
       "refresh": "刷新",
       "noComments": "暂无评审评论",
       "noAnchor": "这条评论没有关联选中的简历文本，因此不会在简历中划线。请在分享页选中文本后提交评论。",
-      "resolved": "已解决"
+      "resolved": "已解决",
+      "resolve": "解决",
+      "reopen": "重开",
+      "status": {
+        "open": "未解决",
+        "resolved": "已解决",
+        "all": "全部"
+      }
     },
     "versionPreview": {
       "history": "历史版本",
@@ -258,6 +265,9 @@
       "wechat": "微信",
       "location": "所在地",
       "website": "个人网站",
+      "fieldIcons": "字段图标",
+      "defaultIcon": "默认",
+      "hideIcon": "隐藏",
       "company": "公司",
       "position": "职位",
       "startDate": "开始时间",
@@ -307,7 +317,12 @@
         "11": "11月",
         "12": "12月"
       },
-      "generateProjectIntro": "生成项目介绍"
+      "generateProjectIntro": "生成项目介绍",
+      "quickImport": "快速导入",
+      "githubTokenOptional": "Token（可选）",
+      "missingRepoUrl": "请填写 GitHub 仓库地址",
+      "githubImportDone": "GitHub 项目已导入项目经历",
+      "githubImportFailed": "导入 GitHub 项目失败"
     }
   },
   "ai": {
@@ -1200,9 +1215,10 @@
     "nav": "求职工作台",
     "eyebrow": "职位驱动优化",
     "title": "求职工作台",
-    "subtitle": "把基础简历、目标 JD、GitHub 项目和长期记忆串成一个闭环：先匹配，再生成职位版本，最后沉淀学习和面试准备。",
+    "subtitle": "把目标 JD、历史分析和长期记忆串成一个闭环：先匹配，再生成职位版本，最后沉淀学习和面试准备。",
     "openKnowledge": "知识图谱",
     "openInterview": "模拟面试",
+    "quickActions": "快捷入口",
     "resumeContext": "简历上下文",
     "baseResume": "基础简历",
     "selectResume": "选择简历",
@@ -1231,13 +1247,17 @@
     "buildKnowledgeHint": "把 JD 缺口写入知识图谱",
     "createInterview": "一键创建面试",
     "createInterviewHint": "按当前 JD 生成多轮模拟面试",
+    "cloudAnalyze": "云端后台分析",
+    "cloudAnalyzeHint": "使用系统 AI 在云端分析，结果会写入历史记录",
     "openEditor": "打开编辑器",
     "openEditorHint": "继续手动调整当前简历",
     "matchTab": "JD 匹配",
-    "githubTab": "GitHub 项目",
+    "historyTab": "历史分析",
     "memoryTab": "个人记忆",
     "matchResult": "匹配结果",
     "matchHistory": "历史匹配记录",
+    "historyHint": "查看云端保存的 JD 匹配分析结果，点击可恢复到当前工作区。",
+    "refreshHistory": "刷新历史",
     "noMatchHistory": "暂无历史匹配记录",
     "matchResultHint": "分析结果不会自动覆盖简历，建议需要手动确认应用。",
     "runAnalysis": "开始分析",
@@ -1275,6 +1295,7 @@
     "loadFailed": "加载求职工作台失败",
     "missingResumeOrJd": "请先选择简历并填写 JD",
     "analysisDone": "JD 匹配分析完成",
+    "cloudAnalysisDone": "云端分析完成，结果已写入历史记录",
     "analysisFailed": "JD 匹配分析失败",
     "deriveDone": "职位版本已创建",
     "deriveFailed": "生成职位版本失败",

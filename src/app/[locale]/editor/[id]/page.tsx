@@ -31,7 +31,6 @@ import { useUIStore } from '@/stores/ui-store';
 import { useSettingsStore, useIsLocalOnly } from '@/stores/settings-store';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SettingsLauncher } from '@/components/layout/settings-launcher';
 import { SettingsDialog } from '@/components/settings/settings-dialog';
 import { useRouter, usePathname } from '@/i18n/routing';
 import { cn } from '@/lib/utils';
@@ -56,9 +55,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [workspaceMode, setWorkspaceMode] = useState<'resume' | 'career'>(() => (
     searchParams.get('workspace') === 'career' ? 'career' : 'resume'
   ));
+  const [resumeModulesCollapsed, setResumeModulesCollapsed] = useState(() => searchParams.get('modules') === 'collapsed');
   const [careerTab, setCareerTab] = useState<CareerWorkbenchTab>(() => {
     const tab = searchParams.get('careerTab');
-    return tab === 'github' || tab === 'memory' || tab === 'match' ? tab : 'match';
+    return tab === 'history' || tab === 'memory' || tab === 'match' ? tab : 'match';
   });
   const { showThemeEditor, mobileActiveTab } = useEditorStore();
   const { activeModal, openModal, closeModal } = useUIStore();
@@ -88,6 +88,15 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       if (next.modal) params.set('modal', next.modal);
       else params.delete('modal');
     }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  };
+
+  const setResumeModulesState = (collapsed: boolean) => {
+    setResumeModulesCollapsed(collapsed);
+    const params = new URLSearchParams(searchParams.toString());
+    if (collapsed) params.set('modules', 'collapsed');
+    else params.delete('modules');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
   };
@@ -194,6 +203,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               sections={sections}
               onAddSection={addSection}
               onReorderSections={reorderSections}
+              modulesCollapsed={resumeModulesCollapsed}
+              onModulesCollapsedChange={setResumeModulesState}
             />
           ) : (
             <CareerWorkbenchNav activeTab={careerTab} onActiveTabChange={handleCareerTabChange} />
@@ -202,10 +213,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
         {/* Canvas: always mounted, hidden on mobile when preview tab active */}
         <div className={cn(
-          "min-w-0 flex-1 overflow-hidden md:flex-[4]",
+          "min-w-0 overflow-hidden transition-[flex-basis,width] duration-200",
+          resumeModulesCollapsed && workspaceMode === 'resume' ? "hidden md:block md:w-0 md:flex-none" : "flex-1 md:flex-[4]",
           isMobile && mobileActiveTab !== "edit" && "hidden"
         )}>
-          {workspaceMode === 'resume' ? (
+          {resumeModulesCollapsed && workspaceMode === 'resume' ? null : workspaceMode === 'resume' ? (
             <EditorCanvas
               sections={visibleSections}
               onUpdateSection={updateSection}
@@ -233,8 +245,6 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           <EditorPreviewTabs resumeId={id} readonly={workspaceMode === 'career'} />
         </div>
       </div>
-
-      <SettingsLauncher variant="profile" />
 
       {/* Mobile sidebar FAB */}
       <button
