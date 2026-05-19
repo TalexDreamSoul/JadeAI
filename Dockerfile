@@ -6,7 +6,8 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN apk add --no-cache python3 make g++ pkgconf
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # --- Build ---
 FROM base AS builder
