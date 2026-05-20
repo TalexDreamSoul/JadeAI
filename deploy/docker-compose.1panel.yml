@@ -1,0 +1,60 @@
+x-jadeai-app: &jadeai-app
+  image: ${JADEAI_IMAGE:-ghcr.io/talexdreamsoul/jadeai:latest}
+  restart: unless-stopped
+  init: true
+  environment:
+    NODE_ENV: production
+    PORT: 3000
+    HOSTNAME: 0.0.0.0
+    APP_NAME: ${APP_NAME:-JadeAI}
+    AUTH_ENABLED: ${AUTH_ENABLED:-false}
+    AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+    DB_TYPE: ${DB_TYPE:-sqlite}
+    SQLITE_PATH: ${SQLITE_PATH:-/app/data/touchresume.db}
+    DATABASE_URL: ${DATABASE_URL:-}
+    AI_PROVIDER: ${AI_PROVIDER:-openai}
+    AI_OPENAI_ENDPOINT: ${AI_OPENAI_ENDPOINT:-chat}
+    AI_API_KEY: ${AI_API_KEY:-}
+    AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+    AI_MODEL: ${AI_MODEL:-gpt-4o}
+    IMAGE_AI_API_KEY: ${IMAGE_AI_API_KEY:-}
+    IMAGE_AI_BASE_URL: ${IMAGE_AI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+    IMAGE_AI_MODEL: ${IMAGE_AI_MODEL:-gemini-3.1-flash-image-preview}
+  volumes:
+    - jadeai-data:/app/data
+  expose:
+    - "3000"
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ready >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
+    interval: 10s
+    timeout: 3s
+    retries: 12
+    start_period: 20s
+
+services:
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - target: 80
+        published: ${APP_PORT:-3003}
+        protocol: tcp
+        mode: host
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  jadeai-blue:
+    <<: *jadeai-app
+
+  jadeai-green:
+    <<: *jadeai-app
+    profiles: ["green"]
+
+volumes:
+  jadeai-data:

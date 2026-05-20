@@ -3,9 +3,25 @@ import { SQLiteAdapter } from './adapters/sqlite';
 import { PostgreSQLAdapter } from './adapters/postgresql';
 import type { DatabaseAdapter } from './adapter';
 
+const skipDbInit = process.env.SKIP_DB_INIT === '1';
+
+function createUnavailableDb() {
+  return new Proxy({}, {
+    get() {
+      throw new Error('Database is unavailable while SKIP_DB_INIT=1');
+    },
+  });
+}
+
 let adapter: DatabaseAdapter;
 
-if (config.db.type === 'postgresql') {
+if (skipDbInit) {
+  adapter = {
+    db: createUnavailableDb(),
+    initialize: async () => undefined,
+    close: async () => undefined,
+  };
+} else if (config.db.type === 'postgresql') {
   adapter = new PostgreSQLAdapter(process.env.DATABASE_URL!);
 } else {
   if (process.env.VERCEL) {

@@ -77,6 +77,50 @@ export const JOB_TEMPLATES: JobTemplate[] = [
 3. 能把模型能力转化为稳定、可解释、可迭代的产品能力。`,
   },
   {
+    roleKey: 'data-modeling-engineer-mid',
+    title: '数据建模工程师',
+    level: 'mid',
+    industry: '数据 / 数仓 / BI',
+    keywords: ['数据建模', '维度建模', '指标体系', 'SQL', 'ETL', '数据治理', '数据质量', '数仓分层', 'BI', '业务分析'],
+    recommendedSections: ['个人简介', '工作经历', '数据建模项目', '技能特长'],
+    interviewQuestions: [
+      '你如何从业务口径拆解出稳定可复用的指标体系？',
+      '讲一个你设计维度模型、事实表或数据集市的案例。',
+      '数据口径不一致或质量异常时，你如何定位和治理？',
+    ],
+    jd: `岗位职责：
+1. 负责业务主题域、指标体系、数仓分层和数据集市建模；
+2. 设计事实表、维度表、宽表和数据服务，支撑 BI 分析与业务决策；
+3. 建设数据质量、口径管理、血缘追踪和数据治理流程。
+
+任职要求：
+1. 熟悉维度建模、指标体系设计、SQL、ETL/调度和数据仓库方法论；
+2. 能理解业务流程并沉淀可复用的数据模型与数据资产；
+3. 有数仓建设、数据治理、BI 报表或大数据平台项目经验优先。`,
+  },
+  {
+    roleKey: 'machine-learning-modeling-engineer-mid',
+    title: '机器学习建模工程师',
+    level: 'mid',
+    industry: 'AI / 算法建模',
+    keywords: ['机器学习', '特征工程', '模型训练', '模型评估', 'Python', 'PyTorch', 'scikit-learn', 'XGBoost', 'MLOps', 'A/B 测试'],
+    recommendedSections: ['个人简介', '算法建模项目', '科研/竞赛经历', '技能特长', '工作经历'],
+    interviewQuestions: [
+      '你如何从业务目标定义建模目标、样本和评估指标？',
+      '讲一个你做特征工程、模型调优和线上验证的完整案例。',
+      '模型效果衰减或线上指标不一致时，你会如何排查？',
+    ],
+    jd: `岗位职责：
+1. 面向推荐、搜索、风控、预测或增长场景进行机器学习建模；
+2. 负责样本构建、特征工程、模型训练、离线评估、上线验证和效果迭代；
+3. 与工程、产品、数据团队协作，建设模型监控、实验分析和自动化训练流程。
+
+任职要求：
+1. 熟悉机器学习、概率统计、特征工程和常见模型评估方法；
+2. 熟练使用 Python、SQL 及 PyTorch/scikit-learn/XGBoost 等工具；
+3. 有模型上线、A/B 实验、MLOps 或真实业务建模经验优先。`,
+  },
+  {
     roleKey: 'product-manager-junior',
     title: '产品经理',
     level: 'junior',
@@ -229,6 +273,72 @@ export const JOB_TEMPLATES: JobTemplate[] = [
 1. 熟悉 Unity 或 Unreal，理解 Shader、材质、灯光、特效和资源导入流程；
 2. 具备 Python、DCC 工具脚本或 Houdini 流程经验；
 3. 有完整项目管线建设、性能规范或美术工具开发经验优先。`,
+  },
+  {
+    roleKey: 'game-character-modeler-mid',
+    title: '3D 角色建模师',
+    level: 'mid',
+    industry: '游戏 / 3D 美术',
+    keywords: ['角色建模', 'ZBrush', 'Maya', 'Blender', '拓扑', 'UV', 'PBR', 'Substance Painter', '烘焙', '引擎落地'],
+    recommendedSections: ['个人简介', '角色建模作品集', '游戏项目经历', '技能特长'],
+    interviewQuestions: [
+      '你如何从原画设定还原角色造型、比例和材质质感？',
+      '讲一个你处理高模、低模、拓扑、UV、烘焙和贴图的完整流程。',
+      '角色模型进引擎后出现穿插、变形或性能问题时你如何排查？',
+    ],
+    jd: `岗位职责：
+1. 根据原画和风格设定完成角色、怪物、装备等 3D 模型制作；
+2. 负责高模雕刻、低模拓扑、UV、烘焙、PBR 材质贴图和引擎内效果还原；
+3. 与原画、动画、TA 和客户端协作，保障资源规范、性能预算和版本交付。
+
+任职要求：
+1. 熟悉角色建模完整流程，具备人体结构、服装褶皱和材质表现能力；
+2. 熟练使用 ZBrush、Maya/Blender、Substance Painter 等常用工具；
+3. 具备良好审美、造型能力和问题定位能力，有上线项目或完整作品集优先。`,
+  },
+  {
+    roleKey: 'game-environment-modeler-mid',
+    title: '3D 场景建模师',
+    level: 'mid',
+    industry: '游戏 / 场景美术',
+    keywords: ['场景建模', '模块化资产', 'Maya', 'Blender', '3ds Max', 'Substance Designer', 'PBR', '地编', '灯光', '性能优化'],
+    recommendedSections: ['个人简介', '场景建模作品集', '游戏项目经历', '技能特长'],
+    interviewQuestions: [
+      '你如何拆解一张场景概念图并规划模块化资产和制作排期？',
+      '讲一个你完成场景搭建、材质、灯光和引擎落地的案例。',
+      '场景资源出现面数、贴图或 Draw Call 压力时你如何优化？',
+    ],
+    jd: `岗位职责：
+1. 负责游戏场景、建筑、地形、植被和道具等 3D 资产制作；
+2. 建设模块化资产、材质库和场景搭建规范，保障风格统一和复用效率；
+3. 与原画、关卡、TA、客户端团队协作，完成引擎内效果还原和性能优化。
+
+任职要求：
+1. 熟悉场景建模、模块化拆分、UV、贴图、材质和引擎地编流程；
+2. 熟练使用 Maya/Blender/3ds Max、Substance 系列或同类工具；
+3. 理解 LOD、碰撞、贴图规格、光照和移动端/主机性能限制，有完整场景作品优先。`,
+  },
+  {
+    roleKey: 'game-prop-hard-surface-modeler-mid',
+    title: '3D 道具 / 硬表面建模师',
+    level: 'mid',
+    industry: '游戏 / 道具建模',
+    keywords: ['道具建模', '硬表面', 'Maya', 'Blender', 'Fusion 360', 'Substance Painter', '拓扑', 'UV', '材质贴图', '资产规范'],
+    recommendedSections: ['个人简介', '道具/硬表面作品集', '游戏项目经历', '技能特长'],
+    interviewQuestions: [
+      '你如何把武器、载具或机械设定拆成可制作的结构和材质层级？',
+      '硬表面模型中倒角、法线、烘焙和贴图瑕疵你如何处理？',
+      '讲一个你在质量、复用和性能预算之间做取舍的资产制作案例。',
+    ],
+    jd: `岗位职责：
+1. 负责武器、载具、机械、装备和交互道具等硬表面资产建模；
+2. 完成高低模制作、拓扑、UV、法线烘焙、材质贴图和资产入库；
+3. 与原画、场景、TA 和程序协作，制定资源规格并保障引擎内表现。
+
+任职要求：
+1. 熟悉硬表面建模流程，理解结构比例、材质分层和工业造型细节；
+2. 熟练使用 Maya/Blender/Fusion 360、Substance Painter 等工具；
+3. 有良好的贴图表现、资产规范意识和问题修复能力，有游戏道具作品集优先。`,
   },
   {
     roleKey: 'game-planner-general-junior',
