@@ -182,6 +182,8 @@ export function PublicResumeReview({
   const [previewZoom, setPreviewZoom] = useState(100);
   const [draft, setDraft] = useState('');
   const [activeLeftTab, setActiveLeftTab] = useState<'info' | 'review' | 'jd'>('info');
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -569,9 +571,50 @@ export function PublicResumeReview({
     <>
       <VisitorWatermarkLayer text={visitorWatermark} />
 
-      <div className="relative z-10 grid h-full min-h-0 w-full grid-cols-1 gap-0 overflow-hidden px-4 py-0 sm:px-6 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
+      <div className="relative z-10 flex h-full min-h-0 w-full overflow-hidden py-0 xl:grid xl:grid-cols-[320px_minmax(0,1fr)_320px] xl:px-6">
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-50 flex items-center justify-between px-3 xl:hidden">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setMobileLeftOpen((open) => !open);
+              setMobileRightOpen(false);
+            }}
+            className="pointer-events-auto h-9 rounded-full border border-zinc-200 bg-white/95 px-3 text-xs shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95"
+          >
+            <Users className="mr-1.5 h-4 w-4 text-brand" />
+            {t('basicInfo')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setMobileRightOpen((open) => !open);
+              setMobileLeftOpen(false);
+            }}
+            className="pointer-events-auto h-9 rounded-full border border-zinc-200 bg-white/95 px-3 text-xs shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95"
+          >
+            <MessageSquare className="mr-1.5 h-4 w-4 text-brand" />
+            {t('review')}
+          </Button>
+        </div>
+
+        {(mobileLeftOpen || mobileRightOpen) && (
+          <button
+            type="button"
+            aria-label="Close mobile panel"
+            onClick={() => {
+              setMobileLeftOpen(false);
+              setMobileRightOpen(false);
+            }}
+            className="absolute inset-0 z-30 bg-black/35 backdrop-blur-[1px] xl:hidden"
+          />
+        )}
+
         {/* Left panel */}
-        <aside className="flex min-h-0 flex-col overflow-y-auto pr-4 xl:border-r xl:border-zinc-200 dark:xl:border-zinc-800">
+        <aside className={`absolute inset-y-0 left-0 z-40 flex min-h-0 w-[min(88vw,22rem)] flex-col overflow-y-auto border-r border-zinc-200 bg-white p-4 shadow-2xl transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-950 xl:static xl:z-auto xl:w-auto xl:translate-x-0 xl:border-r xl:bg-transparent xl:p-0 xl:pr-4 xl:shadow-none ${mobileLeftOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="mb-4 grid shrink-0 grid-cols-3 border-b border-zinc-200 text-xs dark:border-zinc-800">
             {([
               ['info', t('basicInfo')],
@@ -736,7 +779,7 @@ export function PublicResumeReview({
         </aside>
 
         {/* Resume */}
-        <main className="min-h-0 w-full overflow-hidden px-4" onMouseDown={(event) => {
+        <main className="min-h-0 w-full flex-1 overflow-hidden px-3 pt-12 xl:px-4 xl:pt-0" onMouseDown={(event) => {
           if (event.target === event.currentTarget) clearSelection();
         }}>
           <ReviewedResumeView
@@ -781,8 +824,8 @@ export function PublicResumeReview({
         </main>
 
         {/* Right comments */}
-        <aside className="relative min-h-0 overflow-y-auto pl-4" onMouseDown={() => clearSelection()}>
-          <div className="border-l border-zinc-200 bg-white/70 pl-4 dark:border-zinc-800 dark:bg-zinc-950/40">
+        <aside className={`absolute inset-y-0 right-0 z-40 min-h-0 w-[min(88vw,22rem)] overflow-y-auto border-l border-zinc-200 bg-white p-4 shadow-2xl transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-950 xl:relative xl:z-auto xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-transparent xl:p-0 xl:pl-4 xl:shadow-none ${mobileRightOpen ? 'translate-x-0' : 'translate-x-full'}`} onMouseDown={() => clearSelection()}>
+          <div className="bg-white/70 dark:bg-zinc-950/40 xl:border-l xl:border-zinc-200 xl:pl-4 xl:dark:border-zinc-800">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               <MessageSquare className="h-4 w-4 text-brand" />
               {t('review')}
