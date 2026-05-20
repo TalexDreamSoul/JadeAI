@@ -91,7 +91,7 @@ export function buildElegantHtml(resume: ResumeWithSections): string {
       </div>
       ${contacts.length ? `<div class="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-zinc-500">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</div>` : ''}
     </div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <div class="mb-3 flex items-center gap-3">
         <div class="h-px flex-1" style="background:${GOLD}"></div>
         <h2 class="shrink-0 text-sm font-bold uppercase tracking-[0.2em]" style="color:${GOLD}">${esc(s.title)}</h2>

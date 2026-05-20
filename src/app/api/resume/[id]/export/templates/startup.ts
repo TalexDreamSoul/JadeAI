@@ -95,7 +95,7 @@ export function buildStartupHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="p-8">
-      ${sections.map(s => `<div class="mb-6" data-section>
+      ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-3 text-sm font-extrabold uppercase tracking-wider" style="color:${PURPLE}">${esc(s.title)}</h2>
         ${buildStartupSectionContent(s, resume.language || 'en')}
       </div>`).join('')}

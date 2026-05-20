@@ -108,7 +108,7 @@ export function buildMetroHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="mb-6 h-1" style="background-color:${PRIMARY}"></div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <div class="mb-3 flex items-center gap-2">
         <div class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-white" style="background-color:${PRIMARY}">${esc(s.title)}</div>
         <div class="h-0.5 flex-1" style="background-color:${AMBER}"></div>

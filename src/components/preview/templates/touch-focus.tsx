@@ -29,7 +29,7 @@ export function TouchFocusTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <section key={section.id} data-section data-section-id={section.id} className="border-l-2 border-zinc-200 pl-5">
+            <section key={section.id} data-section data-section-id={section.id} data-section-type={section.type} className="border-l-2 border-zinc-200 pl-5">
               <h2 className="mb-2 text-[13px] font-extrabold uppercase tracking-[0.16em]" style={{ color: ACCENT }}>{section.title}</h2>
               <TouchSimpleSectionContent section={section} resume={resume} />
             </section>

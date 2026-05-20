@@ -171,13 +171,13 @@ export function buildCoderHtml(resume: ResumeWithSections): string {
         ${pi.github ? `<div class="flex items-start gap-2"><span style="color:${GREEN}">$</span><span class="break-all" style="color:#8b949e">${esc(pi.github)}</span></div>` : ''}
         ${pi.linkedin ? `<div class="flex items-start gap-2"><span style="color:${GREEN}">$</span><span class="break-all" style="color:#8b949e">${esc(pi.linkedin)}</span></div>` : ''}
       </div>
-      ${sidebarSections.map(s => `<div class="mb-5" data-section style="border-top:1px solid ${BORDER};padding-top:12px">
+      ${sidebarSections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}" style="border-top:1px solid ${BORDER};padding-top:12px">
         <h2 class="mb-2 text-[10px] font-bold uppercase tracking-wider" style="color:${BLUE}">&gt; ${esc(s.title)}</h2>
         ${buildCoderSidebarContent(s)}
       </div>`).join('')}
     </div>
     <div class="flex-1 p-6">
-      ${mainSections.map(s => `<div class="mb-5" data-section>
+      ${mainSections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-2 text-xs font-bold" style="color:${DARK}"><span style="color:${GREEN}">&gt; </span><span class="uppercase tracking-wider">${esc(s.title)}</span></h2>
         <div class="border-l-2 pl-4" style="border-color:${BORDER}">
           ${buildCoderMainContent(s, resume.language || 'en')}

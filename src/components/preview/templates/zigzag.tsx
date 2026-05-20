@@ -62,7 +62,7 @@ export function ZigzagTemplate({ resume }: { resume: Resume }) {
       {filteredSections.map((section, idx) => {
         const isEven = idx % 2 === 0;
         return (
-          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="rounded-lg p-4" style={{ backgroundColor: isEven ? 'transparent' : ALT_BG }}>
               <div className="mb-2 flex items-center gap-2">
                 <div className="h-5 w-1 rounded-full" style={{ backgroundColor: ACCENT }} />

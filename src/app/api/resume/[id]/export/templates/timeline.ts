@@ -105,7 +105,7 @@ export function buildTimelineHtml(resume: ResumeWithSections): string {
       ${pi.jobTitle ? `<p class="mt-0.5 text-base" style="color:${AC}">${esc(pi.jobTitle)}</p>` : ''}
       ${contacts.length ? `<div class="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm text-zinc-500">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</div>` : ''}
     </div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-3 text-sm font-bold uppercase tracking-wider" style="color:${BG}">${esc(s.title)}</h2>
       ${buildTimelineSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

@@ -73,7 +73,7 @@ export function MetroTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="mb-3 flex items-center gap-2">
               <div className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-white" style={{ backgroundColor: PRIMARY }}>
                 {section.title}

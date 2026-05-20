@@ -62,7 +62,7 @@ export function MagazineTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="mb-2 flex items-center gap-2">
               <div className="h-4 w-4 shrink-0" style={{ backgroundColor: ACCENT }} />
               <h2 className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: PRIMARY }}>

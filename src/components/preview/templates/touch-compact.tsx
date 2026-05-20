@@ -25,7 +25,7 @@ export function TouchCompactTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <section key={section.id} data-section data-section-id={section.id}>
+            <section key={section.id} data-section data-section-id={section.id} data-section-type={section.type}>
               <h2 className="mb-1.5 border-b border-zinc-200 pb-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-700">
                 {section.title}
               </h2>

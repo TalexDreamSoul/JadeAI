@@ -162,7 +162,7 @@ export function CoderTemplate({ resume }: { resume: Resume }) {
 
         {/* Sidebar sections */}
         {sidebarSections.map((section) => (
-          <div key={section.id} className="mb-5" data-section data-section-id={section.id} style={{ borderTop: `1px solid ${BORDER}`, paddingTop: '12px' }}>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type} style={{ borderTop: `1px solid ${BORDER}`, paddingTop: '12px' }}>
             <h2 className="mb-2 text-[10px] font-bold uppercase tracking-wider" style={{ color: BLUE }}>
               {'> '}{section.title}
             </h2>
@@ -174,7 +174,7 @@ export function CoderTemplate({ resume }: { resume: Resume }) {
       {/* Main content */}
       <div className="flex-1 p-6">
         {mainSections.map((section) => (
-          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
             <h2 className="mb-2 text-xs font-bold" style={{ color: DARK }}>
               <span style={{ color: GREEN }}>{'> '}</span>
               <span className="uppercase tracking-wider">{section.title}</span>

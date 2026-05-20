@@ -49,7 +49,7 @@ export function TouchSimpleTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <section key={section.id} data-section data-section-id={section.id}>
+            <section key={section.id} data-section data-section-id={section.id} data-section-type={section.type}>
               <h2 className="mb-2 border-b border-zinc-200 pb-1 text-[13px] font-semibold uppercase tracking-[0.16em] text-zinc-900">
                 {section.title}
               </h2>

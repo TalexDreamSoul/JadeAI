@@ -59,7 +59,7 @@ export function ProfessionalTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="mb-3 flex items-center gap-3">
               <h2 className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#1e3a5f' }}>
                 {section.title}

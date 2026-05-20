@@ -30,7 +30,7 @@ export function TouchCardTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <section key={section.id} data-section data-section-id={section.id} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/70">
+            <section key={section.id} data-section data-section-id={section.id} data-section-type={section.type} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/70">
               <div className="mb-3 flex items-center gap-2">
                 <div className="h-5 w-1 rounded-full" style={{ backgroundColor: ACCENT }} />
                 <h2 className="text-[13px] font-bold uppercase tracking-[0.14em] text-zinc-900">{section.title}</h2>

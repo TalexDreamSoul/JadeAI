@@ -52,6 +52,6 @@ export function buildTouchSimpleHtml(resume: ResumeWithSections): string {
       <div class="min-w-0 flex-1"><h1 class="text-3xl font-semibold tracking-tight text-zinc-950">${esc(pi.fullName || 'Your Name')}</h1>${contacts.length ? `<p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-500">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</p>` : ''}</div>
       ${pi.avatar ? `<img src="${esc(pi.avatar)}" alt="" class="shrink-0 border border-zinc-200 object-cover" style="width:56px;height:78px;border-radius:4px"/>` : ''}
     </header>
-    <main class="space-y-5">${sections.map(s => `<section data-section><h2 class="mb-2 border-b border-zinc-200 pb-1 text-[13px] font-semibold uppercase tracking-[0.16em] text-zinc-900">${esc(s.title)}</h2>${buildSectionContent(s, resume.language || 'en')}</section>`).join('')}</main>
+    <main class="space-y-5">${sections.map(s => `<section data-section data-section-type="${esc(s.type)}"><h2 class="mb-2 border-b border-zinc-200 pb-1 text-[13px] font-semibold uppercase tracking-[0.16em] text-zinc-900">${esc(s.title)}</h2>${buildSectionContent(s, resume.language || 'en')}</section>`).join('')}</main>
   </div>`;
 }

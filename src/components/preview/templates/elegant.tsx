@@ -46,7 +46,7 @@ export function ElegantTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="mb-3 flex items-center gap-3">
               <div className="h-px flex-1" style={{ background: GOLD }} />
               <h2 className="shrink-0 text-sm font-bold uppercase tracking-[0.2em]" style={{ color: GOLD }}>{section.title}</h2>

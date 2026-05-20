@@ -111,7 +111,7 @@ export function buildBlocksHtml(resume: ResumeWithSections): string {
       ${contacts.length ? `<div class="mt-3 flex flex-wrap gap-2 text-xs" style="color:#787774">${contacts.map(c => `<span class="rounded-sm px-2 py-0.5" style="background-color:${SUBTLE_BG}">${esc(c)}</span>`).join('')}</div>` : ''}
       <div class="mt-4 h-px w-full" style="background-color:#e3e2de"></div>
     </div>
-    ${sections.map(s => `<div class="mb-5" data-section>
+    ${sections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
       <div class="mb-2 flex items-center gap-2">
         <span class="text-sm" style="color:#9b9a97">&#9654;</span>
         <h2 class="text-sm font-semibold" style="color:${PRIMARY}">${esc(s.title)}</h2>

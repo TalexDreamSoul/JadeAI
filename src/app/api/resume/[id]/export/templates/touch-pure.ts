@@ -113,7 +113,7 @@ export function buildTouchPureHtml(resume: ResumeWithSections): string {
       </div>
     </header>
     <main class="space-y-5">
-      ${sections.map(s => `<section data-section>
+      ${sections.map(s => `<section data-section data-section-type="${esc(s.type)}">
         <div class="mb-2 flex items-center gap-2"><h2 class="text-[13px] font-bold uppercase tracking-[0.18em]" style="color:${ACCENT}">${esc(s.title)}</h2><div class="h-px flex-1 bg-zinc-200"></div></div>
         ${buildTouchPureSectionContent(s, resume.language || 'en')}
       </section>`).join('')}

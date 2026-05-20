@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Palette,
@@ -14,6 +14,7 @@ import {
   Check,
   Minus,
   Code2,
+  Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -35,11 +36,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useResumeStore } from '@/stores/resume-store';
+import { getAIHeaders } from '@/stores/settings-store';
 import { RECOMMENDED_TEMPLATES, TEMPLATES } from '@/lib/constants';
 import { getTemplateLabel } from '@/lib/template-labels';
 import { TemplateThumbnail } from '@/components/dashboard/template-thumbnail';
 import { cn } from '@/lib/utils';
-import type { ThemeConfig } from '@/types/resume';
+import type { ResumeSection, ThemeConfig } from '@/types/resume';
+import { toast } from 'sonner';
 
 // -- Preset Themes --
 
@@ -175,6 +178,18 @@ const FONT_SIZE_OPTIONS = [
 const TITLE_ALIGN_OPTIONS = ['left', 'center', 'right'] as const;
 const TITLE_WEIGHT_OPTIONS = [400, 500, 600, 700, 800, 900];
 const DIVIDER_STYLE_OPTIONS = ['solid', 'dashed', 'dotted', 'double'] as const;
+const SECTION_STYLE_TYPES = [
+  'summary',
+  'work_experience',
+  'projects',
+  'education',
+  'skills',
+  'certifications',
+  'languages',
+  'github',
+  'qr_codes',
+  'custom',
+] as const;
 const THEME_EDITOR_WIDTH_KEY = 'touchresume_theme_editor_width';
 const THEME_EDITOR_DEFAULT_WIDTH = 360;
 const THEME_EDITOR_MIN_WIDTH = 300;
@@ -190,6 +205,22 @@ function getStoredThemeEditorWidth(): number {
   return Number.isFinite(raw) && raw > 0 ? clampThemeEditorWidth(raw) : THEME_EDITOR_DEFAULT_WIDTH;
 }
 
+function sectionTypeToTranslationKey(type: string): string {
+  const map: Record<string, string> = {
+    summary: 'summary',
+    work_experience: 'workExperience',
+    education: 'education',
+    skills: 'skills',
+    projects: 'projects',
+    certifications: 'certifications',
+    languages: 'languages',
+    github: 'github',
+    qr_codes: 'qrCodes',
+    custom: 'custom',
+  };
+  return map[type] || 'custom';
+}
+
 // -- Color Picker Component --
 
 function ColorPickerField({
@@ -197,11 +228,13 @@ function ColorPickerField({
   value,
   onChange,
   fallback = '#000000',
+  disabled = false,
 }: {
   label: string;
   value?: string;
   onChange: (color: string) => void;
   fallback?: string;
+  disabled?: boolean;
 }) {
   const displayValue = value || fallback;
 
@@ -212,7 +245,8 @@ function ColorPickerField({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-2 rounded-md border border-zinc-200 px-2 py-1 text-xs transition-colors hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600"
+            disabled={disabled}
+            className="flex cursor-pointer items-center gap-2 rounded-md border border-zinc-200 px-2 py-1 text-xs transition-colors hover:border-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:border-zinc-600"
           >
             <div
               className="h-4 w-4 rounded-sm border border-zinc-200"
@@ -227,7 +261,8 @@ function ColorPickerField({
               type="color"
               value={displayValue}
               onChange={(e) => onChange(e.target.value)}
-              className="h-8 w-full cursor-pointer rounded border-0 p-0"
+              disabled={disabled}
+              className="h-8 w-full cursor-pointer rounded border-0 p-0 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <Input
               value={value || ''}
@@ -237,6 +272,7 @@ function ColorPickerField({
                   onChange(v);
                 }
               }}
+              disabled={disabled}
               placeholder="#000000"
               className="font-mono text-xs"
             />
@@ -298,8 +334,12 @@ interface ThemeEditorProps {
 export function ThemeEditor({}: ThemeEditorProps) {
   const t = useTranslations('themeEditor');
   const tRoot = useTranslations();
-  const { currentResume } = useResumeStore();
+  const { currentResume, sections } = useResumeStore();
   const [panelWidth, setPanelWidth] = useState(THEME_EDITOR_DEFAULT_WIDTH);
+  const [selectedSectionType, setSelectedSectionType] = useState<string>('summary');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGeneratingCss, setIsGeneratingCss] = useState(false);
+  const previousAiCssRef = useRef<string | null>(null);
 
   useEffect(() => {
     setPanelWidth(getStoredThemeEditorWidth());
@@ -336,6 +376,30 @@ export function ThemeEditor({}: ThemeEditorProps) {
     }),
     [currentResume?.themeConfig]
   );
+
+  const availableSectionTypes = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { type: string; title: string }[] = [];
+    (sections || [])
+      .filter((section: ResumeSection) => section.type !== 'personal_info')
+      .forEach((section: ResumeSection) => {
+        if (seen.has(section.type)) return;
+        seen.add(section.type);
+        result.push({ type: section.type, title: section.title || section.type });
+      });
+
+    SECTION_STYLE_TYPES.forEach((type) => {
+      if (!seen.has(type)) result.push({ type, title: tRoot(`editor.sections.${sectionTypeToTranslationKey(type)}`) });
+    });
+
+    return result;
+  }, [sections, tRoot]);
+
+  useEffect(() => {
+    if (!availableSectionTypes.some((section) => section.type === selectedSectionType)) {
+      setSelectedSectionType(availableSectionTypes[0]?.type || 'summary');
+    }
+  }, [availableSectionTypes, selectedSectionType]);
 
   const updateTheme = useCallback(
     (updates: Partial<ThemeConfig>) => {
@@ -374,6 +438,54 @@ export function ThemeEditor({}: ThemeEditorProps) {
     [themeConfig.sectionDivider, updateTheme]
   );
 
+  const updatePageStyle = useCallback(
+    (updates: NonNullable<ThemeConfig['pageStyle']>) => {
+      updateTheme({ pageStyle: { ...(themeConfig.pageStyle || {}), ...updates } });
+    },
+    [themeConfig.pageStyle, updateTheme]
+  );
+
+  const updatePageBorder = useCallback(
+    (updates: NonNullable<NonNullable<ThemeConfig['pageStyle']>['border']>) => {
+      updatePageStyle({ border: { ...(themeConfig.pageStyle?.border || {}), ...updates } });
+    },
+    [themeConfig.pageStyle?.border, updatePageStyle]
+  );
+
+  const updatePageAccentLines = useCallback(
+    (updates: NonNullable<NonNullable<ThemeConfig['pageStyle']>['accentLines']>) => {
+      updatePageStyle({ accentLines: { ...(themeConfig.pageStyle?.accentLines || {}), ...updates } });
+    },
+    [themeConfig.pageStyle?.accentLines, updatePageStyle]
+  );
+
+  const updateSectionStyle = useCallback(
+    (sectionType: string, updates: NonNullable<ThemeConfig['sectionStyles']>[string]) => {
+      updateTheme({
+        sectionStyles: {
+          ...(themeConfig.sectionStyles || {}),
+          [sectionType]: {
+            ...(themeConfig.sectionStyles?.[sectionType] || {}),
+            ...updates,
+          },
+        },
+      });
+    },
+    [themeConfig.sectionStyles, updateTheme]
+  );
+
+  const updateSectionBorder = useCallback(
+    (sectionType: string, updates: NonNullable<NonNullable<ThemeConfig['sectionStyles']>[string]['border']>) => {
+      updateSectionStyle(sectionType, {
+        border: {
+          ...(themeConfig.sectionStyles?.[sectionType]?.border || {}),
+          ...updates,
+        },
+      });
+    },
+    [themeConfig.sectionStyles, updateSectionStyle]
+  );
+
   const updateLayout = useCallback(
     (updates: NonNullable<ThemeConfig['layout']>) => {
       updateTheme({ layout: { ...(themeConfig.layout || {}), ...updates } });
@@ -387,6 +499,46 @@ export function ThemeEditor({}: ThemeEditorProps) {
     },
     [themeConfig.advanced, updateTheme]
   );
+
+  const handleGenerateThemeCss = useCallback(async () => {
+    if (!aiPrompt.trim() || !currentResume) return;
+    setIsGeneratingCss(true);
+    try {
+      const res = await fetch('/api/ai/theme-css', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(typeof window !== 'undefined' && localStorage.getItem('touchresume_fingerprint')
+            ? { 'x-fingerprint': localStorage.getItem('touchresume_fingerprint') as string }
+            : {}),
+          ...getAIHeaders(),
+        },
+        body: JSON.stringify({
+          prompt: aiPrompt.trim(),
+          currentCss: themeConfig.advanced?.customCss || '',
+          template: currentResume.template,
+          theme: themeConfig,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.css) {
+        throw new Error(data.error || t('aiCssFailed'));
+      }
+      previousAiCssRef.current = themeConfig.advanced?.customCss || '';
+      updateAdvanced({ customCss: data.css });
+      toast.success(t('aiCssApplied'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('aiCssFailed'));
+    } finally {
+      setIsGeneratingCss(false);
+    }
+  }, [aiPrompt, currentResume, t, themeConfig, updateAdvanced]);
+
+  const undoAiCss = useCallback(() => {
+    if (previousAiCssRef.current == null) return;
+    updateAdvanced({ customCss: previousAiCssRef.current });
+    previousAiCssRef.current = null;
+  }, [updateAdvanced]);
 
   const setPanelSectionOpen = useCallback(
     (key: string, open: boolean) => {
@@ -432,6 +584,11 @@ export function ThemeEditor({}: ThemeEditorProps) {
     medium: t('fontSize.medium'),
     large: t('fontSize.large'),
   };
+
+  const pageBorder = themeConfig.pageStyle?.border || {};
+  const pageAccentLines = themeConfig.pageStyle?.accentLines || {};
+  const selectedSectionStyle = themeConfig.sectionStyles?.[selectedSectionType] || {};
+  const selectedSectionBorder = selectedSectionStyle.border || {};
 
   return (
     <div
@@ -807,6 +964,262 @@ export function ThemeEditor({}: ThemeEditorProps) {
 
           <Separator />
 
+          {/* Page Decorations */}
+          <ThemeSection
+            icon={LayoutGrid}
+            title={t('pageDecorations')}
+            defaultOpen={false}
+            open={isPanelSectionOpen('pageDecorations', false)}
+            onOpenChange={(open) => setPanelSectionOpen('pageDecorations', open)}
+          >
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('pageBorder')}</Label>
+              <Switch
+                checked={pageBorder.enabled === true}
+                onCheckedChange={(checked) => updatePageBorder({ enabled: checked })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('borderWidth')}</Label>
+                <Input
+                  type="number"
+                  value={pageBorder.width ?? ''}
+                  onChange={(e) => updatePageBorder({ enabled: true, width: e.target.value === '' ? undefined : Math.max(0, Math.min(24, Number(e.target.value) || 0)) })}
+                  placeholder="1"
+                  min={0}
+                  max={24}
+                  disabled={pageBorder.enabled !== true}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('borderRadius')}</Label>
+                <Input
+                  type="number"
+                  value={pageBorder.radius ?? ''}
+                  onChange={(e) => updatePageBorder({ enabled: true, radius: e.target.value === '' ? undefined : Math.max(0, Math.min(64, Number(e.target.value) || 0)) })}
+                  placeholder="0"
+                  min={0}
+                  max={64}
+                  disabled={pageBorder.enabled !== true}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('borderStyle')}</Label>
+              <Select
+                value={pageBorder.style || 'solid'}
+                onValueChange={(v) => updatePageBorder({ enabled: true, style: v as 'solid' | 'dashed' | 'dotted' | 'double' })}
+                disabled={pageBorder.enabled !== true}
+              >
+                <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DIVIDER_STYLE_OPTIONS.map((style) => (
+                    <SelectItem key={style} value={style}>{t(`divider.${style}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <ColorPickerField
+              label={t('borderColor')}
+              value={pageBorder.color}
+              fallback={themeConfig.primaryColor}
+              disabled={pageBorder.enabled !== true}
+              onChange={(color) => updatePageBorder({ enabled: true, color })}
+            />
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between rounded-md border border-zinc-200 px-2 py-1.5 dark:border-zinc-700">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('leftDecorLine')}</Label>
+                <Switch
+                  checked={pageAccentLines.left === true}
+                  onCheckedChange={(checked) => updatePageAccentLines({ left: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-zinc-200 px-2 py-1.5 dark:border-zinc-700">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('rightDecorLine')}</Label>
+                <Switch
+                  checked={pageAccentLines.right === true}
+                  onCheckedChange={(checked) => updatePageAccentLines({ right: checked })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('lineWidth')}</Label>
+                <Input
+                  type="number"
+                  value={pageAccentLines.width ?? ''}
+                  onChange={(e) => updatePageAccentLines({ width: e.target.value === '' ? undefined : Math.max(1, Math.min(24, Number(e.target.value) || 1)) })}
+                  placeholder="3"
+                  min={1}
+                  max={24}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('lineOffset')}</Label>
+                <Input
+                  type="number"
+                  value={pageAccentLines.offset ?? ''}
+                  onChange={(e) => updatePageAccentLines({ offset: e.target.value === '' ? undefined : Math.max(0, Math.min(96, Number(e.target.value) || 0)) })}
+                  placeholder="14"
+                  min={0}
+                  max={96}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            <ColorPickerField
+              label={t('lineColor')}
+              value={pageAccentLines.color}
+              fallback={themeConfig.accentColor}
+              onChange={(color) => updatePageAccentLines({ color })}
+            />
+          </ThemeSection>
+
+          <Separator />
+
+          {/* Section Styles */}
+          <ThemeSection
+            icon={Sparkles}
+            title={t('sectionStyles')}
+            defaultOpen={false}
+            open={isPanelSectionOpen('sectionStyles', false)}
+            onOpenChange={(open) => setPanelSectionOpen('sectionStyles', open)}
+          >
+            <div className="space-y-1.5">
+              <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('section')}</Label>
+              <Select value={selectedSectionType} onValueChange={setSelectedSectionType}>
+                <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {availableSectionTypes.map((section) => (
+                    <SelectItem key={section.type} value={section.type}>{section.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('contentAlign')}</Label>
+                <Select
+                  value={selectedSectionStyle.align || 'inherit'}
+                  onValueChange={(v) => updateSectionStyle(selectedSectionType, { align: v === 'inherit' ? undefined : v as 'left' | 'center' | 'right' })}
+                >
+                  <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inherit">{t('inherit')}</SelectItem>
+                    {TITLE_ALIGN_OPTIONS.map((align) => <SelectItem key={align} value={align}>{t(`align.${align}`)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('sectionTitleAlign')}</Label>
+                <Select
+                  value={selectedSectionStyle.titleAlign || 'inherit'}
+                  onValueChange={(v) => updateSectionStyle(selectedSectionType, { titleAlign: v === 'inherit' ? undefined : v as 'left' | 'center' | 'right' })}
+                >
+                  <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inherit">{t('inherit')}</SelectItem>
+                    {TITLE_ALIGN_OPTIONS.map((align) => <SelectItem key={align} value={align}>{t(`align.${align}`)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('sectionPadding')}</Label>
+                <Input
+                  type="number"
+                  value={selectedSectionStyle.padding ?? ''}
+                  onChange={(e) => updateSectionStyle(selectedSectionType, { padding: e.target.value === '' ? undefined : Math.max(0, Math.min(64, Number(e.target.value) || 0)) })}
+                  placeholder={t('auto')}
+                  min={0}
+                  max={64}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('sectionMarginBottom')}</Label>
+                <Input
+                  type="number"
+                  value={selectedSectionStyle.marginBottom ?? ''}
+                  onChange={(e) => updateSectionStyle(selectedSectionType, { marginBottom: e.target.value === '' ? undefined : Math.max(0, Math.min(80, Number(e.target.value) || 0)) })}
+                  placeholder={t('auto')}
+                  min={0}
+                  max={80}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            <ColorPickerField
+              label={t('sectionBackground')}
+              value={selectedSectionStyle.backgroundColor}
+              fallback="#ffffff"
+              onChange={(color) => updateSectionStyle(selectedSectionType, { backgroundColor: color })}
+            />
+
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('sectionBorder')}</Label>
+              <Switch
+                checked={selectedSectionBorder.enabled === true}
+                onCheckedChange={(checked) => updateSectionBorder(selectedSectionType, { enabled: checked })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                type="number"
+                value={selectedSectionBorder.width ?? ''}
+                onChange={(e) => updateSectionBorder(selectedSectionType, { enabled: true, width: e.target.value === '' ? undefined : Math.max(0, Math.min(16, Number(e.target.value) || 0)) })}
+                placeholder={t('borderWidth')}
+                min={0}
+                max={16}
+                disabled={selectedSectionBorder.enabled !== true}
+                className="h-8 text-xs"
+              />
+              <Input
+                type="number"
+                value={selectedSectionBorder.radius ?? ''}
+                onChange={(e) => updateSectionBorder(selectedSectionType, { enabled: true, radius: e.target.value === '' ? undefined : Math.max(0, Math.min(48, Number(e.target.value) || 0)) })}
+                placeholder={t('borderRadius')}
+                min={0}
+                max={48}
+                disabled={selectedSectionBorder.enabled !== true}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <ColorPickerField
+              label={t('borderColor')}
+              value={selectedSectionBorder.color}
+              fallback={themeConfig.accentColor}
+              disabled={selectedSectionBorder.enabled !== true}
+              onChange={(color) => updateSectionBorder(selectedSectionType, { enabled: true, color })}
+            />
+
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('leftAccent')}</Label>
+              <Switch
+                checked={selectedSectionStyle.leftAccent === true}
+                onCheckedChange={(checked) => updateSectionStyle(selectedSectionType, { leftAccent: checked })}
+              />
+            </div>
+          </ThemeSection>
+
+          <Separator />
+
           {/* Spacing */}
           <ThemeSection
             icon={Space}
@@ -900,6 +1313,41 @@ export function ThemeEditor({}: ThemeEditorProps) {
               fallback="#ffffff"
               onChange={(color) => updateLayout({ backgroundColor: color })}
             />
+
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-2.5 dark:border-zinc-700 dark:bg-zinc-800/40">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                <Wand2 className="h-3.5 w-3.5 text-brand" />
+                {t('aiCss')}
+              </div>
+              <Textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder={t('aiCssPlaceholder')}
+                className="min-h-20 resize-none bg-white text-xs dark:bg-zinc-900"
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="xs"
+                  onClick={handleGenerateThemeCss}
+                  disabled={isGeneratingCss || !aiPrompt.trim()}
+                  className="cursor-pointer"
+                >
+                  <Wand2 className="h-3 w-3" />
+                  {isGeneratingCss ? t('generatingCss') : t('generateCss')}
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={undoAiCss}
+                  disabled={previousAiCssRef.current == null}
+                  className="cursor-pointer"
+                >
+                  {t('undoAiCss')}
+                </Button>
+              </div>
+            </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs text-zinc-600 dark:text-zinc-400">{t('customCss')}</Label>

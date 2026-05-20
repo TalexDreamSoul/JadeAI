@@ -127,7 +127,7 @@ export function buildCleanHtml(resume: ResumeWithSections): string {
       ${contacts.length || pi.linkedin || pi.github ? `<div class="mt-3 flex flex-wrap gap-4 text-sm text-zinc-500">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}${pi.linkedin ? `<span>LinkedIn: ${esc(pi.linkedin)}</span>` : ''}${pi.github ? `<span>GitHub: ${esc(pi.github)}</span>` : ''}</div>` : ''}
       <div class="mt-3 h-0.5 w-full rounded" style="background:linear-gradient(90deg,${BL},${TL})"></div>
     </div>
-    ${sections.map(s => `<div class="mb-5" data-section>
+    ${sections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-2 text-sm font-bold uppercase tracking-wider" style="color:${BL}">${esc(s.title)}</h2>
       ${buildCleanSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

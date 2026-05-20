@@ -90,7 +90,7 @@ export function buildClassicHtml(resume: ResumeWithSections): string {
         ${contacts.map(c => `<span>${esc(c)}</span>`).join('')}
       </div>
     </div>
-    ${sections.map(s => `<div class="mb-5" data-section>
+    ${sections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-2 border-b border-zinc-300 pb-1 text-sm font-bold uppercase tracking-wider text-zinc-800">${esc(s.title)}</h2>
       ${buildClassicSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

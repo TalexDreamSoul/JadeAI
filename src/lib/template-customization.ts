@@ -59,6 +59,10 @@ function sanitizeTextTransform(value: unknown): 'none' | 'uppercase' | 'capitali
   return value === 'none' || value === 'uppercase' || value === 'capitalize' || value === 'lowercase' ? value : '';
 }
 
+function sanitizeSectionType(value: unknown): string {
+  return typeof value === 'string' && /^[a-z0-9_-]+$/.test(value) ? value : '';
+}
+
 function cssVariableDeclarations(vars?: Record<string, string>): string {
   if (!vars || typeof vars !== 'object') return '';
   return Object.entries(vars as Record<string, unknown>)
@@ -219,8 +223,92 @@ export function buildTemplateCustomizationCSS(scopeSelector: string, theme: Them
     if (layout.pageShadow === true) rootDecls.push('box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12) !important;');
   }
 
+  const pageStyle = theme.pageStyle;
+  if (pageStyle?.border) {
+    const border = pageStyle.border;
+    if (border.enabled === false) {
+      rootDecls.push('border: 0 !important;');
+    } else if (border.enabled) {
+      const width = clampNumber(border.width, 0, 24) ?? 1;
+      const color = sanitizeColor(border.color, theme.primaryColor || 'currentColor');
+      const style = sanitizeDividerStyle(border.style);
+      const radius = clampNumber(border.radius, 0, 64);
+      rootDecls.push(`border: ${width}px ${style} ${color} !important;`);
+      if (radius != null) rootDecls.push(`border-radius: ${radius}px !important; overflow: hidden;`);
+    }
+  }
+
+  const accentLines = pageStyle?.accentLines;
+  if (accentLines?.left || accentLines?.right) {
+    rootDecls.push('position: relative !important;');
+    rootDecls.push('isolation: isolate !important;');
+    const width = clampNumber(accentLines.width, 1, 24) ?? 3;
+    const offset = clampNumber(accentLines.offset, 0, 96) ?? 14;
+    const color = sanitizeColor(accentLines.color, theme.accentColor || 'currentColor');
+
+    if (accentLines.left) {
+      rules.push(`${root}::before {\ncontent: "";\nposition: absolute;\nleft: ${offset}px;\ntop: ${offset}px;\nbottom: ${offset}px;\nwidth: ${width}px;\nborder-radius: 999px;\nbackground: ${color};\npointer-events: none;\nz-index: 0;\n}`);
+    }
+
+    if (accentLines.right) {
+      rules.push(`${root}::after {\ncontent: "";\nposition: absolute;\nright: ${offset}px;\ntop: ${offset}px;\nbottom: ${offset}px;\nwidth: ${width}px;\nborder-radius: 999px;\nbackground: ${color};\npointer-events: none;\nz-index: 0;\n}`);
+    }
+
+    rules.push(`${root} > * {\nposition: relative;\nz-index: 1;\n}`);
+  }
+
   if (rootDecls.length) {
     rules.push(`${root} {\n${rootDecls.join('\n')}\n}`);
+  }
+
+  const sectionStyles = theme.sectionStyles;
+  if (sectionStyles && typeof sectionStyles === 'object') {
+    for (const [key, style] of Object.entries(sectionStyles)) {
+      const sectionType = sanitizeSectionType(key);
+      if (!sectionType || !style || typeof style !== 'object') continue;
+
+      const sectionSelector = `${root} [data-section-type="${sectionType}"], ${root} [data-section][data-section-id][data-section-type="${sectionType}"]`;
+      const sectionDecls: string[] = [];
+      const align = sanitizeAlign(style.align);
+      const backgroundColor = sanitizeColor(style.backgroundColor);
+      const padding = clampNumber(style.padding, 0, 64);
+      const marginBottom = clampNumber(style.marginBottom, 0, 80);
+
+      if (align) sectionDecls.push(`text-align: ${align} !important;`);
+      if (backgroundColor) sectionDecls.push(`background-color: ${backgroundColor} !important;`);
+      if (padding != null) sectionDecls.push(`padding: ${padding}px !important;`);
+      if (marginBottom != null) sectionDecls.push(`margin-bottom: ${marginBottom}px !important;`);
+
+      if (style.border) {
+        const border = style.border;
+        if (border.enabled === false) {
+          sectionDecls.push('border: 0 !important;');
+        } else if (border.enabled) {
+          const width = clampNumber(border.width, 0, 16) ?? 1;
+          const color = sanitizeColor(border.color, theme.accentColor || 'currentColor');
+          const borderStyle = sanitizeDividerStyle(border.style);
+          const radius = clampNumber(border.radius, 0, 48) ?? 0;
+          sectionDecls.push(`border: ${width}px ${borderStyle} ${color} !important;`);
+          sectionDecls.push(`border-radius: ${radius}px !important;`);
+        }
+      }
+
+      if (style.leftAccent) {
+        const width = clampNumber(style.accentWidth, 1, 16) ?? 3;
+        const color = sanitizeColor(style.accentColor, theme.accentColor || 'currentColor');
+        sectionDecls.push(`border-left: ${width}px solid ${color} !important;`);
+        if (padding == null) sectionDecls.push('padding-left: 12px !important;');
+      }
+
+      if (sectionDecls.length) {
+        rules.push(`${sectionSelector} {\n${sectionDecls.join('\n')}\n}`);
+      }
+
+      const titleAlign = sanitizeAlign(style.titleAlign);
+      if (titleAlign) {
+        rules.push(`${sectionSelector} h2 {\ntext-align: ${titleAlign} !important;\nwidth: 100% !important;\n}`);
+      }
+    }
   }
 
   const title = theme.titleStyle;

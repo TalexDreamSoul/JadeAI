@@ -74,7 +74,7 @@ export function MosaicTemplate({ resume }: { resume: Resume }) {
         const color = getTileColor(idx);
         const bg = getTileBg(idx);
         return (
-          <div key={section.id} className="mb-4" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-4" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="rounded-lg p-4" style={{ backgroundColor: bg }}>
               <div className="mb-2 flex items-center gap-2">
                 <div className="h-5 w-5 rounded" style={{ backgroundColor: color, opacity: 0.2 }} />

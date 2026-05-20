@@ -131,13 +131,13 @@ export function buildTwoColumnHtml(resume: ResumeWithSections): string {
         ${pi.linkedin ? `<div class="flex items-start gap-2 text-zinc-300"><span class="shrink-0 text-zinc-400">LinkedIn:</span><span class="break-all">${esc(pi.linkedin)}</span></div>` : ''}
         ${pi.github ? `<div class="flex items-start gap-2 text-zinc-300"><span class="shrink-0 text-zinc-400">GitHub:</span><span class="break-all">${esc(pi.github)}</span></div>` : ''}
       </div>
-      ${leftSections.map(s => `<div class="mb-5" data-section>
+      ${leftSections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-2 border-b border-white/20 pb-1 text-xs font-bold uppercase tracking-wider text-white">${esc(s.title)}</h2>
         ${buildTwoColumnLeftContent(s)}
       </div>`).join('')}
     </div>
     <div class="flex-1 p-6">
-      ${rightSections.map(s => `<div class="mb-5" data-section>
+      ${rightSections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style="color:#1a1a2e;border-color:#1a1a2e">${esc(s.title)}</h2>
         ${buildTwoColumnRightContent(s, lang)}
       </div>`).join('')}

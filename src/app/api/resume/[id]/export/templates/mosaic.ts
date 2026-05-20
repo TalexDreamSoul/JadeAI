@@ -110,7 +110,7 @@ export function buildMosaicHtml(resume: ResumeWithSections): string {
     ${sections.map((s, idx) => {
       const color = getTileColor(idx);
       const bg = getTileBg(idx);
-      return `<div class="mb-4" data-section>
+      return `<div class="mb-4" data-section data-section-type="${esc(s.type)}">
         <div class="rounded-lg p-4" style="background-color:${bg}">
           <div class="mb-2 flex items-center gap-2"><div class="h-5 w-5 rounded" style="background-color:${color};opacity:0.2"></div><h2 class="text-sm font-bold uppercase tracking-wider" style="color:${color}">${esc(s.title)}</h2></div>
           ${buildMosaicSectionContent(s, color, lang)}

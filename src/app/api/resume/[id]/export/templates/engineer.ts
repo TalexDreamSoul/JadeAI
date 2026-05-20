@@ -130,7 +130,7 @@ export function buildEngineerHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="p-8">
-      ${sections.map(s => `<div class="mb-6" data-section>
+      ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
         <div class="mb-2 flex items-center gap-3"><h2 class="text-sm font-bold uppercase tracking-wider" style="color:${PRIMARY}">${esc(s.title)}</h2><div class="h-px flex-1" style="background-color:${ACCENT}"></div><div class="h-1.5 w-1.5" style="background-color:${ACCENT}"></div></div>
         ${buildEngineerSectionContent(s, lang)}
       </div>`).join('')}

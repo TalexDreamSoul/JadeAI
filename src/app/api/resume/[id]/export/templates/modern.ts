@@ -98,7 +98,7 @@ export function buildModernHtml(resume: ResumeWithSections): string {
       <div class="absolute bottom-0 left-0 h-[3px] w-full" style="background:linear-gradient(90deg,#e94560 0%,#0f3460 60%,transparent 100%)"></div>
     </div>
     <div class="p-8 pt-6">
-      ${sections.map(s => `<div class="mb-6" data-section>
+      ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-3 flex items-center gap-2.5 text-sm font-bold uppercase tracking-wider" style="color:#e94560">
           <span class="h-[3px] w-7 rounded-full" style="background:linear-gradient(90deg,#e94560,#0f3460)"></span>${esc(s.title)}
         </h2>

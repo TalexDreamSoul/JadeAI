@@ -148,7 +148,7 @@ export function SidebarTemplate({ resume }: { resume: Resume }) {
 
         {/* Sidebar Sections */}
         {sidebarSections.map((section) => (
-          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
             <h2 className="mb-2 border-b border-white/20 pb-1 text-xs font-bold uppercase tracking-wider text-white">
               {section.title}
             </h2>
@@ -160,7 +160,7 @@ export function SidebarTemplate({ resume }: { resume: Resume }) {
       {/* Main Content */}
       <div className="flex-1 p-6">
         {mainSections.map((section) => (
-          <div key={section.id} className="mb-5" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
             <h2 className="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style={{ color: SIDEBAR_BG, borderColor: ACCENT }}>
               {section.title}
             </h2>

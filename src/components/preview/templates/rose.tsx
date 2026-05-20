@@ -66,7 +66,7 @@ export function RoseTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
             {/* Section header with rose accent */}
             <div className="mb-3 flex items-center gap-2">
               <div className="h-0.5 w-6 rounded-full" style={{ backgroundColor: ACCENT }} />

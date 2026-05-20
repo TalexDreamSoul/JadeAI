@@ -107,7 +107,7 @@ export function buildConsultantHtml(resume: ResumeWithSections): string {
       </div>
       ${contacts.length || pi.linkedin || pi.github ? `<div class="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-500">${contacts.map(ct => `<span>${esc(ct)}</span>`).join('')}${pi.linkedin ? `<span class="break-all">${esc(pi.linkedin)}</span>` : ''}${pi.github ? `<span class="break-all">${esc(pi.github)}</span>` : ''}</div>` : ''}
     </div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-3 border-l-[3px] pl-3 text-sm font-bold uppercase tracking-wider" style="color:${GRAY_700};border-color:${BLUE_600}">${esc(s.title)}</h2>
       ${buildConsultantSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

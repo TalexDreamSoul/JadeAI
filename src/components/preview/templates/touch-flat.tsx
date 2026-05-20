@@ -47,7 +47,7 @@ export function TouchFlatTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <section key={section.id} data-section data-section-id={section.id} className="rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm shadow-zinc-200/40">
+            <section key={section.id} data-section data-section-id={section.id} data-section-type={section.type} className="rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm shadow-zinc-200/40">
               <div className="mb-3 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ACCENT }} />
                 <h2 className="text-[13px] font-bold uppercase tracking-[0.14em]" style={{ color: ACCENT }}>{section.title}</h2>

@@ -55,7 +55,7 @@ export function BoldTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
               <h2 className="mb-3 border-b-4 border-black pb-1 text-lg font-black uppercase tracking-wider text-black">
                 {section.title}
               </h2>

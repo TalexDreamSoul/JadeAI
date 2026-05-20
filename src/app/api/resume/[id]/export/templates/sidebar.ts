@@ -141,13 +141,13 @@ export function buildSidebarHtml(resume: ResumeWithSections): string {
         ${pi.linkedin ? `<div class="flex items-start gap-2 text-blue-100"><span class="shrink-0 text-blue-300">LinkedIn:</span><span class="break-all">${esc(pi.linkedin)}</span></div>` : ''}
         ${pi.github ? `<div class="flex items-start gap-2 text-blue-100"><span class="shrink-0 text-blue-300">GitHub:</span><span class="break-all">${esc(pi.github)}</span></div>` : ''}
       </div>
-      ${sidebarSections.map(s => `<div class="mb-5" data-section>
+      ${sidebarSections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-2 border-b border-white/20 pb-1 text-xs font-bold uppercase tracking-wider text-white">${esc(s.title)}</h2>
         ${buildSidebarSectionContent(s)}
       </div>`).join('')}
     </div>
     <div class="flex-1 p-6">
-      ${mainSections.map(s => `<div class="mb-5" data-section>
+      ${mainSections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style="color:${SIDEBAR_BG};border-color:${ACCENT}">${esc(s.title)}</h2>
         ${buildSidebarMainContent(s, lang)}
       </div>`).join('')}

@@ -107,7 +107,7 @@ export function buildBoldHtml(resume: ResumeWithSections): string {
       ${contacts.length ? `<div class="mt-3 flex flex-wrap gap-4 text-sm text-zinc-400">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="p-8">
-      ${sections.map(s => `<div class="mb-6" data-section>
+      ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-3 border-b-4 border-black pb-1 text-lg font-black uppercase tracking-wider text-black">${esc(s.title)}</h2>
         ${buildBoldSectionContent(s, resume.language || 'en')}
       </div>`).join('')}

@@ -91,7 +91,7 @@ export function buildAcademicHtml(resume: ResumeWithSections): string {
       </div>
       <div class="mt-3 border-b-2 border-zinc-800"></div>
     </div>
-    ${sections.map(s => `<div class="mb-4" data-section>
+    ${sections.map(s => `<div class="mb-4" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-1.5 text-xs font-bold uppercase tracking-[0.25em] text-zinc-800" style="border-bottom:1px solid #d4d4d8;padding-bottom:2px">${esc(s.title)}</h2>
       ${buildAcademicSectionContent(s, lang)}
     </div>`).join('')}

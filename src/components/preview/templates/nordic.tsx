@@ -52,7 +52,7 @@ export function NordicTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-7" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-7" data-section data-section-id={section.id} data-section-type={section.type}>
             <h2 className="mb-3 text-xs font-medium uppercase tracking-[0.2em]" style={{ color: SLATE_500 }}>
               {section.title}
             </h2>

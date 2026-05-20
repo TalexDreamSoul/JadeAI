@@ -89,7 +89,7 @@ export function buildAtsHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <hr class="mb-4 border-black"/>
-    ${sections.map(s => `<div class="mb-4" data-section>
+    ${sections.map(s => `<div class="mb-4" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-1.5 border-b border-black pb-0.5 text-base font-bold uppercase text-black">${esc(s.title)}</h2>
       ${buildAtsSectionContent(s, lang)}
     </div>`).join('')}

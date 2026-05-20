@@ -54,7 +54,7 @@ export function DeveloperTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
               <h2 className="mb-2 text-sm font-bold" style={{ color: ORANGE }}>
                 {'> '}{section.title.toUpperCase()}
               </h2>

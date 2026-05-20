@@ -105,7 +105,7 @@ export function buildCreativeHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="p-8">
-      ${sections.map(s => `<div class="mb-6" data-section>
+      ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
         <div class="mb-3 flex items-center gap-3"><div class="h-8 w-1 rounded-full" style="background:${GRADIENT}"></div><h2 class="text-base font-extrabold uppercase tracking-wide" style="color:${PRIMARY}">${esc(s.title)}</h2></div>
         ${buildCreativeSectionContent(s, lang)}
       </div>`).join('')}

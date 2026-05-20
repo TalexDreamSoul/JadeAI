@@ -115,7 +115,7 @@ export function buildWatercolorHtml(resume: ResumeWithSections): string {
         </div>
       </div>
     </div>
-    ${sections.map(s => `<div class="mb-5" data-section>
+    ${sections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
       <div class="mb-2 flex items-center gap-2"><div class="h-6 w-1.5 rounded-full" style="background:linear-gradient(to bottom,${ACCENT},${PRIMARY})"></div><h2 class="text-sm font-bold uppercase tracking-wider" style="color:${PRIMARY}">${esc(s.title)}</h2></div>
       ${buildWatercolorSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

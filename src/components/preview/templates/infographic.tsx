@@ -48,7 +48,7 @@ export function InfographicTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section, idx) => (
-            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] text-white" style={{ background: COLORS[idx % COLORS.length] }}>
                   {idx + 1}

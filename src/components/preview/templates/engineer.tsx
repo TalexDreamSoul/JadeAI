@@ -65,7 +65,7 @@ export function EngineerTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
               <div className="mb-2 flex items-center gap-3">
                 <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: PRIMARY }}>
                   {section.title}

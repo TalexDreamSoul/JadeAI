@@ -114,7 +114,7 @@ export function buildRoseHtml(resume: ResumeWithSections): string {
       </div>
       ${contacts.length || pi.linkedin || pi.github ? `<div class="mt-3 flex flex-wrap items-center justify-center gap-3 text-xs" style="color:${ACCENT}">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}${pi.linkedin ? `<span>LinkedIn: ${esc(pi.linkedin)}</span>` : ''}${pi.github ? `<span>GitHub: ${esc(pi.github)}</span>` : ''}</div>` : ''}
     </div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <div class="mb-3 flex items-center gap-2">
         <div class="h-0.5 w-6 rounded-full" style="background-color:${ACCENT}"></div>
         <h2 class="text-xs font-semibold uppercase tracking-[0.15em]" style="color:${PRIMARY}">${esc(s.title)}</h2>

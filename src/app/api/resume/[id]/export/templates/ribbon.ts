@@ -102,7 +102,7 @@ export function buildRibbonHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="p-8">
-      ${sections.map(s => `<div class="mb-5" data-section>
+      ${sections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
         <div class="relative mb-3 flex items-center">
           <div class="relative z-10 rounded-r-md px-4 py-1 text-white" style="background-color:${RIBBON}"><h2 class="text-xs font-bold uppercase tracking-wider text-white">${esc(s.title)}</h2></div>
           <div class="h-0 w-0" style="border-top:13px solid transparent;border-bottom:13px solid transparent;border-left:8px solid ${RIBBON}"></div>

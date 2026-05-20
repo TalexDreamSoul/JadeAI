@@ -104,7 +104,7 @@ export function buildNordicHtml(resume: ResumeWithSections): string {
       ${contacts.length ? `<div class="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs" style="color:${SLATE_400}">${contacts.map(ct => `<span>${esc(ct)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="mx-auto mb-8 h-px w-full" style="background-color:${SLATE_400}"></div>
-    ${sections.map(s => `<div class="mb-7" data-section>
+    ${sections.map(s => `<div class="mb-7" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-3 text-xs font-medium uppercase tracking-[0.2em]" style="color:${SLATE_500}">${esc(s.title)}</h2>
       ${buildNordicSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

@@ -59,7 +59,7 @@ export function SwissTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
             {/* Section header with red square */}
             <div className="mb-3 flex items-center gap-2 border-b border-zinc-200 pb-2">
               <span className="inline-block h-2.5 w-2.5 shrink-0" style={{ backgroundColor: RED }} />

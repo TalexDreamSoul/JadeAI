@@ -107,7 +107,7 @@ export function buildLegalHtml(resume: ResumeWithSections): string {
       ${contacts.length || pi.linkedin || pi.github ? `<div class="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs" style="color:${MUTED}">${contacts.map(ct => `<span>${esc(ct)}</span>`).join('')}${pi.linkedin ? `<span>LinkedIn: ${esc(pi.linkedin)}</span>` : ''}${pi.github ? `<span>GitHub: ${esc(pi.github)}</span>` : ''}</div>` : ''}
     </div>
     <div class="mb-6"><div class="h-px w-full" style="background-color:${BORDER}"></div><div class="mt-0.5 h-px w-full" style="background-color:${BORDER}"></div></div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-1 text-sm font-bold uppercase tracking-wider" style="color:${PRIMARY}">${esc(s.title)}</h2>
       <div class="mb-3"><div class="h-px w-full" style="background-color:${BORDER};opacity:0.5"></div><div class="mt-0.5 h-px w-full" style="background-color:${BORDER};opacity:0.5"></div></div>
       ${buildLegalSectionContent(s, resume.language || 'en')}

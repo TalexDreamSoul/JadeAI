@@ -110,7 +110,7 @@ export function buildLuxeHtml(resume: ResumeWithSections): string {
         ${contacts.length ? `<div class="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs" style="color:#78716c">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</div>` : ''}
       </div>
     </div>
-    ${sections.map(s => `<div class="mb-7" data-section>
+    ${sections.map(s => `<div class="mb-7" data-section data-section-type="${esc(s.type)}">
       <div class="mb-4 flex items-center gap-3">
         <div class="h-px flex-1" style="background-color:${GOLD}"></div>
         <h2 class="shrink-0 text-xs font-bold uppercase tracking-[0.2em]" style="color:${GOLD}">${esc(s.title)}</h2>

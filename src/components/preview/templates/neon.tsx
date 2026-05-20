@@ -71,7 +71,7 @@ export function NeonTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
-            <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+            <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
               <div className="mb-3 flex items-center gap-3">
                 <h2 className="text-sm font-extrabold uppercase tracking-widest" style={{ color: CYAN, textShadow: `0 0 10px ${CYAN}40` }}>
                   {section.title}

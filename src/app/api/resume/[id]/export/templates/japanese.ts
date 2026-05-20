@@ -118,7 +118,7 @@ export function buildJapaneseHtml(resume: ResumeWithSections): string {
       ${contacts.length ? `<div class="mt-6 flex flex-wrap items-center justify-center gap-6 text-xs font-light" style="color:${ACCENT}">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="mx-auto mb-10 h-px" style="background-color:${ACCENT};opacity:0.4"></div>
-    ${sections.map(s => `<div class="mb-8" data-section>
+    ${sections.map(s => `<div class="mb-8" data-section data-section-type="${esc(s.type)}">
       <div class="mb-4 flex items-center gap-2">
         <span class="inline-block h-1 w-1 rounded-full" style="background-color:${ACCENT}"></span>
         <h2 class="text-[10px] font-light uppercase tracking-[0.25em]" style="color:${ACCENT}">${esc(s.title)}</h2>

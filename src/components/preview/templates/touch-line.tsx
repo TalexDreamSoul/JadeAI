@@ -46,7 +46,7 @@ export function TouchLineTemplate({ resume }: { resume: Resume }) {
         {resume.sections
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section, index) => (
-            <section key={section.id} data-section data-section-id={section.id} className="grid grid-cols-[92px_1fr] gap-5">
+            <section key={section.id} data-section data-section-id={section.id} data-section-type={section.type} className="grid grid-cols-[92px_1fr] gap-5">
               <div className="border-r border-zinc-200 pr-4">
                 <span className="block text-[10px] font-semibold text-zinc-400">{String(index + 1).padStart(2, '0')}</span>
                 <h2 className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-950">{section.title}</h2>

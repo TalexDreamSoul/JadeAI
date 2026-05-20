@@ -104,7 +104,7 @@ export function buildZigzagHtml(resume: ResumeWithSections): string {
     <div class="mb-6 flex items-center justify-center gap-1">${zigzagDots}</div>
     ${sections.map((s, idx) => {
       const isEven = idx % 2 === 0;
-      return `<div class="mb-5" data-section>
+      return `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
         <div class="rounded-lg p-4" style="background-color:${isEven ? 'transparent' : ALT_BG}">
           <div class="mb-2 flex items-center gap-2"><div class="h-5 w-1 rounded-full" style="background-color:${ACCENT}"></div><h2 class="text-sm font-bold uppercase tracking-wider" style="color:${PRIMARY}">${esc(s.title)}</h2></div>
           <div>${buildZigzagSectionContent(s, lang)}</div>

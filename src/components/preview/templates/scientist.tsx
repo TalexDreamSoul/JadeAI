@@ -56,7 +56,7 @@ export function ScientistTemplate({ resume }: { resume: Resume }) {
 
       {/* Sections with numbering */}
       {filteredSections.map((section, idx) => (
-        <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+        <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
           <div className="mb-2 flex items-baseline gap-2">
             <span className="text-sm font-bold" style={{ color: ACCENT }}>{idx + 1}.</span>
             <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: PRIMARY }}>

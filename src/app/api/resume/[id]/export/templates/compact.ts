@@ -124,13 +124,13 @@ export function buildCompactHtml(resume: ResumeWithSections): string {
     </div>
     <div class="flex">
       <div class="w-[32%] shrink-0 border-r border-zinc-100 bg-zinc-50 p-4">
-        ${leftSections.map(s => `<div class="mb-4" data-section>
+        ${leftSections.map(s => `<div class="mb-4" data-section data-section-type="${esc(s.type)}">
           <h2 class="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">${esc(s.title)}</h2>
           ${buildCompactLeftContent(s)}
         </div>`).join('')}
       </div>
       <div class="flex-1 p-4">
-        ${rightSections.map(s => `<div class="mb-4" data-section>
+        ${rightSections.map(s => `<div class="mb-4" data-section data-section-type="${esc(s.type)}">
           <h2 class="mb-1.5 border-b border-zinc-200 pb-0.5 text-xs font-bold uppercase tracking-wider text-zinc-700">${esc(s.title)}</h2>
           ${buildCompactRightContent(s, resume.language || 'en')}
         </div>`).join('')}

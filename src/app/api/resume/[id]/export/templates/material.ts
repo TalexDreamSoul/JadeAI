@@ -110,7 +110,7 @@ export function buildMaterialHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="p-6 pt-4">
-      ${sections.map(s => `<div class="mb-4" data-section>
+      ${sections.map(s => `<div class="mb-4" data-section data-section-type="${esc(s.type)}">
         <div class="mb-3 rounded-xl bg-white p-5 shadow-sm">
           <h2 class="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider" style="color:${PRIMARY}"><span class="inline-block h-5 w-1 rounded-full" style="background-color:${VIOLET}"></span>${esc(s.title)}</h2>
           ${buildMaterialSectionContent(s, resume.language || 'en')}

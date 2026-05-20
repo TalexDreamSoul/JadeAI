@@ -191,13 +191,48 @@ export interface TemplateSectionTitleStyle extends TemplateTitleStyle {
   uppercase?: boolean;
 }
 
+export type TemplateBorderStyle = 'solid' | 'dashed' | 'dotted' | 'double';
+
 export interface TemplateSectionDividerConfig {
   enabled?: boolean;
-  style?: 'solid' | 'dashed' | 'dotted' | 'double';
+  style?: TemplateBorderStyle;
   thickness?: number;
   color?: string;
   marginTop?: number;
   marginBottom?: number;
+}
+
+export interface TemplateBorderConfig {
+  enabled?: boolean;
+  width?: number;
+  color?: string;
+  style?: TemplateBorderStyle;
+  radius?: number;
+}
+
+export interface TemplatePageAccentLinesConfig {
+  left?: boolean;
+  right?: boolean;
+  width?: number;
+  color?: string;
+  offset?: number;
+}
+
+export interface TemplatePageStyleConfig {
+  border?: TemplateBorderConfig;
+  accentLines?: TemplatePageAccentLinesConfig;
+}
+
+export interface TemplateSectionStyleConfig {
+  align?: 'left' | 'center' | 'right';
+  titleAlign?: 'left' | 'center' | 'right';
+  backgroundColor?: string;
+  padding?: number;
+  marginBottom?: number;
+  border?: TemplateBorderConfig;
+  leftAccent?: boolean;
+  accentWidth?: number;
+  accentColor?: string;
 }
 
 export interface TemplateLayoutConfig {
@@ -228,6 +263,8 @@ export interface ThemeConfig {
   titleStyle?: TemplateTitleStyle;
   sectionTitleStyle?: TemplateSectionTitleStyle;
   sectionDivider?: TemplateSectionDividerConfig;
+  pageStyle?: TemplatePageStyleConfig;
+  sectionStyles?: Record<string, TemplateSectionStyleConfig>;
   layout?: TemplateLayoutConfig;
   advanced?: TemplateAdvancedConfig;
   editorPanel?: TemplateEditorPanelState;

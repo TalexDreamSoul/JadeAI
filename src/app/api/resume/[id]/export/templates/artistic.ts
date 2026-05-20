@@ -117,7 +117,7 @@ export function buildArtisticHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="p-8 pt-6">
-      ${sections.map(s => `<div class="mb-6" data-section>
+      ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
         <div class="mb-2 flex items-center gap-2"><h2 class="text-sm font-extrabold uppercase tracking-widest" style="color:${PRIMARY}">${esc(s.title)}</h2><div class="h-0.5 flex-1" style="border-top:2px dashed ${ACCENT}40"></div></div>
         ${buildArtisticSectionContent(s, resume.language || 'en')}
       </div>`).join('')}

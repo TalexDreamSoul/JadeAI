@@ -107,7 +107,7 @@ export function buildMedicalHtml(resume: ResumeWithSections): string {
         </div>
       </div>
     </div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <h2 class="mb-3 inline-block rounded-full px-4 py-1 text-xs font-bold uppercase tracking-wider text-white" style="background-color:${TEAL_500}">${esc(s.title)}</h2>
       ${buildMedicalSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

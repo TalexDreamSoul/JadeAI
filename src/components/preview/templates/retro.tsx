@@ -62,7 +62,7 @@ export function RetroTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section, idx, arr) => (
-          <div key={section.id} data-section data-section-id={section.id}>
+          <div key={section.id} data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="mb-2 text-center">
               <h2 className="inline-block px-4 text-xs font-bold uppercase tracking-[0.3em]" style={{ color: PRIMARY, borderBottom: `1px solid ${PRIMARY}`, borderTop: `1px solid ${PRIMARY}`, padding: '4px 16px' }}>
                 {section.title}

@@ -107,7 +107,7 @@ export function buildScientistHtml(resume: ResumeWithSections): string {
       ${contacts.length || pi.linkedin || pi.github ? `<div class="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs" style="color:${MUTED}">${contacts.map(ct => `<span>${esc(ct)}</span>`).join('')}${pi.linkedin ? `<span>${esc(pi.linkedin)}</span>` : ''}${pi.github ? `<span>${esc(pi.github)}</span>` : ''}</div>` : ''}
     </div>
     <div class="mb-6 h-px w-full" style="background-color:${PRIMARY}"></div>
-    ${sections.map((s, idx) => `<div class="mb-6" data-section>
+    ${sections.map((s, idx) => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <div class="mb-2 flex items-baseline gap-2"><span class="text-sm font-bold" style="color:${ACCENT}">${idx + 1}.</span><h2 class="text-sm font-bold uppercase tracking-wider" style="color:${PRIMARY}">${esc(s.title)}</h2></div>
       <div class="h-px w-full" style="background-color:${GRID_LINE}"></div>
       <div class="mt-2">${buildScientistSectionContent(s, idx, resume.language || 'en')}</div>

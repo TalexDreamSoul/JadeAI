@@ -91,7 +91,7 @@ export function buildFormalHtml(resume: ResumeWithSections): string {
       </div>
       ${contacts.length || pi.linkedin || pi.github ? `<div class="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm text-zinc-500">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}${pi.linkedin ? `<span>LinkedIn: ${esc(pi.linkedin)}</span>` : ''}${pi.github ? `<span>GitHub: ${esc(pi.github)}</span>` : ''}</div>` : ''}
     </div>
-    ${sections.map(s => `<div class="mb-5" data-section>
+    ${sections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
       <div class="mb-2 flex items-center gap-2">
         <h2 class="shrink-0 text-sm font-bold uppercase tracking-wider" style="color:${DG}">${esc(s.title)}</h2>
         <div class="h-px flex-1 bg-zinc-200"></div>

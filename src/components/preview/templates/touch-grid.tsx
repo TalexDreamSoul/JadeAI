@@ -17,7 +17,7 @@ export function TouchGridTemplate({ resume }: { resume: Resume }) {
   const contacts = getPersonalInfoPreviewItems(pi);
 
   const renderSection = (section: any, compact = false) => (
-    <section key={section.id} data-section data-section-id={section.id} className={compact ? '' : 'mb-5'}>
+    <section key={section.id} data-section data-section-id={section.id} data-section-type={section.type} className={compact ? '' : 'mb-5'}>
       <h2 className="mb-2 border-b border-zinc-200 pb-1 text-[12px] font-bold uppercase tracking-[0.16em] text-zinc-900">{section.title}</h2>
       <TouchSimpleSectionContent section={section} resume={resume} />
     </section>

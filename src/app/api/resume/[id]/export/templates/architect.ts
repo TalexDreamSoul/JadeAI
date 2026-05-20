@@ -118,7 +118,7 @@ export function buildArchitectHtml(resume: ResumeWithSections): string {
         </div>
       </div>
     </div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <div class="mb-3 flex items-center gap-3">
         <div class="h-2.5 w-2.5 rotate-45" style="background-color:${ACCENT}"></div>
         <h2 class="text-sm font-bold uppercase tracking-[0.15em]" style="font-family:JetBrains Mono,Consolas,monospace;color:${PRIMARY}">${esc(s.title)}</h2>

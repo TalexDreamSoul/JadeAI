@@ -57,7 +57,7 @@ export function AtsTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-4" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-4" data-section data-section-id={section.id} data-section-type={section.type}>
             <h2 className="mb-1.5 border-b border-black pb-0.5 text-base font-bold uppercase text-black">
               {section.title}
             </h2>

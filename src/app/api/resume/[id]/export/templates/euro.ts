@@ -121,7 +121,7 @@ export function buildEuroHtml(resume: ResumeWithSections): string {
     </div>
     <div class="h-1 w-full rounded" style="background:${BL}"></div>
     <div class="mt-6">
-      ${sections.map(s => `<div class="mb-5 flex gap-4" data-section>
+      ${sections.map(s => `<div class="mb-5 flex gap-4" data-section data-section-type="${esc(s.type)}">
         <div class="w-28 shrink-0 pt-0.5 text-right">
           <h2 class="text-xs font-bold uppercase tracking-wider" style="color:${BL}">${esc(s.title)}</h2>
         </div>

@@ -51,6 +51,10 @@ function stripNumericKeys(value: Record<string, unknown>) {
 export function normalizeThemeConfig(value: unknown): ThemeConfig {
   const raw = parseThemeValue(value);
   const margin = isPlainObject(raw.margin) ? raw.margin : {};
+  const pageStyle = isPlainObject(raw.pageStyle) ? raw.pageStyle : undefined;
+  const pageBorder = pageStyle && isPlainObject(pageStyle.border) ? pageStyle.border : undefined;
+  const pageAccentLines = pageStyle && isPlainObject(pageStyle.accentLines) ? pageStyle.accentLines : undefined;
+  const sectionStyles = isPlainObject(raw.sectionStyles) ? raw.sectionStyles : undefined;
   const normalized: ThemeConfig = {
     ...DEFAULT_THEME_CONFIG,
     ...raw,
@@ -58,6 +62,14 @@ export function normalizeThemeConfig(value: unknown): ThemeConfig {
       ...DEFAULT_THEME_CONFIG.margin,
       ...margin,
     },
+    ...(pageStyle ? {
+      pageStyle: {
+        ...pageStyle,
+        ...(pageBorder ? { border: { ...pageBorder } } : {}),
+        ...(pageAccentLines ? { accentLines: { ...pageAccentLines } } : {}),
+      },
+    } : {}),
+    ...(sectionStyles ? { sectionStyles: { ...sectionStyles } } : {}),
   } as ThemeConfig;
   return normalized;
 }

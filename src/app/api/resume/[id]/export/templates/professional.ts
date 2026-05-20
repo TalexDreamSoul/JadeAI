@@ -92,7 +92,7 @@ export function buildProfessionalHtml(resume: ResumeWithSections): string {
       ${contacts.length ? `<div class="mt-3 flex flex-wrap items-center justify-center gap-x-1.5 text-sm text-zinc-500">${contacts.map((c, i) => `<span class="flex items-center gap-1.5">${esc(c)}${i < contacts.length - 1 ? '<span class="text-zinc-300">|</span>' : ''}</span>`).join('')}</div>` : ''}
       <div class="mt-4 h-[2px] w-full" style="background:linear-gradient(90deg,transparent 0%,${BLUE} 20%,${BLUE} 80%,transparent 100%)"></div>
     </div>
-    ${sections.map(s => `<div class="mb-5" data-section>
+    ${sections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
       <div class="mb-3 flex items-center gap-3"><h2 class="text-sm font-bold uppercase tracking-[0.2em]" style="color:${BLUE}">${esc(s.title)}</h2><div class="h-[1px] flex-1 bg-zinc-200"></div></div>
       ${buildProfessionalSectionContent(s, resume.language || 'en')}
     </div>`).join('')}

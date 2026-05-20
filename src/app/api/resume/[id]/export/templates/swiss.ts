@@ -121,7 +121,7 @@ export function buildSwissHtml(resume: ResumeWithSections): string {
       </div>
       ${contacts.length ? `<div class="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-black pt-3 text-xs" style="color:${TEXT}">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</div>` : ''}
     </div>
-    ${sections.map(s => `<div class="mb-6" data-section>
+    ${sections.map(s => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
       <div class="mb-3 flex items-center gap-2 border-b border-zinc-200 pb-2">
         <span class="inline-block h-2.5 w-2.5 shrink-0" style="background-color:${RED}"></span>
         <h2 class="text-xs font-bold uppercase tracking-[0.2em]" style="color:${TEXT}">${esc(s.title)}</h2>

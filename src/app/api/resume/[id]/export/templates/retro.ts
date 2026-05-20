@@ -103,7 +103,7 @@ export function buildRetroHtml(resume: ResumeWithSections): string {
     const divider = idx < sections.length - 1
       ? `<div class="mb-4 flex items-center justify-center gap-2 text-xs" style="color:${PRIMARY}40"><div class="h-px w-12" style="background-color:${PRIMARY}20"></div><span>&#10022;</span><div class="h-px w-12" style="background-color:${PRIMARY}20"></div></div>`
       : '';
-    return `<div data-section>
+    return `<div data-section data-section-type="${esc(s.type)}">
       <div class="mb-2 text-center"><h2 class="inline-block text-xs font-bold uppercase tracking-[0.3em]" style="color:${PRIMARY};border-bottom:1px solid ${PRIMARY};border-top:1px solid ${PRIMARY};padding:4px 16px">${esc(s.title)}</h2></div>
       <div class="mb-4">${buildRetroSectionContent(s, resume.language || 'en')}</div>
       ${divider}

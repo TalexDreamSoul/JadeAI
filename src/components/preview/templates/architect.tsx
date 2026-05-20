@@ -71,7 +71,7 @@ export function ArchitectTemplate({ resume }: { resume: Resume }) {
       {resume.sections
         .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
         .map((section) => (
-          <div key={section.id} className="mb-6" data-section data-section-id={section.id}>
+          <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="mb-3 flex items-center gap-3">
               <div className="h-2.5 w-2.5 rotate-45" style={{ backgroundColor: ACCENT }} />
               <h2

@@ -45,7 +45,7 @@ export function CompactTemplate({ resume }: { resume: Resume }) {
         {/* Left - sidebar sections */}
         <div className="w-[32%] shrink-0 border-r border-zinc-100 bg-zinc-50 p-4">
           {leftSections.map((section) => (
-            <div key={section.id} className="mb-4" data-section data-section-id={section.id}>
+            <div key={section.id} className="mb-4" data-section data-section-id={section.id} data-section-type={section.type}>
               <h2 className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{section.title}</h2>
               <CompactLeftContent section={section} />
             </div>
@@ -54,7 +54,7 @@ export function CompactTemplate({ resume }: { resume: Resume }) {
         {/* Right - main sections */}
         <div className="flex-1 p-4">
           {rightSections.map((section) => (
-            <div key={section.id} className="mb-4" data-section data-section-id={section.id}>
+            <div key={section.id} className="mb-4" data-section data-section-id={section.id} data-section-type={section.type}>
               <h2 className="mb-1.5 border-b border-zinc-200 pb-0.5 text-xs font-bold uppercase tracking-wider text-zinc-700">{section.title}</h2>
               <CompactRightContent section={section} resume={resume} />
             </div>

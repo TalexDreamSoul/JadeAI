@@ -95,7 +95,7 @@ export function buildInfographicHtml(resume: ResumeWithSections): string {
       </div>
     </div>
     <div class="p-8">
-      ${sections.map((s, idx) => `<div class="mb-6" data-section>
+      ${sections.map((s, idx) => `<div class="mb-6" data-section data-section-type="${esc(s.type)}">
         <h2 class="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
           <span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] text-white" style="background:${COLORS[idx % COLORS.length]}">${idx + 1}</span>
           <span style="color:${COLORS[idx % COLORS.length]}">${esc(s.title)}</span>
