@@ -14,6 +14,7 @@ interface EditorStore {
   redoStack: ResumeSnapshot[];
   pendingAiMessage: string | null;
   mobileActiveTab: "edit" | "preview";
+  highlightedSectionType: string | null;
 
   selectSection: (id: string | null) => void;
   selectItem: (id: string | null) => void;
@@ -27,6 +28,7 @@ interface EditorStore {
   redo: () => ResumeSnapshot | null;
   setPendingAiMessage: (message: string | null) => void;
   setMobileActiveTab: (tab: "edit" | "preview") => void;
+  setHighlightedSectionType: (sectionType: string | null) => void;
   reset: () => void;
 }
 
@@ -41,6 +43,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   redoStack: [],
   pendingAiMessage: null,
   mobileActiveTab: "edit",
+  highlightedSectionType: null,
 
   selectSection: (id) => set({ selectedSectionId: id, selectedItemId: null }),
   selectItem: (id) => set({ selectedItemId: id }),
@@ -84,6 +87,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setPendingAiMessage: (message) => set({ pendingAiMessage: message }),
   setMobileActiveTab: (tab) => set({ mobileActiveTab: tab }),
+  setHighlightedSectionType: (sectionType) => set({ highlightedSectionType: sectionType }),
 
   reset: () =>
     set({
@@ -97,5 +101,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       redoStack: [],
       pendingAiMessage: null,
       mobileActiveTab: "edit",
+      highlightedSectionType: null,
     }),
 }));

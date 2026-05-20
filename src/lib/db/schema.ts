@@ -188,6 +188,8 @@ export const resumeAiReviews = sqliteTable('resume_ai_reviews', {
   userId: text('user_id').notNull().references(() => users.id),
   result: text('result', { mode: 'json' }).notNull(),
   score: integer('score').notNull().default(0),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
@@ -250,6 +252,8 @@ export const jdAnalyses = sqliteTable('jd_analyses', {
   result: text('result', { mode: 'json' }).notNull(),
   overallScore: integer('overall_score').notNull(),
   atsScore: integer('ats_score').notNull(),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
@@ -259,6 +263,8 @@ export const grammarChecks = sqliteTable('grammar_checks', {
   result: text('result', { mode: 'json' }).notNull(),
   score: integer('score').notNull(),
   issueCount: integer('issue_count').notNull(),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 

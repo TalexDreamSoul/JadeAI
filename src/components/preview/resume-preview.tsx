@@ -4,6 +4,7 @@ import { useId } from 'react';
 import type { Resume, ThemeConfig } from '@/types/resume';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import { buildTemplateCustomizationCSS } from '@/lib/template-customization';
+import { useEditorStore } from '@/stores/editor-store';
 import { TouchPureTemplate } from './templates/touch-pure';
 import { TouchSimpleTemplate } from './templates/touch-simple';
 import { TouchFlatTemplate } from './templates/touch-flat';
@@ -256,9 +257,21 @@ function buildThemeCSS(scopeId: string, theme: ThemeConfig, template: string): s
 export function ResumePreview({ resume }: ResumePreviewProps) {
   const Template = templateMap[resume.template] || ClassicTemplate;
   const scopeId = useId();
+  const highlightedSectionType = useEditorStore((state) => state.highlightedSectionType);
   const theme: ThemeConfig = { ...DEFAULT_THEME, ...(resume.themeConfig || {}) };
   const scopeSelector = `[data-theme-scope="${scopeId}"]`;
   const customCss = buildTemplateCustomizationCSS(scopeSelector, theme);
+  const safeHighlightedSectionType = highlightedSectionType?.replace(/[^a-zA-Z0-9_-]/g, '');
+  const highlightCss = safeHighlightedSectionType ? `
+    ${scopeSelector} [data-section][data-section-type="${safeHighlightedSectionType}"] {
+      outline: 2px solid var(--brand, #8b5cf6) !important;
+      outline-offset: 4px !important;
+      border-radius: 8px !important;
+      background-color: color-mix(in srgb, var(--brand, #8b5cf6) 8%, transparent) !important;
+      box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand, #8b5cf6) 10%, transparent) !important;
+      transition: outline-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease !important;
+    }
+  ` : '';
 
   // Defensive: ensure resume.sections is always an array and only visible sections render.
   const safeResume = {
@@ -276,7 +289,7 @@ export function ResumePreview({ resume }: ResumePreviewProps) {
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       <div data-theme-scope={scopeId}>
-        <style dangerouslySetInnerHTML={{ __html: `${buildThemeCSS(scopeId, theme, safeResume.template)}\n${customCss}` }} />
+        <style dangerouslySetInnerHTML={{ __html: `${buildThemeCSS(scopeId, theme, safeResume.template)}\n${customCss}\n${highlightCss}` }} />
         <Template resume={safeResume} />
       </div>
     </>

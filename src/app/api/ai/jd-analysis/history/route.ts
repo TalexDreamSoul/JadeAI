@@ -24,25 +24,49 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    const familyResumeIds = await resumeRepository.findFamilyIdsByResumeId(resumeId, user.id);
+    const allowedResumeIds = familyResumeIds.length > 0 ? familyResumeIds : [resumeId];
+
     // Single record detail
     if (id) {
       const analysis = await analysisRepository.findJdAnalysisById(id);
-      if (!analysis || analysis.resumeId !== resumeId) {
+      if (!analysis || !allowedResumeIds.includes(analysis.resumeId)) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
       return NextResponse.json(analysis);
     }
 
-    // List all
-    const analyses = await analysisRepository.findJdAnalysesByResumeId(resumeId);
+    // List all analyses in the same resume family so JD histories survive switching between base and derived JD resumes.
+    const analyses = await analysisRepository.findJdAnalysesByResumeIds(allowedResumeIds);
+    const familyResumes = await Promise.all(allowedResumeIds.map((id) => resumeRepository.findById(id).catch(() => null)));
+    const resumeMeta = new Map(familyResumes.filter(Boolean).map((item: any) => [item.id, {
+      title: item.title,
+      versionLabel: item.versionLabel,
+      targetCompany: item.targetCompany,
+      targetJobTitle: item.targetJobTitle,
+      isCurrent: item.id === resumeId,
+      isBase: item.id === (resume.baseResumeId || resume.id),
+    }]));
 
-    const list = analyses.map((a: any) => ({
-      id: a.id,
-      overallScore: a.overallScore,
-      atsScore: a.atsScore,
-      jobDescription: a.jobDescription.slice(0, 100),
-      createdAt: a.createdAt,
-    }));
+    const list = analyses.map((a: any) => {
+      const meta = resumeMeta.get(a.resumeId) as any;
+      return {
+        id: a.id,
+        resumeId: a.resumeId,
+        resumeTitle: meta?.title || '',
+        resumeVersionLabel: meta?.versionLabel || '',
+        targetCompany: meta?.targetCompany || '',
+        targetJobTitle: meta?.targetJobTitle || '',
+        isCurrentResume: meta?.isCurrent || false,
+        isBaseResume: meta?.isBase || false,
+        overallScore: a.overallScore,
+        atsScore: a.atsScore,
+        jobDescription: a.jobDescription.slice(0, 100),
+        status: a.status || 'success',
+        error: a.error || undefined,
+        createdAt: a.createdAt,
+      };
+    });
 
     return NextResponse.json(list);
   } catch (error) {

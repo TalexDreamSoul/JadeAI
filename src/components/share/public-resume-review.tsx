@@ -977,7 +977,7 @@ export function PublicResumeReview({
         </main>
 
         {/* Right comments */}
-        <aside className={`absolute inset-y-0 right-0 z-40 min-h-0 w-[min(88vw,22rem)] overflow-y-auto border-l border-zinc-200 bg-white p-4 shadow-2xl transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-950 xl:relative xl:z-auto xl:flex xl:w-auto xl:translate-x-0 xl:flex-col xl:border-l-0 xl:bg-transparent xl:p-0 xl:pl-4 xl:shadow-none ${mobileRightOpen ? 'translate-x-0' : 'translate-x-full'}`} onMouseDown={() => clearSelection()}>
+        <aside className={`absolute inset-y-0 right-0 z-40 min-h-0 w-[min(88vw,22rem)] overflow-y-auto border-l border-zinc-200 bg-white p-4 shadow-2xl transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-950 xl:relative xl:z-auto xl:flex xl:w-auto xl:translate-x-0 xl:flex-col xl:border-l-0 xl:bg-transparent xl:p-0 xl:pl-4 xl:shadow-none ${mobileRightOpen ? 'translate-x-0' : 'translate-x-full'}`}>
           <div className="min-h-full bg-white/70 dark:bg-zinc-950/40 xl:flex xl:flex-1 xl:flex-col xl:border-l xl:border-zinc-200 xl:pl-4 xl:dark:border-zinc-800">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               <MessageSquare className="h-4 w-4 text-brand" />

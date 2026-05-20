@@ -10,21 +10,21 @@ import {
   Cloud,
   CloudOff,
   Download,
-  FileText,
   GitBranch,
-  Languages,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Printer,
   Redo2,
   Save,
   Share2,
-  SpellCheck,
   Undo2,
   Upload,
-  WandSparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
@@ -50,6 +50,7 @@ interface EditorToolbarProps {
 
 export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onWorkspaceModeChange, onOpenModal }: EditorToolbarProps) {
   const t = useTranslations('editor.toolbar');
+  const tc = useTranslations('common');
   const router = useRouter();
   const { undo, redo, undoStack, redoStack } = useEditorStore();
   const { isSaving, isDirty, currentResume, reorderSections, save, setTitle, enableCloudSync, disableCloudSync } = useResumeStore();
@@ -57,9 +58,11 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
   const autoSave = useSettingsStore((s) => s.autoSave);
   const localOnly = useIsLocalOnly();
   const [renameOpen, setRenameOpen] = useState(false);
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [versionLabel, setVersionLabel] = useState('');
+  const [savingVersion, setSavingVersion] = useState(false);
   const isOfflineResume = isLocalResumeId(resumeId) || currentResume?.cloudSyncEnabled === false;
   const cloudDisabled = localOnly || isOfflineResume;
-  const aiDisabled = false;
   const cloudActionLabel = isOfflineResume ? t('uploadToCloud') : t('switchToLocalOnly');
   const openToolModal = (modal: Parameters<NonNullable<EditorToolbarProps['onOpenModal']>>[0]) => {
     if (onOpenModal) onOpenModal(modal);
@@ -93,19 +96,38 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
     }
   };
 
+  const openVersionDialog = () => {
+    setVersionLabel('');
+    setVersionDialogOpen(true);
+  };
+
   const saveVersion = async () => {
-    await save();
-    if (localOnly || isLocalResumeId(resumeId)) return;
-    await fetch(`/api/resume/${resumeId}/versions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(typeof window !== 'undefined' && localStorage.getItem('touchresume_fingerprint')
-          ? { 'x-fingerprint': localStorage.getItem('touchresume_fingerprint') as string }
-          : {}),
-      },
-      body: JSON.stringify({ label: currentResume?.versionLabel || `v${new Date().toISOString()}` }),
-    }).catch(() => null);
+    if (savingVersion) return;
+    setSavingVersion(true);
+    try {
+      await save();
+      if (localOnly || isLocalResumeId(resumeId)) return;
+      const label = versionLabel.trim() || `v${new Date().toISOString()}`;
+      const res = await fetch(`/api/resume/${resumeId}/versions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(typeof window !== 'undefined' && localStorage.getItem('touchresume_fingerprint')
+            ? { 'x-fingerprint': localStorage.getItem('touchresume_fingerprint') as string }
+            : {}),
+        },
+        body: JSON.stringify({ label }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success(t('saveVersionSuccess'));
+      setVersionDialogOpen(false);
+      setVersionLabel('');
+    } catch (error) {
+      console.error(error);
+      toast.error(t('saveVersionFailed'));
+    } finally {
+      setSavingVersion(false);
+    }
   };
 
   const handleRename = (title: string) => {
@@ -155,30 +177,9 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
         {isOfflineResume ? <Cloud className="mr-2 h-4 w-4" /> : <CloudOff className="mr-2 h-4 w-4" />}
         {cloudActionLabel}
       </DropdownMenuItem>
-      <DropdownMenuItem disabled={cloudDisabled} onClick={saveVersion} className="cursor-pointer">
+      <DropdownMenuItem disabled={cloudDisabled} onClick={openVersionDialog} className="cursor-pointer">
         <GitBranch className="mr-2 h-4 w-4" />
         {t('saveVersion')}
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  );
-
-  const aiMenu = (
-    <DropdownMenuContent align="end" className="w-44">
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('ai-review')} className="cursor-pointer">
-        <WandSparkles className="mr-2 h-4 w-4" />
-        {t('aiReview')}
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('translate')} className="cursor-pointer">
-        <Languages className="mr-2 h-4 w-4" />
-        {t('translate')}
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('cover-letter')} className="cursor-pointer">
-        <FileText className="mr-2 h-4 w-4" />
-        {t('coverLetter')}
-      </DropdownMenuItem>
-      <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('grammar-check')} className="cursor-pointer">
-        <SpellCheck className="mr-2 h-4 w-4" />
-        {t('grammarCheck')}
       </DropdownMenuItem>
     </DropdownMenuContent>
   );
@@ -276,16 +277,6 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
             {fileMenu}
           </DropdownMenu>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="cursor-pointer gap-1.5">
-                <WandSparkles className="h-4 w-4" />
-                <span className="text-xs">{t('aiActions')}</span>
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            {aiMenu}
-          </DropdownMenu>
         </div>
 
         <div className="md:hidden">
@@ -315,23 +306,6 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
                 {t('share')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('ai-review')} className="cursor-pointer">
-                <WandSparkles className="mr-2 h-4 w-4" />
-                {t('aiReview')}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('translate')} className="cursor-pointer">
-                <Languages className="mr-2 h-4 w-4" />
-                {t('translate')}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('cover-letter')} className="cursor-pointer">
-                <FileText className="mr-2 h-4 w-4" />
-                {t('coverLetter')}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={aiDisabled} onClick={() => openToolModal('grammar-check')} className="cursor-pointer">
-                <SpellCheck className="mr-2 h-4 w-4" />
-                {t('grammarCheck')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 disabled={localOnly && !isLocalResumeId(resumeId)}
                 onClick={toggleCloudSync}
@@ -340,7 +314,7 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
                 {isOfflineResume ? <Cloud className="mr-2 h-4 w-4" /> : <CloudOff className="mr-2 h-4 w-4" />}
                 {cloudActionLabel}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={cloudDisabled} onClick={saveVersion} className="cursor-pointer">
+              <DropdownMenuItem disabled={cloudDisabled} onClick={openVersionDialog} className="cursor-pointer">
                 <GitBranch className="mr-2 h-4 w-4" />
                 {t('saveVersion')}
               </DropdownMenuItem>
@@ -356,6 +330,35 @@ export function EditorToolbar({ resumeId, onPrint, workspaceMode = 'resume', onW
         onOpenChange={setRenameOpen}
         onSave={handleRename}
       />
+      <Dialog open={versionDialogOpen} onOpenChange={setVersionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('saveVersionDialogTitle')}</DialogTitle>
+            <DialogDescription>{t('saveVersionDialogDescription')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="version-label">{t('saveVersionLabel')}</Label>
+            <Input
+              id="version-label"
+              value={versionLabel}
+              onChange={(event) => setVersionLabel(event.target.value)}
+              placeholder={t('saveVersionPlaceholder')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') saveVersion();
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setVersionDialogOpen(false)} disabled={savingVersion}>
+              {tc('cancel')}
+            </Button>
+            <Button type="button" onClick={saveVersion} disabled={savingVersion} className="bg-brand hover:bg-brand-hover">
+              {savingVersion && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('saveVersionConfirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

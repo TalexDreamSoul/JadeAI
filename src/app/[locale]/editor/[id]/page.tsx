@@ -9,7 +9,7 @@ import { useIsMobile } from '@/hooks/use-media-query';
 import { EditorToolbar } from '@/components/editor/editor-toolbar';
 import { EditorSidebar } from '@/components/editor/editor-sidebar';
 import { EditorCanvas } from '@/components/editor/editor-canvas';
-import { CareerWorkbench, CareerWorkbenchNav, type CareerWorkbenchTab } from '@/components/career-workbench';
+import { CareerWorkbench, CareerWorkbenchNav, type CareerWorkbenchAiTool, type CareerWorkbenchTab } from '@/components/career-workbench';
 import { ThemeEditor } from '@/components/editor/theme-editor';
 import { EditorPreviewTabs } from '@/components/editor/editor-preview-tabs';
 import { EditorMobileTabBar } from '@/components/editor/editor-mobile-tab-bar';
@@ -49,7 +49,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isLoading: fpLoading } = useFingerprint();
-  const { resume, sections, updateSection, addSection, removeSection, reorderSections, loadResume, hasLoaded } = useEditor(id);
+  const { resume, sections, updateSection, addSection, removeSection, reorderSections, loadResume, refreshResume, hasLoaded } = useEditor(id);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<'resume' | 'career'>(() => (
@@ -58,7 +58,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [resumeModulesCollapsed, setResumeModulesCollapsed] = useState(() => searchParams.get('modules') === 'collapsed');
   const [careerTab, setCareerTab] = useState<CareerWorkbenchTab>(() => {
     const tab = searchParams.get('careerTab');
-    return tab === 'history' || tab === 'memory' || tab === 'match' ? tab : 'match';
+    return tab === 'memory' || tab === 'match' || tab === 'knowledge' || tab === 'interview' ? tab : 'match';
   });
   const { showThemeEditor, mobileActiveTab } = useEditorStore();
   const { activeModal, openModal, closeModal } = useUIStore();
@@ -102,6 +102,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   };
 
   const handleWorkspaceModeChange = (mode: 'resume' | 'career') => {
+    if (mode === 'career') {
+      useEditorStore.setState({ showThemeEditor: false });
+    }
     setWorkspaceMode(mode);
     updateEditorQuery({ workspace: mode });
   };
@@ -114,6 +117,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const openEditorModal = (modal: string) => {
     openModal(modal as Parameters<typeof openModal>[0]);
     updateEditorQuery({ modal });
+  };
+
+  const openCareerAiTool = (tool: CareerWorkbenchAiTool) => {
+    openEditorModal(tool);
   };
 
   const closeEditorModal = () => {
@@ -207,7 +214,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               onModulesCollapsedChange={setResumeModulesState}
             />
           ) : (
-            <CareerWorkbenchNav activeTab={careerTab} onActiveTabChange={handleCareerTabChange} />
+            <CareerWorkbenchNav activeTab={careerTab} onActiveTabChange={handleCareerTabChange} onOpenAiTool={openCareerAiTool} />
           )}
         </div>
 
@@ -230,7 +237,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               resumeId={id}
               activeTab={careerTab}
               onActiveTabChange={handleCareerTabChange}
-              onResumeChanged={loadResume}
+              onResumeChanged={refreshResume}
             />
           )}
         </div>
@@ -272,6 +279,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               activeTab={careerTab}
               onActiveTabChange={(tab) => {
                 handleCareerTabChange(tab);
+                setSidebarOpen(false);
+              }}
+              onOpenAiTool={(tool) => {
+                openCareerAiTool(tool);
                 setSidebarOpen(false);
               }}
             />

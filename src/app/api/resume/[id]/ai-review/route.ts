@@ -58,46 +58,51 @@ export async function POST(
     if (resume.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await request.json().catch(() => ({}));
-    const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-    const result = await generateText({
-      model: getModel(aiConfig),
-      system: SYSTEM,
-      prompt: JSON.stringify({
-        resume: resume.sections,
-        template: resume.template,
-        themeConfig: resume.themeConfig,
-        targetCompany: resume.targetCompany,
-        targetJobTitle: resume.targetJobTitle,
-        jobDescription: resume.jobDescription,
-        focus: body.focus || 'overall',
-      }),
-      maxOutputTokens: 4096,
-      providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
-    });
+    const attempt = await aiReviewRepository.createAttempt({ resumeId: id, userId: user.id });
+    const historyId = attempt?.id;
 
-    const review = extractJson(result.text, aiReviewSchema);
-    const saved = await aiReviewRepository.create({
-      resumeId: id,
-      userId: user.id,
-      result: review,
-      score: review.score,
-    });
-    await resumeRepository.createEvent({
-      resumeId: id,
-      userId: user.id,
-      type: 'resume.ai_reviewed',
-      title: 'AI review completed',
-      metadata: { score: review.score, reviewId: saved?.id },
-    });
-    await chargeAICredit();
-    return NextResponse.json({ ...review, historyId: saved?.id });
-  } catch (error) {
-    if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+    try {
+      const aiConfig = await extractAIConfig(request);
+      const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
+      const result = await generateText({
+        model: getModel(aiConfig),
+        system: SYSTEM,
+        prompt: JSON.stringify({
+          resume: resume.sections,
+          template: resume.template,
+          themeConfig: resume.themeConfig,
+          targetCompany: resume.targetCompany,
+          targetJobTitle: resume.targetJobTitle,
+          jobDescription: resume.jobDescription,
+          focus: body.focus || 'overall',
+        }),
+        maxOutputTokens: 4096,
+        providerOptions: getProviderOptions(aiConfig),
+        output: Output.json(),
+      });
+
+      const review = extractJson(result.text, aiReviewSchema);
+      if (historyId) await aiReviewRepository.markSuccess(historyId, { result: review, score: review.score });
+      await resumeRepository.createEvent({
+        resumeId: id,
+        userId: user.id,
+        type: 'resume.ai_reviewed',
+        title: 'AI review completed',
+        metadata: { score: review.score, reviewId: historyId },
+      });
+      await chargeAICredit();
+      return NextResponse.json({ ...review, historyId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to review resume';
+      if (historyId) await aiReviewRepository.markFailed(historyId, message).catch(() => null);
+      if (error instanceof AIConfigError) {
+        return NextResponse.json({ error: error.message, historyId }, { status: 401 });
+      }
+      console.error('POST /api/resume/[id]/ai-review error:', error);
+      return NextResponse.json({ error: message, historyId }, { status: 500 });
     }
-    console.error('POST /api/resume/[id]/ai-review error:', error);
+  } catch (error) {
+    console.error('POST /api/resume/[id]/ai-review setup error:', error);
     return NextResponse.json({ error: 'Failed to review resume' }, { status: 500 });
   }
 }

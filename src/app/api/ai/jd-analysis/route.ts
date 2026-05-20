@@ -68,46 +68,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
     }
 
-    const resumeContext = getResumeSectionsContext(resume);
-    const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-    const model = getModel(aiConfig);
-
-    const result = await generateText({
-      model,
-      maxOutputTokens: 8192,
-      system: JD_ANALYSIS_PROMPT,
-      prompt: `Resume:\n${resumeContext}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
-      providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
-    });
-
-    const analysisData = extractJson(result.text, jdAnalysisOutputSchema);
-
-    // Persist to database only for cloud resumes.
+    // Persist an attempt immediately for cloud resumes so refresh can still show pending/failed state.
     let historyId: string | undefined;
     if (!localResume) {
       try {
-        const saved = await analysisRepository.createJdAnalysis({
-          resumeId,
-          jobDescription,
+        const attempt = await analysisRepository.createJdAnalysisAttempt({ resumeId, jobDescription });
+        historyId = attempt?.id;
+      } catch (e) {
+        console.error('Failed to create JD analysis attempt:', e);
+      }
+    }
+
+    try {
+      const resumeContext = getResumeSectionsContext(resume);
+      const aiConfig = await extractAIConfig(request);
+      const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
+      const model = getModel(aiConfig);
+
+      const result = await generateText({
+        model,
+        maxOutputTokens: 8192,
+        system: JD_ANALYSIS_PROMPT,
+        prompt: `Resume:\n${resumeContext}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
+        providerOptions: getProviderOptions(aiConfig),
+        output: Output.json(),
+      });
+
+      const analysisData = extractJson(result.text, jdAnalysisOutputSchema);
+
+      if (historyId) {
+        await analysisRepository.markJdAnalysisSuccess(historyId, {
           result: analysisData,
           overallScore: analysisData.overallScore,
           atsScore: analysisData.atsScore,
         });
-        historyId = saved?.id;
-      } catch (e) {
-        console.error('Failed to save JD analysis history:', e);
       }
-    }
 
-    await chargeAICredit();
-    return NextResponse.json({ ...analysisData, historyId });
-  } catch (error) {
-    if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      await chargeAICredit();
+      return NextResponse.json({ ...analysisData, historyId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to analyze job description match';
+      if (historyId) {
+        await analysisRepository.markJdAnalysisFailed(historyId, message).catch((e) => {
+          console.error('Failed to mark JD analysis failed:', e);
+        });
+      }
+      if (error instanceof AIConfigError) {
+        return NextResponse.json({ error: error.message, historyId }, { status: 401 });
+      }
+      console.error('POST /api/ai/jd-analysis error:', error);
+      return NextResponse.json({ error: message, historyId }, { status: 500 });
     }
-    console.error('POST /api/ai/jd-analysis error:', error);
+  } catch (error) {
+    console.error('POST /api/ai/jd-analysis setup error:', error);
     return NextResponse.json({ error: 'Failed to analyze job description match' }, { status: 500 });
   }
 }

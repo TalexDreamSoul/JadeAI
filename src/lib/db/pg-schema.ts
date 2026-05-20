@@ -195,6 +195,8 @@ export const resumeAiReviews = pgTable('resume_ai_reviews', {
   userId: text('user_id').notNull(),
   result: text('result').notNull(),
   score: integer('score').notNull().default(0),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
   createdAt: integer('created_at').notNull().default(epochNow),
 });
 
@@ -257,6 +259,8 @@ export const jdAnalyses = pgTable('jd_analyses', {
   result: text('result').notNull(),
   overallScore: integer('overall_score').notNull(),
   atsScore: integer('ats_score').notNull(),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
   createdAt: integer('created_at').notNull().default(epochNow),
 });
 
@@ -266,6 +270,8 @@ export const grammarChecks = pgTable('grammar_checks', {
   result: text('result').notNull(),
   score: integer('score').notNull(),
   issueCount: integer('issue_count').notNull(),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
   createdAt: integer('created_at').notNull().default(epochNow),
 });
 

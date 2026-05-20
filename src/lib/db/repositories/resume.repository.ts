@@ -46,6 +46,24 @@ export const resumeRepository = {
     return { ...resume[0], sections };
   },
 
+  async findFamilyIdsByResumeId(id: string, userId: string) {
+    const rows = await db
+      .select({ id: resumes.id, baseResumeId: resumes.baseResumeId, sourceResumeId: resumes.sourceResumeId })
+      .from(resumes)
+      .where(eq(resumes.userId, userId)) as Array<{ id: string; baseResumeId: string | null; sourceResumeId: string | null }>;
+    const current = rows.find((resume) => resume.id === id);
+    if (!current) return [];
+    const rootId = current.baseResumeId || current.id;
+    return Array.from(new Set(rows
+      .filter((resume) => (
+        resume.id === id ||
+        resume.id === rootId ||
+        resume.baseResumeId === rootId ||
+        resume.sourceResumeId === rootId
+      ))
+      .map((resume) => resume.id)));
+  },
+
   async findOwnerByResumeId(id: string) {
     const rows = await db
       .select({ id: users.id, name: users.name, email: users.email })

@@ -49,7 +49,7 @@ function headers() {
   };
 }
 
-export default function KnowledgePage() {
+export default function KnowledgePage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useTranslations('knowledge');
   const { isLoading } = useFingerprint();
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -109,13 +109,15 @@ export default function KnowledgePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-foreground">
-          <Brain className="h-6 w-6 text-brand" />
-          {t('title')}
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500">{t('subtitle')}</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-foreground">
+            <Brain className="h-6 w-6 text-brand" />
+            {t('title')}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">{t('subtitle')}</p>
+        </div>
+      )}
 
       <div className="grid gap-3 rounded-xl border bg-white p-4 dark:bg-zinc-900 md:grid-cols-[160px_1fr_auto]">
         <Input value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} placeholder={t('type')} />

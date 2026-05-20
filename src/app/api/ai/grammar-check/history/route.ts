@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
       id: c.id,
       score: c.score,
       issueCount: c.issueCount,
+      status: c.status || 'success',
+      error: c.error || undefined,
       createdAt: c.createdAt,
     }));
 

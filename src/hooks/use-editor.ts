@@ -22,9 +22,11 @@ export function useEditor(resumeId: string) {
   const { setResume, sections, currentResume, updateSection, addSection, removeSection, reorderSections, reset: resetResume } = useResumeStore();
   const { pushSnapshot, reset: resetEditor } = useEditorStore();
 
-  const loadResume = useCallback(async () => {
-    setHasLoaded(false);
-    resetResume();
+  const loadResume = useCallback(async (options?: { soft?: boolean }) => {
+    if (!options?.soft) {
+      setHasLoaded(false);
+      resetResume();
+    }
     try {
       if (localOnly || isLocalResumeId(resumeId)) {
         const data = getLocalResume(resumeId);
@@ -49,6 +51,8 @@ export function useEditor(resumeId: string) {
       setHasLoaded(true);
     }
   }, [localOnly, resetResume, resumeId, setResume]);
+
+  const refreshResume = useCallback(() => loadResume({ soft: true }), [loadResume]);
 
   useEffect(() => {
     loadResume();
@@ -99,6 +103,7 @@ export function useEditor(resumeId: string) {
     removeSection: handleRemoveSection,
     reorderSections: handleReorder,
     loadResume,
+    refreshResume,
     hasLoaded,
   };
 }

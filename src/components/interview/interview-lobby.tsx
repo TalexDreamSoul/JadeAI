@@ -19,7 +19,7 @@ import { InterviewCard } from './interview-card';
 import { Link } from '@/i18n/routing';
 import type { InterviewSession } from '@/types/interview';
 
-export function InterviewLobby() {
+export function InterviewLobby({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useTranslations('interview.lobby');
   const tc = useTranslations('common');
   const [sessions, setSessions] = useState<InterviewSession[]>([]);
@@ -50,8 +50,8 @@ export function InterviewLobby() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('title')}</h1>
+      <div className={embedded ? 'mb-4 flex justify-end' : 'mb-6 flex items-center justify-between'}>
+        {!embedded && <h1 className="text-2xl font-bold">{t('title')}</h1>}
         <Link href="/interview/new">
           <Button className="bg-brand hover:bg-brand-hover">
             <Plus className="mr-2 h-4 w-4" />

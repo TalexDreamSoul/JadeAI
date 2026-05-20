@@ -96,45 +96,54 @@ export async function POST(request: NextRequest) {
       content: s.content,
     }));
 
-    const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-    const model = getModel(aiConfig);
-
-    const result = await generateText({
-      model,
-      maxOutputTokens: 8192,
-      system: GRAMMAR_CHECK_PROMPT,
-      prompt: `Analyze the following resume sections. Respond with JSON only.\n\n${JSON.stringify(sectionsData, null, 2)}`,
-      providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
-    });
-
-    console.log('[grammar-check] raw response:\n', result.text);
-    const checkResult = extractJson(result.text, grammarCheckOutputSchema);
-
-    // Persist to database only for cloud resumes.
     let historyId: string | undefined;
     if (!localResume) {
       try {
-        const saved = await analysisRepository.createGrammarCheck({
-          resumeId,
+        const attempt = await analysisRepository.createGrammarCheckAttempt({ resumeId });
+        historyId = attempt?.id;
+      } catch (e) {
+        console.error('Failed to create grammar check attempt:', e);
+      }
+    }
+
+    try {
+      const aiConfig = await extractAIConfig(request);
+      const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
+      const model = getModel(aiConfig);
+
+      const result = await generateText({
+        model,
+        maxOutputTokens: 8192,
+        system: GRAMMAR_CHECK_PROMPT,
+        prompt: `Analyze the following resume sections. Respond with JSON only.\n\n${JSON.stringify(sectionsData, null, 2)}`,
+        providerOptions: getProviderOptions(aiConfig),
+        output: Output.json(),
+      });
+
+      console.log('[grammar-check] raw response:\n', result.text);
+      const checkResult = extractJson(result.text, grammarCheckOutputSchema);
+
+      if (historyId) {
+        await analysisRepository.markGrammarCheckSuccess(historyId, {
           result: checkResult,
           score: checkResult.score,
           issueCount: checkResult.issues.length,
         });
-        historyId = saved?.id;
-      } catch (e) {
-        console.error('Failed to save grammar check history:', e);
       }
-    }
 
-    await chargeAICredit();
-    return NextResponse.json({ ...checkResult, historyId });
-  } catch (error) {
-    if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      await chargeAICredit();
+      return NextResponse.json({ ...checkResult, historyId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to check grammar';
+      if (historyId) await analysisRepository.markGrammarCheckFailed(historyId, message).catch(() => null);
+      if (error instanceof AIConfigError) {
+        return NextResponse.json({ error: error.message, historyId }, { status: 401 });
+      }
+      console.error('POST /api/ai/grammar-check error:', error);
+      return NextResponse.json({ error: message, historyId }, { status: 500 });
     }
-    console.error('POST /api/ai/grammar-check error:', error);
+  } catch (error) {
+    console.error('POST /api/ai/grammar-check setup error:', error);
     return NextResponse.json({ error: 'Failed to check grammar' }, { status: 500 });
   }
 }

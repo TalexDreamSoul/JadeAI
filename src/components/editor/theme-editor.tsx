@@ -43,6 +43,16 @@ import { TemplateThumbnail } from '@/components/dashboard/template-thumbnail';
 import { cn } from '@/lib/utils';
 import type { ResumeSection, ThemeConfig } from '@/types/resume';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // -- Preset Themes --
 
@@ -339,6 +349,7 @@ export function ThemeEditor({}: ThemeEditorProps) {
   const [selectedSectionType, setSelectedSectionType] = useState<string>('summary');
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGeneratingCss, setIsGeneratingCss] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const previousAiCssRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -568,8 +579,16 @@ export function ThemeEditor({}: ThemeEditorProps) {
   );
 
   const resetTheme = useCallback(() => {
-    updateTheme(DEFAULT_THEME);
-  }, [updateTheme]);
+    if (!currentResume) return;
+    useResumeStore.setState((state) => ({
+      currentResume: state.currentResume
+        ? { ...state.currentResume, themeConfig: { ...DEFAULT_THEME } }
+        : null,
+      isDirty: true,
+    }));
+    useResumeStore.getState()._scheduleSave();
+    setShowResetDialog(false);
+  }, [currentResume]);
 
   const handleTemplateSwitch = useCallback(
     (tpl: string) => {
@@ -611,13 +630,28 @@ export function ThemeEditor({}: ThemeEditorProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={resetTheme}
+          onClick={() => setShowResetDialog(true)}
           title={t('reset')}
           className="cursor-pointer text-zinc-400 hover:text-zinc-600"
         >
           <RotateCcw className="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('resetConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('resetConfirmDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tRoot('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={resetTheme} className="bg-red-600 hover:bg-red-700">
+              {t('resetConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
         <div className="min-w-[340px] px-4 py-3 space-y-1">

@@ -36,6 +36,12 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       }
 
       await this.db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_credits integer NOT NULL DEFAULT 20`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS error text`);
+      await this.db.execute(sql`ALTER TABLE resume_ai_reviews ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
+      await this.db.execute(sql`ALTER TABLE resume_ai_reviews ADD COLUMN IF NOT EXISTS error text`);
+      await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
+      await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS error text`);
 
       console.log('[DB] PostgreSQL migrations applied');
     } catch (e) {
