@@ -5,8 +5,10 @@ import { signIn } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import {
   Bot,
+  Briefcase,
   CircleDot,
   FileSearch,
+  History,
   Loader2,
   MessageSquare,
   Send,
@@ -18,10 +20,16 @@ import { ReviewedResumeView, anchorToRects } from '@/components/share/reviewed-r
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
 import { md } from '@/components/preview/utils';
-import { getAIHeaders, hasUsableAIConfig } from '@/stores/settings-store';
+import { getAIHeaders, useIsLocalOnly, useSettingsStore } from '@/stores/settings-store';
 import type { Resume } from '@/types/resume';
 
 interface ShareMeta {
@@ -105,6 +113,21 @@ interface ChatMessage {
   content: string;
 }
 
+interface JdSource {
+  id: string;
+  label: string;
+  description?: string;
+  jobDescription: string;
+  source: 'resume' | 'history' | 'template';
+}
+
+interface AIReviewHistoryItem {
+  id: string;
+  score: number;
+  result: AIReviewResult;
+  createdAt: string | number | Date;
+}
+
 function getFingerprintHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};
   const fingerprint = localStorage.getItem('touchresume_fingerprint');
@@ -119,12 +142,18 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+function formatDate(value: string | number | Date) {
+  const date = typeof value === 'number' && value < 10_000_000_000 ? new Date(value * 1000) : new Date(value);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function safeCopy(value: string, fallback: string) {
   return value.startsWith('publicView.') ? fallback : value;
+}
+
+function truncateText(value: string, max = 72) {
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
 }
 
 function normalizeForMatch(value: string) {
@@ -172,6 +201,8 @@ export function PublicResumeReview({
 }) {
   const t = useTranslations('publicView');
   const { user, isAuthenticated } = useAuth();
+  const { hydrate, _hydrated, _localOnlyHydrated, serverAIConfigured, aiMode, aiApiKey } = useSettingsStore();
+  const localOnly = useIsLocalOnly();
   const previewRef = useRef<HTMLDivElement>(null);
   const selectionMarkerRef = useRef<HTMLSpanElement | null>(null);
   const lastCursorRef = useRef({ x: 0, y: 0 });
@@ -191,7 +222,11 @@ export function PublicResumeReview({
   const [submitting, setSubmitting] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiReview, setAiReview] = useState<AIReviewResult | null>(null);
+  const [aiReviewHistory, setAiReviewHistory] = useState<AIReviewHistoryItem[]>([]);
+  const [aiReviewHistoryLoading, setAiReviewHistoryLoading] = useState(false);
   const [jdText, setJdText] = useState('');
+  const [jdSources, setJdSources] = useState<JdSource[]>([]);
+  const [jdSourcesLoading, setJdSourcesLoading] = useState(false);
   const [jdLoading, setJdLoading] = useState(false);
   const [jdResult, setJdResult] = useState<JdAnalysisResult | null>(null);
   const [aiChatInput, setAiChatInput] = useState('');
@@ -205,7 +240,7 @@ export function PublicResumeReview({
   const copyright = safeCopy(t('copyright', { owner: ownerName }), `© TouchResume & ${ownerName}`);
   const visitorWatermark = `${safeCopy(t('visitor'), 'Visitor')}: ${visitorName} · ${copyright}`;
   const sensitiveWatermark = `${safeCopy(t('sensitiveWatermark'), 'Sensitive content - do not share')} · ${safeCopy(t('antiCrawlerWatermark'), 'No AI crawler / training collection')}`;
-  const aiAvailable = isAuthenticated && hasUsableAIConfig();
+  const aiAvailable = isAuthenticated && (aiMode === 'server' ? serverAIConfigured : !!aiApiKey);
 
   const headers = useCallback((json = false): Record<string, string> => ({
     ...(json ? { 'Content-Type': 'application/json' } : {}),
@@ -218,16 +253,37 @@ export function PublicResumeReview({
     ...getFingerprintHeader(),
   }), []);
 
-  const fetchComments = useCallback(async () => {
+  useEffect(() => {
+    if (!_hydrated || (!localOnly && _localOnlyHydrated)) hydrate(localOnly);
+  }, [_hydrated, _localOnlyHydrated, hydrate, localOnly]);
+
+  const fetchComments = useCallback(async (options?: { silent?: boolean }) => {
     if (!shareMeta.reviewEnabled) return;
-    setCommentsLoading(true);
+    if (!options?.silent) setCommentsLoading(true);
     try {
       const res = await fetch(`/api/share/${token}/comments${passwordQuery}`, { headers: headers() });
       if (res.ok) setComments(await res.json());
     } finally {
-      setCommentsLoading(false);
+      if (!options?.silent) setCommentsLoading(false);
     }
   }, [headers, passwordQuery, shareMeta.reviewEnabled, token]);
+
+  const fetchAiReviewHistory = useCallback(async (options?: { silent?: boolean }) => {
+    if (!shareMeta.reviewEnabled || !isAuthenticated) {
+      setAiReviewHistory([]);
+      return;
+    }
+    if (!options?.silent) setAiReviewHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/share/${token}/ai-review${passwordQuery}`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setAiReviewHistory(Array.isArray(data) ? data : []);
+      }
+    } finally {
+      if (!options?.silent) setAiReviewHistoryLoading(false);
+    }
+  }, [headers, isAuthenticated, passwordQuery, shareMeta.reviewEnabled, token]);
 
   const pulsePresence = useCallback(async () => {
     if (!shareMeta.reviewEnabled) return;
@@ -252,6 +308,10 @@ export function PublicResumeReview({
   }, [fetchComments]);
 
   useEffect(() => {
+    fetchAiReviewHistory();
+  }, [fetchAiReviewHistory]);
+
+  useEffect(() => {
     if (!shareMeta.reviewEnabled) return;
     const getPresence = async () => {
       try {
@@ -270,6 +330,27 @@ export function PublicResumeReview({
     const interval = window.setInterval(pulsePresence, 4_000);
     return () => window.clearInterval(interval);
   }, [isAuthenticated, pulsePresence, shareMeta.reviewEnabled]);
+
+  useEffect(() => {
+    if (!shareMeta.reviewEnabled || !isAuthenticated) {
+      setJdSources([]);
+      return;
+    }
+    let cancelled = false;
+    setJdSourcesLoading(true);
+    fetch(`/api/share/${token}/jd-sources${passwordQuery}`, { headers: headers() })
+      .then((res) => res.ok ? res.json() : [])
+      .then((data) => {
+        if (!cancelled) setJdSources(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setJdSources([]);
+      })
+      .finally(() => {
+        if (!cancelled) setJdSourcesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [headers, isAuthenticated, passwordQuery, shareMeta.reviewEnabled, token]);
 
   useEffect(() => {
     const onMouseMove = (event: MouseEvent) => {
@@ -453,36 +534,43 @@ export function PublicResumeReview({
       signIn(undefined, { callbackUrl: window.location.href });
       return false;
     }
-    if (!hasUsableAIConfig()) {
+    if (!aiAvailable) {
       setError(t('aiConfigRequired'));
       return false;
     }
     return true;
   };
 
-  const runAiReview = async () => {
+  const runAiReview = async (options?: { selectionOnly?: boolean }) => {
     if (!requireAIAvailable()) return;
+    const selected = options?.selectionOnly ? selection : null;
     setAiLoading(true);
     setError('');
     try {
       const res = await fetch(`/api/share/${token}/ai-review`, {
         method: 'POST',
         headers: aiHeaders(),
-        body: JSON.stringify({ password: password || undefined, focus: 'overall' }),
+        body: JSON.stringify({
+          password: password || undefined,
+          focus: selected ? 'selection' : 'overall',
+          selectedText: selected?.text || undefined,
+          sectionId: selected?.sectionId || undefined,
+          anchor: selected?.anchor || undefined,
+          createComments: true,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t('aiReview'));
       setAiReview(data);
-      const aiComments = await Promise.all(
-        (data.actions || []).slice(0, 5).map((action: AIReviewResult['actions'][number]) =>
-          createAiReviewComment(
-            `AI 评审分析，仅供参考\n\n${action.priority ? `优先级：${action.priority}\n` : ''}${action.suggestion}`,
-            action.section,
-          )
-        )
-      );
-      if (aiComments.length > 0) {
-        setComments((prev) => [...aiComments, ...prev]);
+      if (Array.isArray(data.comments) && data.comments.length > 0) {
+        setComments((prev) => [...data.comments, ...prev]);
+      } else {
+        await fetchComments({ silent: true });
+      }
+      await fetchAiReviewHistory({ silent: true });
+      if (selected) {
+        setActiveCommentId(data.comments?.[0]?.id || null);
+        clearSelection();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -721,7 +809,7 @@ export function PublicResumeReview({
                   {t('aiTools')}
                 </div>
               <div className="space-y-3">
-                <Button onClick={runAiReview} disabled={aiLoading || !aiAvailable} className="w-full cursor-pointer bg-brand hover:bg-brand-hover">
+                <Button onClick={() => runAiReview()} disabled={aiLoading || !aiAvailable} className="w-full cursor-pointer bg-brand hover:bg-brand-hover">
                   {aiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   {t('runAiReview')}
                 </Button>
@@ -736,6 +824,39 @@ export function PublicResumeReview({
                     </div>
                   </div>
                 )}
+                <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                      <History className="h-3.5 w-3.5 text-brand" />
+                      {safeCopy(t('aiReviewHistory'), 'AI review history')}
+                    </div>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => fetchAiReviewHistory()} className="h-6 px-2 text-[11px]">
+                      {safeCopy(t('refresh'), 'Refresh')}
+                    </Button>
+                  </div>
+                  {aiReviewHistoryLoading && <Loader2 className="mx-auto h-4 w-4 animate-spin text-zinc-300" />}
+                  {!aiReviewHistoryLoading && aiReviewHistory.length === 0 && (
+                    <p className="text-xs text-zinc-400">{safeCopy(t('noAiReviewHistory'), 'No AI review history')}</p>
+                  )}
+                  {!aiReviewHistoryLoading && aiReviewHistory.length > 0 && (
+                    <div className="space-y-2">
+                      {aiReviewHistory.slice(0, 5).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setAiReview(item.result)}
+                          className="w-full rounded-lg border border-zinc-100 bg-white px-2 py-2 text-left transition hover:border-brand dark:border-zinc-800 dark:bg-zinc-900"
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-brand">{item.score}</span>
+                            <span className="text-[10px] text-zinc-400">{formatDate(item.createdAt)}</span>
+                          </div>
+                          <p className="line-clamp-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{item.result.summary}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               </div>
             </div>
@@ -753,6 +874,38 @@ export function PublicResumeReview({
                 <Target className="h-4 w-4 text-brand" />
                 {t('jdMatch')}
               </div>
+              {isAuthenticated && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="mb-2 w-full cursor-pointer justify-start gap-2 text-xs">
+                      {jdSourcesLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Briefcase className="h-3.5 w-3.5" />}
+                      {safeCopy(t('selectExistingJd'), 'Use existing JD')}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[min(20rem,calc(100vw-2rem))] max-h-80 overflow-y-auto">
+                    {jdSources.length === 0 ? (
+                      <DropdownMenuItem disabled className="text-xs text-zinc-400">
+                        {safeCopy(t('noExistingJd'), 'No existing JD')}
+                      </DropdownMenuItem>
+                    ) : jdSources.map((source) => (
+                      <DropdownMenuItem
+                        key={source.id}
+                        onClick={() => {
+                          setJdText(source.jobDescription);
+                          setJdResult(null);
+                        }}
+                        className="cursor-pointer items-start gap-2 py-2"
+                      >
+                        <Briefcase className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">{source.label}</div>
+                          <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-zinc-400">{truncateText(source.jobDescription, 96)}</div>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <Textarea value={jdText} onChange={(e) => setJdText(e.target.value)} placeholder={t('jdPlaceholder')} className="min-h-28 text-sm" />
               {!aiAvailable && (
                 <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
@@ -824,8 +977,8 @@ export function PublicResumeReview({
         </main>
 
         {/* Right comments */}
-        <aside className={`absolute inset-y-0 right-0 z-40 min-h-0 w-[min(88vw,22rem)] overflow-y-auto border-l border-zinc-200 bg-white p-4 shadow-2xl transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-950 xl:relative xl:z-auto xl:w-auto xl:translate-x-0 xl:border-l-0 xl:bg-transparent xl:p-0 xl:pl-4 xl:shadow-none ${mobileRightOpen ? 'translate-x-0' : 'translate-x-full'}`} onMouseDown={() => clearSelection()}>
-          <div className="bg-white/70 dark:bg-zinc-950/40 xl:border-l xl:border-zinc-200 xl:pl-4 xl:dark:border-zinc-800">
+        <aside className={`absolute inset-y-0 right-0 z-40 min-h-0 w-[min(88vw,22rem)] overflow-y-auto border-l border-zinc-200 bg-white p-4 shadow-2xl transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-950 xl:relative xl:z-auto xl:flex xl:w-auto xl:translate-x-0 xl:flex-col xl:border-l-0 xl:bg-transparent xl:p-0 xl:pl-4 xl:shadow-none ${mobileRightOpen ? 'translate-x-0' : 'translate-x-full'}`} onMouseDown={() => clearSelection()}>
+          <div className="min-h-full bg-white/70 dark:bg-zinc-950/40 xl:flex xl:flex-1 xl:flex-col xl:border-l xl:border-zinc-200 xl:pl-4 xl:dark:border-zinc-800">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               <MessageSquare className="h-4 w-4 text-brand" />
               {t('review')}
@@ -843,24 +996,23 @@ export function PublicResumeReview({
                 )}
 
                 <div className="space-y-2 border-b border-zinc-200 pb-3 dark:border-zinc-800">
-                  {selection ? (
-                    <div className="rounded-lg bg-yellow-50 px-2 py-1.5 text-xs text-yellow-800 dark:bg-yellow-500/10 dark:text-yellow-100">
-                      <div className="mb-1 font-medium">{t('selectedText')}</div>
-                      <div className="line-clamp-3">{selection.text}</div>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-zinc-400">{t('generalComment')}</div>
-                  )}
+                  <div className="text-xs text-zinc-400">{selection ? t('commentOnSelection') : t('generalComment')}</div>
                   <Textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder={selection ? t('commentPlaceholder') : t('reviewPlaceholder')}
                     className="min-h-24 bg-white text-sm dark:bg-zinc-900"
                   />
-                  <Button onClick={submitComment} disabled={submitting || !draft.trim()} className="w-full cursor-pointer bg-brand hover:bg-brand-hover">
-                    {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    {selection ? t('commentOnSelection') : t('submitReview')}
-                  </Button>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                    <Button onClick={submitComment} disabled={submitting || !draft.trim()} className="cursor-pointer bg-brand hover:bg-brand-hover">
+                      {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      {selection ? t('commentOnSelection') : t('submitReview')}
+                    </Button>
+                    <Button onClick={() => runAiReview({ selectionOnly: !!selection })} disabled={aiLoading || !aiAvailable} variant="outline" className="cursor-pointer gap-2">
+                      {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {safeCopy(t('aiReviewSelection'), 'AI review')}
+                    </Button>
+                  </div>
                 </div>
               </>
             ) : (
