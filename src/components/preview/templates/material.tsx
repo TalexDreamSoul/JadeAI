@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#4f46e5';
-const VIOLET = '#7c3aed';
+const PRIMARY = 'var(--resume-primary-color, #4f46e5)';
+const VIOLET = 'var(--resume-accent-color, #7c3aed)';
 
 export function MaterialTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -229,7 +229,7 @@ function MaterialSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="flex flex-wrap gap-2">
         {items.map((item: any) => (
-          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-sm" style={{ backgroundColor: `${PRIMARY}10` }}>
+          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-sm" style={{ backgroundColor: `var(--resume-accent-color-10)` }}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: VIOLET }} />
             <span className="text-sm font-medium text-zinc-700">{item.language}</span>
             <span className="text-xs text-zinc-400">{item.proficiency}</span>

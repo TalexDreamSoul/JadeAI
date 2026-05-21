@@ -14,7 +14,7 @@ import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights
 function buildCreativeSectionContent(section: Section, lang: string): string {
   const c = section.content as any;
   const GRADIENT = 'linear-gradient(135deg,#7c3aed 0%,#f97316 100%)';
-  const PRIMARY = '#7c3aed';
+  const PRIMARY = 'var(--resume-accent-color,#7c3aed)';
 
   if (section.type === 'summary') return `<div class="rounded-lg bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-600 italic">${md((c as SummaryContent).text)}</div>`;
   if (section.type === 'work_experience') {
@@ -39,7 +39,7 @@ function buildCreativeSectionContent(section: Section, lang: string): string {
     return `<div class="space-y-3">${((c as SkillsContent).categories || []).map((cat: any) => `<div>
       <p class="mb-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500">${esc(cat.name)}</p>
       <div class="flex flex-wrap gap-1.5">${(cat.skills || []).map((skill: string) =>
-        `<span class="rounded-full border px-2.5 py-0.5 text-xs font-medium text-zinc-700" style="border-color:${PRIMARY}40;background-color:${PRIMARY}08">${esc(skill)}</span>`
+        `<span class="rounded-full border px-2.5 py-0.5 text-xs font-medium text-zinc-700" style="border-color:var(--resume-accent-color-40);background-color:var(--resume-accent-color-08)">${esc(skill)}</span>`
       ).join('')}</div>
     </div>`).join('')}</div>`;
   }
@@ -88,7 +88,7 @@ export function buildCreativeHtml(resume: ResumeWithSections): string {
   const lang = resume.language || 'en';
   const contacts = [pi.age, pi.politicalStatus, pi.gender, pi.ethnicity, pi.hometown, pi.maritalStatus, pi.yearsOfExperience, pi.educationLevel, pi.email, pi.phone, pi.wechat, pi.location, pi.website].filter(Boolean);
   const GRADIENT = 'linear-gradient(135deg,#7c3aed 0%,#f97316 100%)';
-  const PRIMARY = '#7c3aed';
+  const PRIMARY = 'var(--resume-accent-color,#7c3aed)';
 
   return `<div class="mx-auto max-w-[210mm] overflow-hidden bg-white shadow-lg" style="font-family:Inter,sans-serif">
     <div class="relative px-8 py-10 text-white" style="background:${GRADIENT}">

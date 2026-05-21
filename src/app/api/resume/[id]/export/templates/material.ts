@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#4f46e5';
-const VIOLET = '#7c3aed';
+const PRIMARY = 'var(--resume-primary-color,#4f46e5)';
+const VIOLET = 'var(--resume-accent-color,#7c3aed)';
 
 function buildMaterialSectionContent(section: Section, lang: string): string {
   const c = section.content as any;
@@ -64,7 +64,7 @@ function buildMaterialSectionContent(section: Section, lang: string): string {
 
   if (section.type === 'languages') {
     return `<div class="flex flex-wrap gap-2">${((c as LanguagesContent).items || []).map((it: any) =>
-      `<div class="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-sm" style="background-color:${PRIMARY}10"><span class="h-2 w-2 rounded-full" style="background-color:${VIOLET}"></span><span class="text-sm font-medium text-zinc-700">${esc(it.language)}</span><span class="text-xs text-zinc-400">${esc(it.proficiency)}</span></div>`
+      `<div class="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-sm" style="background-color:var(--resume-accent-color-10)"><span class="h-2 w-2 rounded-full" style="background-color:${VIOLET}"></span><span class="text-sm font-medium text-zinc-700">${esc(it.language)}</span><span class="text-xs text-zinc-400">${esc(it.proficiency)}</span></div>`
     ).join('')}</div>`;
   }
 

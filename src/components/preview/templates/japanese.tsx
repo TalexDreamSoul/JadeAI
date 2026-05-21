@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#1c1917';
-const ACCENT = '#44403c';
+const PRIMARY = 'var(--resume-primary-color, #1c1917)';
+const ACCENT = 'var(--resume-accent-color, #44403c)';
 const SUBTLE = '#f5f5f4';
 
 export function JapaneseTemplate({ resume }: { resume: Resume }) {

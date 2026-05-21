@@ -17,8 +17,8 @@ import { degreeField, isSectionEmpty, md } from '../utils';
 import { AvatarImage } from '../avatar-image';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const BLUE = '#0066cc';
-const TEAL = '#0d9488';
+const BLUE = 'var(--resume-primary-color, #0066cc)';
+const TEAL = 'var(--resume-accent-color, #0d9488)';
 
 export function CleanTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

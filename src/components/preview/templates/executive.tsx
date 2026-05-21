@@ -5,8 +5,8 @@ import { degreeField, isSectionEmpty, md } from '../utils';
 import { AvatarImage } from '../avatar-image';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const CHARCOAL = '#2d3436';
-const EMERALD = '#00b894';
+const CHARCOAL = 'var(--resume-primary-color, #2d3436)';
+const EMERALD = 'var(--resume-accent-color, #00b894)';
 
 export function ExecutiveTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

@@ -12,8 +12,8 @@ import type {
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 import { buildClassicSectionContent } from './classic';
 
-const PRIMARY = '#9a3412';
-const ACCENT = '#ea580c';
+const PRIMARY = 'var(--resume-primary-color,#9a3412)';
+const ACCENT = 'var(--resume-accent-color,#ea580c)';
 const WARM_BG = '#fff7ed';
 const BODY_TEXT = '#374151';
 const MUTED = '#78716c';

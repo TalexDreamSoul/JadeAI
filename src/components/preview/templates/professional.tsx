@@ -29,10 +29,10 @@ export function ProfessionalTemplate({ resume }: { resume: Resume }) {
       <div className="mb-6 text-center">
         <div className="flex items-center justify-center gap-4">
           {pi.avatar && (
-            <AvatarImage src={pi.avatar} avatarStyle={resume.themeConfig?.avatarStyle} size={72} className="shrink-0" style={{ border: '2px solid #1e3a5f' }} />
+            <AvatarImage src={pi.avatar} avatarStyle={resume.themeConfig?.avatarStyle} size={72} className="shrink-0" style={{ border: '2px solid var(--resume-primary-color, #1e3a5f)' }} />
           )}
           <div>
-            <h1 className="text-3xl font-bold tracking-wide" style={{ color: '#1e3a5f' }}>
+            <h1 className="text-3xl font-bold tracking-wide" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>
               {pi.fullName || 'Your Name'}
             </h1>
             {pi.jobTitle && (
@@ -52,7 +52,7 @@ export function ProfessionalTemplate({ resume }: { resume: Resume }) {
             ))}
           </div>
         )}
-        <div className="mt-4 h-[2px] w-full" style={{ background: 'linear-gradient(90deg, transparent 0%, #1e3a5f 20%, #1e3a5f 80%, transparent 100%)' }} />
+        <div className="mt-4 h-[2px] w-full" style={{ background: 'linear-gradient(90deg, transparent 0%, var(--resume-primary-color, #1e3a5f) 20%, var(--resume-primary-color, #1e3a5f) 80%, transparent 100%)' }} />
       </div>
 
       {/* Sections */}
@@ -61,7 +61,7 @@ export function ProfessionalTemplate({ resume }: { resume: Resume }) {
         .map((section) => (
           <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
             <div className="mb-3 flex items-center gap-3">
-              <h2 className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#1e3a5f' }}>
+              <h2 className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>
                 {section.title}
               </h2>
               <div className="h-[1px] flex-1 bg-zinc-200" />
@@ -89,7 +89,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
           <div key={item.id}>
             <div className="flex items-baseline justify-between">
               <div>
-                <span className="text-sm font-bold" style={{ color: '#1e3a5f' }}>{item.position}</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.position}</span>
                 {item.company && <span className="text-sm text-zinc-600"> — {item.company}</span>}
                 {item.location && <span className="text-sm text-zinc-400"> ({item.location})</span>}
               </div>
@@ -120,7 +120,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
           <div key={item.id}>
             <div className="flex items-baseline justify-between">
               <div>
-                <span className="text-sm font-bold" style={{ color: '#1e3a5f' }}>{item.institution}</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.institution}</span>
                 {item.location && <span className="text-sm text-zinc-400"> ({item.location})</span>}
               </div>
               <span className="shrink-0 text-xs text-zinc-400 italic">{item.startDate} – {item.endDate || (lang === 'zh' ? '至今' : 'Present')}</span>
@@ -146,7 +146,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
       <div className="space-y-1.5">
         {categories.map((cat: any) => (
           <div key={cat.id} className="flex text-sm">
-            <span className="w-32 shrink-0 font-semibold" style={{ color: '#1e3a5f' }}>{cat.name}:</span>
+            <span className="w-32 shrink-0 font-semibold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{cat.name}:</span>
             <span className="text-zinc-600">{cat.skills?.join(', ')}</span>
           </div>
         ))}
@@ -161,7 +161,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
         {items.map((item: any) => (
           <div key={item.id}>
             <div className="flex items-baseline justify-between">
-              <span className="text-sm font-bold" style={{ color: '#1e3a5f' }}>{item.name}</span>
+              <span className="text-sm font-bold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.name}</span>
               {item.startDate && (
                 <span className="shrink-0 text-xs text-zinc-400 italic">
                   {item.startDate} – {item.endDate || (lang === 'zh' ? '至今' : 'Present')}
@@ -192,7 +192,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
         {items.map((item: any) => (
           <div key={item.id}>
             <div className="flex items-baseline justify-between">
-              <span className="text-sm font-bold" style={{ color: '#1e3a5f' }}>{item.name}</span>
+              <span className="text-sm font-bold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.name}</span>
               <span className="shrink-0 text-xs text-zinc-400 italic">{item.stars?.toLocaleString()}</span>
             </div>
             {item.language && <span className="text-xs text-zinc-500">{item.language}</span>}
@@ -210,7 +210,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
         {items.map((item: any) => (
           <div key={item.id} className="flex items-baseline justify-between text-sm">
             <div>
-              <span className="font-semibold" style={{ color: '#1e3a5f' }}>{item.name}</span>
+              <span className="font-semibold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.name}</span>
               {item.issuer && <span className="text-zinc-600"> — {item.issuer}</span>}
             </div>
             {item.date && <span className="shrink-0 text-xs text-zinc-400 italic">{item.date}</span>}
@@ -226,7 +226,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
       <div className="flex flex-wrap gap-x-6 gap-y-1">
         {items.map((item: any) => (
           <span key={item.id} className="text-sm">
-            <span className="font-semibold" style={{ color: '#1e3a5f' }}>{item.language}</span>
+            <span className="font-semibold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.language}</span>
             <span className="text-zinc-500"> — {item.proficiency}</span>
           </span>
         ))}
@@ -242,7 +242,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
           <div key={item.id}>
             <div className="flex items-baseline justify-between">
               <div>
-                <span className="text-sm font-semibold" style={{ color: '#1e3a5f' }}>{item.title}</span>
+                <span className="text-sm font-semibold" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.title}</span>
                 {item.subtitle && <span className="text-sm text-zinc-500"> — {item.subtitle}</span>}
               </div>
               {item.date && <span className="shrink-0 text-xs text-zinc-400 italic">{item.date}</span>}
@@ -264,7 +264,7 @@ function ProfessionalSectionContent({ section, lang }: { section: any; lang?: st
       <div className="space-y-2">
         {content.items.map((item: any) => (
           <div key={item.id}>
-            <span className="text-sm font-medium" style={{ color: '#1e3a5f' }}>{item.name || item.title || item.language}</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--resume-primary-color, #1e3a5f)' }}>{item.name || item.title || item.language}</span>
             {item.description && <p className="text-sm text-zinc-600" dangerouslySetInnerHTML={{ __html: md(item.description) }} />}
           </div>
         ))}

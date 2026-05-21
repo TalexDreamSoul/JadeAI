@@ -11,10 +11,10 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const BLUE = '#2563eb';
+const BLUE = 'var(--resume-accent-color,#2563eb)';
 const YELLOW = '#eab308';
 const RED_B = '#dc2626';
-const TEXT = '#18181b';
+const TEXT = 'var(--resume-primary-color,#18181b)';
 
 function buildBerlinSectionContent(section: Section, lang: string): string {
   const c = section.content as any;

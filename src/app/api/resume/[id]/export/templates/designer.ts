@@ -13,7 +13,7 @@ import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights
 
 function buildDesignerSectionContent(section: Section, lang: string = 'en'): string {
   const c = section.content as any;
-  const CORAL = '#ff6b6b';
+  const CORAL = 'var(--resume-accent-color,#ff6b6b)';
   if (section.type === 'summary') return `<div class="border-l-4 pl-4 text-sm leading-relaxed text-zinc-600" style="border-color:${CORAL}">${md((c as SummaryContent).text)}</div>`;
   if (section.type === 'work_experience') {
     return `<div class="space-y-4">${((c as WorkExperienceContent).items || []).map((it: any) => `<div class="rounded-lg bg-zinc-50 p-4">
@@ -77,7 +77,7 @@ function buildDesignerSectionContent(section: Section, lang: string = 'en'): str
 export function buildDesignerHtml(resume: ResumeWithSections): string {
   const pi = getPersonalInfo(resume);
   const sections = visibleSections(resume);
-  const CORAL = '#ff6b6b';
+  const CORAL = 'var(--resume-accent-color,#ff6b6b)';
 
   return `<div class="mx-auto max-w-[210mm] bg-white shadow-lg" style="font-family:Inter,sans-serif">
     <div class="flex">

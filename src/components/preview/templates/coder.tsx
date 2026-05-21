@@ -18,8 +18,8 @@ import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
 const DARK = '#0d1117';
-const BLUE = '#58a6ff';
-const GREEN = '#3fb950';
+const BLUE = 'var(--resume-primary-color, #58a6ff)';
+const GREEN = 'var(--resume-accent-color, #3fb950)';
 const BORDER = '#21262d';
 
 // Sidebar section types

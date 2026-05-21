@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const SLATE_800 = '#1e293b';
-const GOLD = '#c4a747';
+const SLATE_800 = 'var(--resume-primary-color,#1e293b)';
+const GOLD = 'var(--resume-accent-color,#c4a747)';
 
 function buildFinanceSectionContent(section: Section, lang: string): string {
   const c = section.content as any;

@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#37352f';
-const ACCENT = '#2383e2';
+const PRIMARY = 'var(--resume-primary-color, #37352f)';
+const ACCENT = 'var(--resume-accent-color, #2383e2)';
 const SUBTLE_BG = '#f7f6f3';
 
 export function BlocksTemplate({ resume }: { resume: Resume }) {
@@ -166,7 +166,7 @@ function BlocksSectionContent({ section, resume }: { section: any; resume: Resum
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap gap-1">
                     {(cat.skills || []).map((skill: string, i: number) => (
-                      <span key={i} className="rounded-sm px-2 py-0.5 text-xs" style={{ backgroundColor: `${ACCENT}12`, color: ACCENT }}>
+                      <span key={i} className="rounded-sm px-2 py-0.5 text-xs" style={{ backgroundColor: `var(--resume-accent-color-12)`, color: ACCENT }}>
                         {skill}
                       </span>
                     ))}

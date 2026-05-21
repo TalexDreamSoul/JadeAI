@@ -13,8 +13,8 @@ import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights
 
 function buildExecutiveSectionContent(section: Section, lang: string): string {
   const c = section.content as any;
-  const CHARCOAL = '#2d3436';
-  const EMERALD = '#00b894';
+  const CHARCOAL = 'var(--resume-primary-color,#2d3436)';
+  const EMERALD = 'var(--resume-accent-color,#00b894)';
   if (section.type === 'summary') return `<div class="text-sm leading-relaxed text-zinc-600">${md((c as SummaryContent).text)}</div>`;
   if (section.type === 'work_experience') {
     return `<div class="space-y-4">${((c as WorkExperienceContent).items || []).map((it: any) => `<div>
@@ -78,8 +78,8 @@ export function buildExecutiveHtml(resume: ResumeWithSections): string {
   const pi = getPersonalInfo(resume);
   const sections = visibleSections(resume);
   const contacts = [pi.age, pi.politicalStatus, pi.gender, pi.ethnicity, pi.hometown, pi.maritalStatus, pi.yearsOfExperience, pi.educationLevel, pi.email, pi.phone, pi.wechat, pi.location, pi.website].filter(Boolean);
-  const CHARCOAL = '#2d3436';
-  const EMERALD = '#00b894';
+  const CHARCOAL = 'var(--resume-primary-color,#2d3436)';
+  const EMERALD = 'var(--resume-accent-color,#00b894)';
 
   return `<div class="mx-auto max-w-[210mm] bg-white shadow-lg" style="font-family:Inter,sans-serif">
     <div class="px-8 py-8" style="background:${CHARCOAL}">

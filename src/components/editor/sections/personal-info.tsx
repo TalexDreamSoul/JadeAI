@@ -251,7 +251,8 @@ function IconSelectField({
               event.stopPropagation();
               onChange('');
             }}
-            className="absolute right-7 top-1/2 rounded p-0.5 text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+            aria-label={label}
+            className="absolute right-7 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
           >
             <X className="h-3 w-3" />
           </button>

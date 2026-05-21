@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const SLATE_500 = '#64748b';
-const SLATE_400 = '#94a3b8';
+const SLATE_500 = 'var(--resume-primary-color,#64748b)';
+const SLATE_400 = 'var(--resume-accent-color,#94a3b8)';
 const SLATE_50 = '#f8fafc';
 
 function buildNordicSectionContent(section: Section, lang: string): string {

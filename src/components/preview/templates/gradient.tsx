@@ -18,8 +18,8 @@ import { isSectionEmpty, md, degreeField } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
 // intentional: gradient template visual identity — pink→purple is the defining aesthetic of this template
-const GRADIENT = 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)';
-const ACCENT = '#a855f7';
+const GRADIENT = 'linear-gradient(135deg, var(--resume-primary-color, #ec4899) 0%, var(--resume-accent-color, #8b5cf6) 100%)';
+const ACCENT = 'var(--resume-accent-color, #a855f7)';
 
 export function GradientTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -69,7 +69,7 @@ export function GradientTemplate({ resume }: { resume: Resume }) {
         {/* Bottom gradient fade line */}
         <div
           className="absolute bottom-0 left-0 h-1 w-full"
-          style={{ background: 'linear-gradient(90deg, #ec4899 0%, #8b5cf6 50%, transparent 100%)' }} // intentional: gradient template visual identity
+          style={{ background: 'linear-gradient(90deg, var(--resume-primary-color, #ec4899) 0%, var(--resume-accent-color, #8b5cf6) 50%, transparent 100%)' }} // intentional: gradient template visual identity
         />
       </div>
 

@@ -75,6 +75,36 @@ function cssVariableDeclarations(vars?: Record<string, string>): string {
     .join('\n');
 }
 
+function alphaColor(color: string, alpha: string): string {
+  const safe = sanitizeColor(color, 'currentColor');
+  if (/^#[0-9a-fA-F]{3}$/.test(safe)) {
+    const [r, g, b] = safe.slice(1).split('');
+    return `#${r}${r}${g}${g}${b}${b}${alpha}`;
+  }
+  if (/^#[0-9a-fA-F]{6}$/.test(safe)) return `${safe}${alpha}`;
+  if (/^#[0-9a-fA-F]{8}$/.test(safe)) return `${safe.slice(0, 7)}${alpha}`;
+  if (safe === 'currentColor' || safe === 'inherit' || safe === 'initial' || safe === 'unset' || safe === 'revert') return safe;
+  return `color-mix(in srgb, ${safe} ${Math.round((parseInt(alpha, 16) / 255) * 100)}%, transparent)`;
+}
+
+export function buildTemplateVariableCSS(scopeSelector: string, theme: ThemeConfig): string {
+  const primary = sanitizeColor(theme.primaryColor, '#1a1a1a');
+  const accent = sanitizeColor(theme.accentColor, '#3b82f6');
+
+  return `${scopeSelector} > div {
+--resume-primary-color: ${primary};
+--resume-accent-color: ${accent};
+--resume-accent-color-08: ${alphaColor(accent, '14')};
+--resume-accent-color-10: ${alphaColor(accent, '1a')};
+--resume-accent-color-12: ${alphaColor(accent, '1f')};
+--resume-accent-color-18: ${alphaColor(accent, '2e')};
+--resume-accent-color-20: ${alphaColor(accent, '33')};
+--resume-accent-color-30: ${alphaColor(accent, '4d')};
+--resume-accent-color-40: ${alphaColor(accent, '66')};
+--resume-accent-color-50: ${alphaColor(accent, '80')};
+}`;
+}
+
 function splitSelectorList(selector: string): string[] {
   const parts: string[] = [];
   let current = '';
@@ -204,7 +234,7 @@ export function scopeCustomCss(css: unknown, scopeSelector: string): string {
 
 export function buildTemplateCustomizationCSS(scopeSelector: string, theme: ThemeConfig): string {
   const root = `${scopeSelector} > div`;
-  const rules: string[] = [];
+  const rules: string[] = [buildTemplateVariableCSS(scopeSelector, theme)];
 
   const vars = cssVariableDeclarations(theme.advanced?.cssVars);
   const layout = theme.layout;

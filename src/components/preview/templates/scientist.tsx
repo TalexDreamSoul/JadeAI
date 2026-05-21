@@ -5,8 +5,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#0f172a';
-const ACCENT = '#0891b2';
+const PRIMARY = 'var(--resume-primary-color, #0f172a)';
+const ACCENT = 'var(--resume-accent-color, #0891b2)';
 const GRID_LINE = '#e2e8f0';
 const BODY_TEXT = '#334155';
 const MUTED = '#64748b';

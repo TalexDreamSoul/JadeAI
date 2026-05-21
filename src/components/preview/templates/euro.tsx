@@ -5,7 +5,7 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const BLUE = '#1e40af';
+const BLUE = 'var(--resume-accent-color, #1e40af)';
 
 export function EuroTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

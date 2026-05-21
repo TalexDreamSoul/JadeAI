@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#1e293b';
-const ACCENT = '#8b5cf6';
+const PRIMARY = 'var(--resume-primary-color,#1e293b)';
+const ACCENT = 'var(--resume-accent-color,#8b5cf6)';
 const ALT_BG = '#f5f3ff';
 
 function buildZigzagSectionContent(section: Section, lang: string = 'en'): string {
@@ -40,7 +40,7 @@ function buildZigzagSectionContent(section: Section, lang: string = 'en'): strin
   if (section.type === 'skills') {
     return `<div class="space-y-2">${((c as SkillsContent).categories || []).map((cat: any) => `<div>
       <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">${esc(cat.name)}</p>
-      <div class="flex flex-wrap gap-1.5">${(cat.skills || []).map((s: string) => `<span class="rounded-full border px-2 py-0.5 text-xs font-medium" style="border-color:${ACCENT}50;color:${ACCENT};background-color:${ACCENT}08">${esc(s)}</span>`).join('')}</div>
+      <div class="flex flex-wrap gap-1.5">${(cat.skills || []).map((s: string) => `<span class="rounded-full border px-2 py-0.5 text-xs font-medium" style="border-color:var(--resume-accent-color-50);color:${ACCENT};background-color:var(--resume-accent-color-08)">${esc(s)}</span>`).join('')}</div>
     </div>`).join('')}</div>`;
   }
   if (section.type === 'projects') {
@@ -65,7 +65,7 @@ function buildZigzagSectionContent(section: Section, lang: string = 'en'): strin
   }
   if (section.type === 'languages') {
     return `<div class="flex flex-wrap gap-3">${((c as LanguagesContent).items || []).map((it: any) =>
-      `<div class="flex items-center gap-2 rounded-full px-3 py-1" style="background-color:${ACCENT}10;border:1px solid ${ACCENT}30"><span class="text-sm font-medium" style="color:${PRIMARY}">${esc(it.language)}</span><span class="text-xs text-zinc-400">${esc(it.proficiency)}</span></div>`
+      `<div class="flex items-center gap-2 rounded-full px-3 py-1" style="background-color:var(--resume-accent-color-10);border:1px solid var(--resume-accent-color-30)"><span class="text-sm font-medium" style="color:${PRIMARY}">${esc(it.language)}</span><span class="text-xs text-zinc-400">${esc(it.proficiency)}</span></div>`
     ).join('')}</div>`;
   }
   if (section.type === 'custom') {
@@ -89,7 +89,7 @@ export function buildZigzagHtml(resume: ResumeWithSections): string {
   const contacts = [pi.age, pi.politicalStatus, pi.gender, pi.ethnicity, pi.hometown, pi.maritalStatus, pi.yearsOfExperience, pi.educationLevel, pi.email, pi.phone, pi.wechat, pi.location, pi.website].filter(Boolean);
 
   const zigzagDots = Array.from({ length: 20 }, (_, i) =>
-    `<div class="h-1 w-3 rounded-full" style="background-color:${i % 2 === 0 ? ACCENT : `${ACCENT}40`}"></div>`
+    `<div class="h-1 w-3 rounded-full" style="background-color:${i % 2 === 0 ? ACCENT : `var(--resume-accent-color-40)`}"></div>`
   ).join('');
 
   const zigzagSvg = `<svg width="40" height="12" viewBox="0 0 40 12" fill="none"><path d="M0 6 L10 1 L20 6 L30 1 L40 6" stroke="${ACCENT}" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.4"/></svg>`;

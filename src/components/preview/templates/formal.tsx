@@ -5,7 +5,7 @@ import { degreeField, isSectionEmpty, md } from '../utils';
 import { AvatarImage } from '../avatar-image';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const DARK_GREEN = '#004d40';
+const DARK_GREEN = 'var(--resume-primary-color, #004d40)';
 
 export function FormalTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

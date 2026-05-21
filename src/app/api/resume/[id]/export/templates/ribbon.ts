@@ -11,9 +11,9 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#1e293b';
-const ACCENT = '#b91c1c';
-const RIBBON = '#dc2626';
+const PRIMARY = 'var(--resume-primary-color,#1e293b)';
+const ACCENT = 'var(--resume-accent-color,#b91c1c)';
+const RIBBON = 'var(--resume-accent-color,#dc2626)';
 
 function buildRibbonSectionContent(section: Section, lang: string = 'en'): string {
   const c = section.content as any;
@@ -40,7 +40,7 @@ function buildRibbonSectionContent(section: Section, lang: string = 'en'): strin
   if (section.type === 'skills') {
     return `<div class="space-y-2">${((c as SkillsContent).categories || []).map((cat: any) => `<div>
       <p class="mb-1 text-xs font-semibold text-zinc-500">${esc(cat.name)}</p>
-      <div class="flex flex-wrap gap-1.5">${(cat.skills || []).map((s: string) => `<span class="rounded-sm border px-2 py-0.5 text-xs" style="border-color:${RIBBON}40;color:${ACCENT}">${esc(s)}</span>`).join('')}</div>
+      <div class="flex flex-wrap gap-1.5">${(cat.skills || []).map((s: string) => `<span class="rounded-sm border px-2 py-0.5 text-xs" style="border-color:var(--resume-accent-color-40);color:${ACCENT}">${esc(s)}</span>`).join('')}</div>
     </div>`).join('')}</div>`;
   }
   if (section.type === 'projects') {

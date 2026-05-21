@@ -14,8 +14,8 @@ import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights
 function buildDeveloperSectionContent(section: Section, lang: string): string {
   const c = section.content as any;
   const DARK = '#282c34';
-  const GREEN = '#98c379';
-  const BLUE = '#61afef';
+  const GREEN = 'var(--resume-accent-color,#98c379)';
+  const BLUE = 'var(--resume-primary-color,#61afef)';
   const ORANGE = '#e5c07b';
   if (section.type === 'summary') return `<div class="text-sm leading-relaxed text-zinc-600">${md((c as SummaryContent).text)}</div>`;
   if (section.type === 'work_experience') {
@@ -81,8 +81,8 @@ export function buildDeveloperHtml(resume: ResumeWithSections): string {
   const sections = visibleSections(resume);
   const contacts = [pi.age, pi.politicalStatus, pi.gender, pi.ethnicity, pi.hometown, pi.maritalStatus, pi.yearsOfExperience, pi.educationLevel, pi.email, pi.phone, pi.wechat, pi.location, pi.website].filter(Boolean);
   const DARK = '#282c34';
-  const GREEN = '#98c379';
-  const BLUE = '#61afef';
+  const GREEN = 'var(--resume-accent-color,#98c379)';
+  const BLUE = 'var(--resume-primary-color,#61afef)';
   const ORANGE = '#e5c07b';
 
   return `<div class="mx-auto max-w-[210mm] bg-white shadow-lg" style="font-family:'JetBrains Mono','Fira Code',monospace">

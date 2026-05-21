@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#4c1d95';
-const ACCENT = '#c084fc';
+const PRIMARY = 'var(--resume-primary-color,#4c1d95)';
+const ACCENT = 'var(--resume-accent-color,#c084fc)';
 const WASH = '#f5f3ff';
 const TEXT = '#6b7280';
 const TEXT_DARK = '#374151';
@@ -48,7 +48,7 @@ function buildWatercolorSectionContent(section: Section, lang: string): string {
     return `<div class="space-y-3">${((c as SkillsContent).categories || []).map((cat: any) => `<div>
       <p class="mb-1.5 text-xs font-bold uppercase tracking-wider" style="color:${ACCENT}">${esc(cat.name)}</p>
       <div class="flex flex-wrap gap-1.5">${(cat.skills || []).map((skill: string) =>
-        `<span class="rounded-full px-2.5 py-0.5 text-xs font-medium" style="background-color:${WASH};color:${PRIMARY};border:1px solid ${ACCENT}40">${esc(skill)}</span>`
+        `<span class="rounded-full px-2.5 py-0.5 text-xs font-medium" style="background-color:${WASH};color:${PRIMARY};border:1px solid var(--resume-accent-color-40)">${esc(skill)}</span>`
       ).join('')}</div>
     </div>`).join('')}</div>`;
   }
@@ -72,13 +72,13 @@ function buildWatercolorSectionContent(section: Section, lang: string): string {
 
   if (section.type === 'certifications') {
     return `<div class="flex flex-wrap gap-2">${((c as CertificationsContent).items || []).map((it: any) =>
-      `<div class="rounded-xl px-4 py-2" style="background-color:${WASH};border:1px solid ${ACCENT}30"><p class="text-sm font-bold" style="color:${PRIMARY}">${esc(it.name)}</p>${it.issuer || it.date ? `<p class="text-xs" style="color:${TEXT}">${it.issuer ? esc(it.issuer) : ''}${it.issuer && it.date ? ' | ' : ''}${it.date ? esc(it.date) : ''}</p>` : ''}</div>`
+      `<div class="rounded-xl px-4 py-2" style="background-color:${WASH};border:1px solid var(--resume-accent-color-30)"><p class="text-sm font-bold" style="color:${PRIMARY}">${esc(it.name)}</p>${it.issuer || it.date ? `<p class="text-xs" style="color:${TEXT}">${it.issuer ? esc(it.issuer) : ''}${it.issuer && it.date ? ' | ' : ''}${it.date ? esc(it.date) : ''}</p>` : ''}</div>`
     ).join('')}</div>`;
   }
 
   if (section.type === 'languages') {
     return `<div class="flex flex-wrap gap-3">${((c as LanguagesContent).items || []).map((it: any) =>
-      `<div class="flex items-center gap-2 rounded-full px-4 py-1.5" style="background-color:${WASH};border:1px solid ${ACCENT}30"><span class="h-2 w-2 rounded-full" style="background:${GRADIENT}"></span><span class="text-sm font-medium" style="color:${PRIMARY}">${esc(it.language)}</span><span class="text-xs" style="color:${TEXT}">${esc(it.proficiency)}</span></div>`
+      `<div class="flex items-center gap-2 rounded-full px-4 py-1.5" style="background-color:${WASH};border:1px solid var(--resume-accent-color-30)"><span class="h-2 w-2 rounded-full" style="background:${GRADIENT}"></span><span class="text-sm font-medium" style="color:${PRIMARY}">${esc(it.language)}</span><span class="text-xs" style="color:${TEXT}">${esc(it.proficiency)}</span></div>`
     ).join('')}</div>`;
   }
 

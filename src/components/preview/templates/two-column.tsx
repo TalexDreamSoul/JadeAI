@@ -34,7 +34,7 @@ export function TwoColumnTemplate({ resume }: { resume: Resume }) {
   return (
     <div className="mx-auto flex max-w-[210mm] overflow-hidden bg-white shadow-lg" style={{ fontFamily: 'Inter, sans-serif', minHeight: '297mm' }}>
       {/* Left Column */}
-      <div className="w-[35%] shrink-0 p-6 text-white" style={{ background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)' }}>
+      <div className="w-[35%] shrink-0 p-6 text-white" style={{ background: 'linear-gradient(180deg, var(--resume-primary-color, #1a1a2e) 0%, var(--resume-accent-color, #16213e) 100%)' }}>
         {/* Avatar & Name */}
         <div className="mb-6 text-center">
           {pi.avatar && (
@@ -158,7 +158,7 @@ export function TwoColumnTemplate({ resume }: { resume: Resume }) {
       <div className="flex-1 p-6">
         {rightSections.map((section) => (
           <div key={section.id} className="mb-5" data-section data-section-id={section.id} data-section-type={section.type}>
-            <h2 className="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style={{ color: '#1a1a2e', borderColor: '#1a1a2e' }}>
+            <h2 className="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--resume-primary-color, #1a1a2e)', borderColor: 'var(--resume-primary-color, #1a1a2e)' }}>
               {section.title}
             </h2>
             <RightSectionContent section={section} resume={resume} />

@@ -14,26 +14,26 @@ export function ModernTemplate({ resume }: { resume: Resume }) {
       {/* Header with gradient */}
       <div
         className="relative px-10 py-8 text-white"
-        style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
+        style={{ background: 'linear-gradient(135deg, var(--resume-primary-color, #1a1a2e) 0%, color-mix(in srgb, var(--resume-primary-color, #16213e) 88%, black) 50%, var(--resume-primary-color, #0f3460) 100%)' }}
       >
         {/* Decorative circles */}
         <div
           className="absolute -right-10 -top-10 h-40 w-40 rounded-full opacity-10"
-          style={{ background: 'radial-gradient(circle, #e94560 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, var(--resume-accent-color, #e94560) 0%, transparent 70%)' }}
         />
         <div
           className="absolute -bottom-6 right-20 h-24 w-24 rounded-full opacity-8"
-          style={{ background: 'radial-gradient(circle, #e94560 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, var(--resume-accent-color, #e94560) 0%, transparent 70%)' }}
         />
 
         <div className="relative flex items-center gap-6">
           {pi.avatar && (
-            <AvatarImage src={pi.avatar} avatarStyle={resume.themeConfig?.avatarStyle} size={80} className="border-2 border-white/10" wrapperClassName="shrink-0 p-[2px]" wrapperStyle={{ background: 'linear-gradient(135deg, #e94560, #0f3460)' }} />
+            <AvatarImage src={pi.avatar} avatarStyle={resume.themeConfig?.avatarStyle} size={80} className="border-2 border-white/10" wrapperClassName="shrink-0 p-[2px]" wrapperStyle={{ background: 'linear-gradient(135deg, var(--resume-accent-color, #e94560), var(--resume-primary-color, #0f3460))' }} />
           )}
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold tracking-tight">{pi.fullName || 'Your Name'}</h1>
             {pi.jobTitle && (
-              <p className="mt-1.5 text-base font-light tracking-wide" style={{ color: '#e94560' }}>
+              <p className="mt-1.5 text-base font-light tracking-wide" style={{ color: 'var(--resume-accent-color, #e94560)' }}>
                 {pi.jobTitle}
               </p>
             )}
@@ -51,7 +51,7 @@ export function ModernTemplate({ resume }: { resume: Resume }) {
         {/* Bottom accent line */}
         <div
           className="absolute bottom-0 left-0 h-[3px] w-full"
-          style={{ background: 'linear-gradient(90deg, #e94560 0%, #0f3460 60%, transparent 100%)' }}
+          style={{ background: 'linear-gradient(90deg, var(--resume-accent-color, #e94560) 0%, var(--resume-primary-color, #0f3460) 60%, transparent 100%)' }}
         />
       </div>
 
@@ -60,8 +60,8 @@ export function ModernTemplate({ resume }: { resume: Resume }) {
           .filter((s) => s.visible && s.type !== 'personal_info' && !isSectionEmpty(s))
           .map((section) => (
             <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
-              <h2 className="mb-3 flex items-center gap-2.5 text-sm font-bold uppercase tracking-wider" style={{ color: '#e94560' }}>
-                <span className="h-[3px] w-7 rounded-full" style={{ background: 'linear-gradient(90deg, #e94560, #0f3460)' }} />
+              <h2 className="mb-3 flex items-center gap-2.5 text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--resume-accent-color, #e94560)' }}>
+                <span className="h-[3px] w-7 rounded-full" style={{ background: 'linear-gradient(90deg, var(--resume-accent-color, #e94560), var(--resume-primary-color, #0f3460))' }} />
                 {section.title}
               </h2>
               <ModernSectionContent section={section} lang={resume.language} />
@@ -84,14 +84,14 @@ function ModernSectionContent({ section, lang }: { section: any; lang?: string }
     return (
       <div className="space-y-4">
         {(content.items || []).map((item: any) => (
-          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: '#e94560' }}>
+          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: 'var(--resume-accent-color, #e94560)' }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-semibold text-zinc-800">{item.position}</h3>
               <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-500">
                 {item.startDate} - {item.endDate || (item.current ? (lang === 'zh' ? '至今' : 'Present') : '')}
               </span>
             </div>
-            {item.company && <p className="text-sm" style={{ color: '#e94560' }}>{item.company}</p>}
+            {item.company && <p className="text-sm" style={{ color: 'var(--resume-accent-color, #e94560)' }}>{item.company}</p>}
             {item.description && <p className="mt-1 text-sm text-zinc-600" dangerouslySetInnerHTML={{ __html: md(item.description) }} />}
             {item.technologies?.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -115,7 +115,7 @@ function ModernSectionContent({ section, lang }: { section: any; lang?: string }
     return (
       <div className="space-y-3">
         {(content.items || []).map((item: any) => (
-          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: '#0f3460' }}>
+          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: 'var(--resume-primary-color, #0f3460)' }}>
             <h3 className="text-sm font-semibold text-zinc-800">{item.institution}</h3>
             <p className="text-sm text-zinc-600">{degreeField(item.degree, item.field)}</p>
             <span className="text-xs text-zinc-400">{item.startDate} - {item.endDate || (lang === 'zh' ? '至今' : 'Present')}</span>
@@ -153,7 +153,7 @@ function ModernSectionContent({ section, lang }: { section: any; lang?: string }
     return (
       <div className="space-y-4">
         {items.map((item: any) => (
-          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: '#e94560' }}>
+          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: 'var(--resume-accent-color, #e94560)' }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-semibold text-zinc-800">{item.name}</h3>
               {item.startDate && (
@@ -186,7 +186,7 @@ function ModernSectionContent({ section, lang }: { section: any; lang?: string }
     return (
       <div className="space-y-4">
         {items.map((item: any) => (
-          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: '#e94560' }}>
+          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: 'var(--resume-accent-color, #e94560)' }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-semibold text-zinc-800">{item.name}</h3>
               <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-500">{item.stars?.toLocaleString()}</span>
@@ -204,7 +204,7 @@ function ModernSectionContent({ section, lang }: { section: any; lang?: string }
     return (
       <div className="space-y-1.5">
         {items.map((item: any) => (
-          <div key={item.id} className="flex items-baseline justify-between border-l-2 pl-4" style={{ borderColor: '#0f3460' }}>
+          <div key={item.id} className="flex items-baseline justify-between border-l-2 pl-4" style={{ borderColor: 'var(--resume-primary-color, #0f3460)' }}>
             <div>
               <span className="text-sm font-semibold text-zinc-800">{item.name}</span>
               {item.issuer && <span className="text-sm text-zinc-500"> — {item.issuer}</span>}
@@ -234,7 +234,7 @@ function ModernSectionContent({ section, lang }: { section: any; lang?: string }
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: '#e94560' }}>
+          <div key={item.id} className="border-l-2 pl-4" style={{ borderColor: 'var(--resume-accent-color, #e94560)' }}>
             <div className="flex items-baseline justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-zinc-800">{item.title}</h3>

@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#78350f';
-const ACCENT = '#92400e';
+const PRIMARY = 'var(--resume-primary-color, #78350f)';
+const ACCENT = 'var(--resume-accent-color, #92400e)';
 const BG = '#fefce8';
 
 export function RetroTemplate({ resume }: { resume: Resume }) {
@@ -45,7 +45,7 @@ export function RetroTemplate({ resume }: { resume: Resume }) {
             {contacts.map((c, i) => (
               <span key={i} className="flex items-center gap-1.5" style={{ fontFamily: "'Courier New', monospace" }}>
                 {c}
-                {i < contacts.length - 1 && <span style={{ color: `${PRIMARY}40` }}>{'\u2022'}</span>}
+                {i < contacts.length - 1 && <span style={{ color: `var(--resume-accent-color-40)` }}>{'\u2022'}</span>}
               </span>
             ))}
           </div>
@@ -73,10 +73,10 @@ export function RetroTemplate({ resume }: { resume: Resume }) {
             </div>
             {/* Ornamental divider between sections */}
             {idx < arr.length - 1 && (
-              <div className="mb-4 flex items-center justify-center gap-2 text-xs" style={{ color: `${PRIMARY}40` }}>
-                <div className="h-px w-12" style={{ backgroundColor: `${PRIMARY}20` }} />
+              <div className="mb-4 flex items-center justify-center gap-2 text-xs" style={{ color: `var(--resume-accent-color-40)` }}>
+                <div className="h-px w-12" style={{ backgroundColor: `var(--resume-accent-color-20)` }} />
                 <span>{'\u2726'}</span>
-                <div className="h-px w-12" style={{ backgroundColor: `${PRIMARY}20` }} />
+                <div className="h-px w-12" style={{ backgroundColor: `var(--resume-accent-color-20)` }} />
               </div>
             )}
           </div>

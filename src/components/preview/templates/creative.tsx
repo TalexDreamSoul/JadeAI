@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { isSectionEmpty, md, degreeField } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const GRADIENT = 'linear-gradient(135deg, #7c3aed 0%, #f97316 100%)';
-const PRIMARY = '#7c3aed';
+const GRADIENT = 'linear-gradient(135deg, var(--resume-primary-color, #7c3aed) 0%, var(--resume-accent-color, #f97316) 100%)';
+const PRIMARY = 'var(--resume-accent-color, #7c3aed)';
 
 export function CreativeTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -176,7 +176,7 @@ function CreativeSectionContent({ section, resume }: { section: any; resume: Res
                 <span
                   key={i}
                   className="rounded-full border px-2.5 py-0.5 text-xs font-medium text-zinc-700"
-                  style={{ borderColor: `${PRIMARY}40`, backgroundColor: `${PRIMARY}08` }}
+                  style={{ borderColor: `var(--resume-accent-color-40)`, backgroundColor: `var(--resume-accent-color-08)` }}
                 >
                   {skill}
                 </span>

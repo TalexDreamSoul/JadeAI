@@ -6,7 +6,8 @@ import { AvatarImage } from '../avatar-image';
 import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { TouchSimpleSectionContent } from './touch-simple';
 
-const ACCENT = '#4f46e5';
+const ACCENT = 'var(--resume-accent-color, #4f46e5)';
+const INK = 'var(--resume-primary-color, #111827)';
 
 export function TouchCardTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -14,7 +15,7 @@ export function TouchCardTemplate({ resume }: { resume: Resume }) {
   const contacts = getPersonalInfoPreviewItems(pi, { includeJobTitle: true });
 
   return (
-    <div className="mx-auto max-w-[210mm] bg-[#f8fafc] p-6 shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: '#111827' }}>
+    <div className="mx-auto max-w-[210mm] bg-[#f8fafc] p-6 shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: INK }}>
       <header className="mb-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-200/70">
         <div className="flex items-start justify-between gap-5">
           <div className="min-w-0 flex-1">

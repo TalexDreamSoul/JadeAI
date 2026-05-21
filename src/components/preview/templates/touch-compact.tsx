@@ -6,13 +6,15 @@ import { AvatarImage } from '../avatar-image';
 import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { TouchSimpleSectionContent } from './touch-simple';
 
+const INK = 'var(--resume-primary-color, #18181b)';
+
 export function TouchCompactTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
   const pi = (personalInfo?.content || {}) as PersonalInfoContent;
   const contacts = getPersonalInfoPreviewItems(pi, { includeJobTitle: true });
 
   return (
-    <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: '#18181b' }}>
+    <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: INK }}>
       <header className="mb-4 flex items-start justify-between gap-4 border-b border-zinc-300 pb-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-950">{pi.fullName || 'Your Name'}</h1>

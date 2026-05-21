@@ -12,8 +12,8 @@ import type {
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
 const DARK = '#0d1117';
-const BLUE = '#58a6ff';
-const GREEN = '#3fb950';
+const BLUE = 'var(--resume-primary-color,#58a6ff)';
+const GREEN = 'var(--resume-accent-color,#3fb950)';
 const BORDER = '#21262d';
 
 const SIDEBAR_TYPES = new Set(['skills', 'languages', 'certifications']);

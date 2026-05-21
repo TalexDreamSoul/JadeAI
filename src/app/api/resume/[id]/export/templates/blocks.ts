@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#37352f';
-const ACCENT = '#2383e2';
+const PRIMARY = 'var(--resume-primary-color,#37352f)';
+const ACCENT = 'var(--resume-accent-color,#2383e2)';
 const SUBTLE_BG = '#f7f6f3';
 
 function buildBlocksSectionContent(section: Section, lang: string): string {
@@ -42,7 +42,7 @@ function buildBlocksSectionContent(section: Section, lang: string): string {
   if (section.type === 'skills') {
     return `<div class="overflow-hidden rounded-md border" style="border-color:#e3e2de"><table class="w-full text-sm"><tbody>${((c as SkillsContent).categories || []).map((cat: any) =>
       `<tr style="border-bottom:1px solid #e3e2de"><td class="w-28 shrink-0 px-3 py-2 font-medium" style="color:${PRIMARY};background-color:${SUBTLE_BG}">${esc(cat.name)}</td><td class="px-3 py-2"><div class="flex flex-wrap gap-1">${(cat.skills || []).map((skill: string) =>
-        `<span class="rounded-sm px-2 py-0.5 text-xs" style="background-color:${ACCENT}12;color:${ACCENT}">${esc(skill)}</span>`
+        `<span class="rounded-sm px-2 py-0.5 text-xs" style="background-color:var(--resume-accent-color-12);color:${ACCENT}">${esc(skill)}</span>`
       ).join('')}</div></td></tr>`
     ).join('')}</tbody></table></div>`;
   }

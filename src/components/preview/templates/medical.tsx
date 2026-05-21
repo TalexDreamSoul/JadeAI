@@ -5,8 +5,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const TEAL_800 = '#115e59';
-const TEAL_500 = '#0d9488';
+const TEAL_800 = 'var(--resume-primary-color, #115e59)';
+const TEAL_500 = 'var(--resume-accent-color, #0d9488)';
 const TEAL_50 = '#f0fdfa';
 
 export function MedicalTemplate({ resume }: { resume: Resume }) {

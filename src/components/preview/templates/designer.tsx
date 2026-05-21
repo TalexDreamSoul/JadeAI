@@ -5,7 +5,7 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const CORAL = '#ff6b6b';
+const CORAL = 'var(--resume-accent-color, #ff6b6b)';
 
 export function DesignerTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

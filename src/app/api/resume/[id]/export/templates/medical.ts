@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const TEAL_800 = '#115e59';
-const TEAL_500 = '#0d9488';
+const TEAL_800 = 'var(--resume-primary-color,#115e59)';
+const TEAL_500 = 'var(--resume-accent-color,#0d9488)';
 const TEAL_50 = '#f0fdfa';
 
 function buildMedicalSectionContent(section: Section, lang: string): string {

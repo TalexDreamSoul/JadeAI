@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#881337';
-const ACCENT = '#be185d';
+const PRIMARY = 'var(--resume-primary-color,#881337)';
+const ACCENT = 'var(--resume-accent-color,#be185d)';
 const ROSE_50 = '#fff1f2';
 const ROSE_100 = '#ffe4e6';
 

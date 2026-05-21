@@ -205,7 +205,7 @@ function buildThemeCSS(scopeId: string, theme: ThemeConfig, template: string): s
       line-height: ${theme.lineSpacing} !important;
     }
     ${s} h2:not([style*="color"]) {
-      color: ${theme.primaryColor} !important;
+      color: ${theme.accentColor} !important;
       font-size: ${fs.h2} !important;
       line-height: ${theme.lineSpacing} !important;
       border-color: ${theme.accentColor} !important;

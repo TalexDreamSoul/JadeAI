@@ -12,7 +12,7 @@ import type {
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
 const GRADIENT = 'linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%)';
-const ACCENT = '#a855f7';
+const ACCENT = 'var(--resume-accent-color,#a855f7)';
 
 function buildGradientSectionContent(section: Section, lang: string): string {
   const c = section.content as any;

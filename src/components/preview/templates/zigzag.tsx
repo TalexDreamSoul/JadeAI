@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#1e293b';
-const ACCENT = '#8b5cf6';
+const PRIMARY = 'var(--resume-primary-color, #1e293b)';
+const ACCENT = 'var(--resume-accent-color, #8b5cf6)';
 const ALT_BG = '#f5f3ff';
 
 export function ZigzagTemplate({ resume }: { resume: Resume }) {
@@ -54,7 +54,7 @@ export function ZigzagTemplate({ resume }: { resume: Resume }) {
       {/* Zigzag divider */}
       <div className="mb-6 flex items-center justify-center gap-1">
         {[...Array(20)].map((_, i) => (
-          <div key={i} className="h-1 w-3 rounded-full" style={{ backgroundColor: i % 2 === 0 ? ACCENT : `${ACCENT}40` }} />
+          <div key={i} className="h-1 w-3 rounded-full" style={{ backgroundColor: i % 2 === 0 ? ACCENT : `var(--resume-accent-color-40)` }} />
         ))}
       </div>
 
@@ -167,7 +167,7 @@ function ZigzagSectionContent({ section, resume }: { section: any; resume: Resum
             <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{cat.name}</p>
             <div className="flex flex-wrap gap-1.5">
               {(cat.skills || []).map((skill: string, i: number) => (
-                <span key={i} className="rounded-full border px-2 py-0.5 text-xs font-medium" style={{ borderColor: `${ACCENT}50`, color: ACCENT, backgroundColor: `${ACCENT}08` }}>
+                <span key={i} className="rounded-full border px-2 py-0.5 text-xs font-medium" style={{ borderColor: `var(--resume-accent-color-50)`, color: ACCENT, backgroundColor: `var(--resume-accent-color-08)` }}>
                   {skill}
                 </span>
               ))}
@@ -237,7 +237,7 @@ function ZigzagSectionContent({ section, resume }: { section: any; resume: Resum
     return (
       <div className="flex flex-wrap gap-3">
         {items.map((item: any) => (
-          <div key={item.id} className="flex items-center gap-2 rounded-full px-3 py-1" style={{ backgroundColor: `${ACCENT}10`, border: `1px solid ${ACCENT}30` }}>
+          <div key={item.id} className="flex items-center gap-2 rounded-full px-3 py-1" style={{ backgroundColor: `var(--resume-accent-color-10)`, border: `1px solid var(--resume-accent-color-30)` }}>
             <span className="text-sm font-medium" style={{ color: PRIMARY }}>{item.language}</span>
             <span className="text-xs text-zinc-400">{item.proficiency}</span>
           </div>

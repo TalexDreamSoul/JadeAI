@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#1e293b';
-const AMBER = '#f59e0b';
+const PRIMARY = 'var(--resume-primary-color, #1e293b)';
+const AMBER = 'var(--resume-accent-color, #f59e0b)';
 
 export function MetroTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

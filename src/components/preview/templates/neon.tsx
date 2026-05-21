@@ -18,8 +18,8 @@ import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
 const BG = '#111827';
-const CYAN = '#22d3ee';
-const VIOLET = '#a78bfa';
+const CYAN = 'var(--resume-accent-color, #22d3ee)';
+const VIOLET = 'var(--resume-primary-color, #a78bfa)';
 const TEXT = '#d1d5db';
 const TEXT_DIM = '#9ca3af';
 
@@ -32,7 +32,7 @@ export function NeonTemplate({ resume }: { resume: Resume }) {
   return (
     <div className="mx-auto max-w-[210mm] overflow-hidden shadow-lg" style={{ fontFamily: 'Inter, sans-serif', backgroundColor: BG }}>
       {/* Header */}
-      <div className="relative px-10 py-8" style={{ borderBottom: `2px solid ${CYAN}`, boxShadow: `0 2px 20px ${CYAN}40` }}>
+      <div className="relative px-10 py-8" style={{ borderBottom: `2px solid ${CYAN}`, boxShadow: `0 2px 20px var(--resume-accent-color-40)` }}>
         <div className="flex items-center gap-5">
           {pi.avatar && (
             <AvatarImage
@@ -40,15 +40,15 @@ export function NeonTemplate({ resume }: { resume: Resume }) {
               avatarStyle={resume.themeConfig?.avatarStyle}
               size={80}
               wrapperClassName="shrink-0 p-0.5"
-              wrapperStyle={{ border: `2px solid ${CYAN}`, boxShadow: `0 0 12px ${CYAN}60` }}
+              wrapperStyle={{ border: `2px solid ${CYAN}`, boxShadow: `0 0 12px var(--resume-accent-color-50)` }}
             />
           )}
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: CYAN, textShadow: `0 0 20px ${CYAN}60` }}>
+            <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: CYAN, textShadow: `0 0 20px var(--resume-accent-color-50)` }}>
               {pi.fullName || 'Your Name'}
             </h1>
             {pi.jobTitle && (
-              <p className="mt-1 text-sm font-medium" style={{ color: VIOLET, textShadow: `0 0 10px ${VIOLET}40` }}>
+              <p className="mt-1 text-sm font-medium" style={{ color: VIOLET, textShadow: `0 0 10px var(--resume-accent-color-40)` }}>
                 {pi.jobTitle}
               </p>
             )}
@@ -57,7 +57,7 @@ export function NeonTemplate({ resume }: { resume: Resume }) {
                 {contacts.map((c, i) => (
                   <span key={i} className="flex items-center gap-1.5">
                     {c}
-                    {i < contacts.length - 1 && <span style={{ color: `${CYAN}40` }}>|</span>}
+                    {i < contacts.length - 1 && <span style={{ color: `var(--resume-accent-color-40)` }}>|</span>}
                   </span>
                 ))}
               </div>
@@ -73,10 +73,10 @@ export function NeonTemplate({ resume }: { resume: Resume }) {
           .map((section) => (
             <div key={section.id} className="mb-6" data-section data-section-id={section.id} data-section-type={section.type}>
               <div className="mb-3 flex items-center gap-3">
-                <h2 className="text-sm font-extrabold uppercase tracking-widest" style={{ color: CYAN, textShadow: `0 0 10px ${CYAN}40` }}>
+                <h2 className="text-sm font-extrabold uppercase tracking-widest" style={{ color: CYAN, textShadow: `0 0 10px var(--resume-accent-color-40)` }}>
                   {section.title}
                 </h2>
-                <div className="h-px flex-1" style={{ background: `linear-gradient(90deg, ${CYAN}40, transparent)` }} />
+                <div className="h-px flex-1" style={{ background: `linear-gradient(90deg, var(--resume-accent-color-40), transparent)` }} />
               </div>
               <NeonSectionContent section={section} resume={resume} />
             </div>
@@ -92,7 +92,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
 
   if (section.type === 'summary') {
     return (
-      <div className="rounded-lg p-4" style={{ border: `1px solid ${CYAN}20`, backgroundColor: `${CYAN}08` }}>
+      <div className="rounded-lg p-4" style={{ border: `1px solid var(--resume-accent-color-20)`, backgroundColor: `var(--resume-accent-color-08)` }}>
         <p className="text-sm leading-relaxed" style={{ color: TEXT }} dangerouslySetInnerHTML={{ __html: md((content as SummaryContent).text) }} />
       </div>
     );
@@ -103,10 +103,10 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="space-y-4">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid ${CYAN}20`, backgroundColor: `${CYAN}05` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid var(--resume-accent-color-20)`, backgroundColor: `var(--resume-accent-color-08)` }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: CYAN }}>{item.position}</h3>
-              <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ color: BG, backgroundColor: VIOLET, boxShadow: `0 0 8px ${VIOLET}40` }}>
+              <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ color: BG, backgroundColor: VIOLET, boxShadow: `0 0 8px var(--resume-accent-color-40)` }}>
                 {item.startDate} - {item.endDate || (item.current ? (resume.language === 'zh' ? '至今' : 'Present') : '')}
               </span>
             </div>
@@ -142,7 +142,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid ${VIOLET}20`, backgroundColor: `${VIOLET}05` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid var(--resume-accent-color-20)`, backgroundColor: `var(--resume-accent-color-08)` }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: CYAN }}>{item.institution}</h3>
               <span className="text-xs" style={{ color: TEXT_DIM }}>{item.startDate} - {item.endDate || (resume.language === 'zh' ? '至今' : 'Present')}</span>
@@ -198,7 +198,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid ${CYAN}20`, backgroundColor: `${CYAN}05` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid var(--resume-accent-color-20)`, backgroundColor: `var(--resume-accent-color-08)` }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: CYAN }}>{item.name}</h3>
               {item.startDate && (
@@ -238,7 +238,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="flex flex-wrap gap-2">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg px-4 py-2" style={{ border: `1px solid ${VIOLET}30`, backgroundColor: `${VIOLET}08` }}>
+          <div key={item.id} className="rounded-lg px-4 py-2" style={{ border: `1px solid var(--resume-accent-color-30)`, backgroundColor: `var(--resume-accent-color-08)` }}>
             <p className="text-sm font-bold" style={{ color: CYAN }}>{item.name}</p>
             {(item.issuer || item.date) && <p className="text-xs" style={{ color: TEXT_DIM }}>{item.issuer}{item.issuer && item.date ? ' | ' : ''}{item.date}</p>}
           </div>
@@ -252,7 +252,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="flex flex-wrap gap-3">
         {items.map((item: any) => (
-          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5" style={{ border: `1px solid ${CYAN}30` }}>
+          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5" style={{ border: `1px solid var(--resume-accent-color-30)` }}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: CYAN, boxShadow: `0 0 6px ${CYAN}` }} />
             <span className="text-sm font-medium" style={{ color: CYAN }}>{item.language}</span>
             <span className="text-xs" style={{ color: TEXT_DIM }}>{item.proficiency}</span>
@@ -267,7 +267,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid ${CYAN}20`, backgroundColor: `${CYAN}05` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid var(--resume-accent-color-20)`, backgroundColor: `var(--resume-accent-color-08)` }}>
             <div className="flex items-baseline justify-between">
               <span className="text-sm font-bold" style={{ color: CYAN }}>{item.name}</span>
               <span className="text-xs" style={{ color: TEXT_DIM }}>{'\u2B50'} {item.stars?.toLocaleString()}</span>
@@ -285,7 +285,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid ${CYAN}20`, backgroundColor: `${CYAN}05` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px solid var(--resume-accent-color-20)`, backgroundColor: `var(--resume-accent-color-08)` }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: CYAN }}>{item.title}</h3>
               {item.date && <span className="text-xs" style={{ color: TEXT_DIM }}>{item.date}</span>}
@@ -307,7 +307,7 @@ function NeonSectionContent({ section, resume }: { section: any; resume: Resume 
     return (
       <div className="space-y-2">
         {content.items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-3" style={{ border: `1px solid ${CYAN}20` }}>
+          <div key={item.id} className="rounded-lg p-3" style={{ border: `1px solid var(--resume-accent-color-20)` }}>
             <span className="text-sm font-medium" style={{ color: CYAN }}>{item.name || item.title || item.language}</span>
             {item.description && <p className="text-sm" style={{ color: TEXT }} dangerouslySetInnerHTML={{ __html: md(item.description) }} />}
           </div>

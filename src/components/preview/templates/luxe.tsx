@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const GOLD = '#d4af37';
-const TEXT = '#000000';
+const GOLD = 'var(--resume-accent-color, #d4af37)';
+const TEXT = 'var(--resume-primary-color, #000000)';
 const BG = '#fafaf9';
 
 export function LuxeTemplate({ resume }: { resume: Resume }) {

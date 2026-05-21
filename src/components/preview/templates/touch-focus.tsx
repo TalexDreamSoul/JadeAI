@@ -6,7 +6,8 @@ import { AvatarImage } from '../avatar-image';
 import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { TouchSimpleSectionContent } from './touch-simple';
 
-const ACCENT = '#ea580c';
+const ACCENT = 'var(--resume-accent-color, #ea580c)';
+const INK = 'var(--resume-primary-color, #111827)';
 
 export function TouchFocusTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -14,7 +15,7 @@ export function TouchFocusTemplate({ resume }: { resume: Resume }) {
   const contacts = getPersonalInfoPreviewItems(pi, { includeJobTitle: true });
 
   return (
-    <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: '#111827' }}>
+    <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: INK }}>
       <header className="mb-6 border-l-8 pl-5" style={{ borderColor: ACCENT }}>
         <div className="flex items-start justify-between gap-5">
           <div className="min-w-0 flex-1">

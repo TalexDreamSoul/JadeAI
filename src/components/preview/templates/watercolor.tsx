@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#4c1d95';
-const ACCENT = '#c084fc';
+const PRIMARY = 'var(--resume-primary-color, #4c1d95)';
+const ACCENT = 'var(--resume-accent-color, #c084fc)';
 const WASH = '#f5f3ff';
 const TEXT = '#6b7280';
 const TEXT_DARK = '#374151';
@@ -174,7 +174,7 @@ function WatercolorSectionContent({ section, lang }: { section: any; lang?: stri
                 <span
                   key={i}
                   className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                  style={{ backgroundColor: WASH, color: PRIMARY, border: `1px solid ${ACCENT}40` }}
+                  style={{ backgroundColor: WASH, color: PRIMARY, border: `1px solid var(--resume-accent-color-40)` }}
                 >
                   {skill}
                 </span>
@@ -231,7 +231,7 @@ function WatercolorSectionContent({ section, lang }: { section: any; lang?: stri
     return (
       <div className="flex flex-wrap gap-2">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-xl px-4 py-2" style={{ backgroundColor: WASH, border: `1px solid ${ACCENT}30` }}>
+          <div key={item.id} className="rounded-xl px-4 py-2" style={{ backgroundColor: WASH, border: `1px solid var(--resume-accent-color-30)` }}>
             <p className="text-sm font-bold" style={{ color: PRIMARY }}>{item.name}</p>
             {(item.issuer || item.date) && <p className="text-xs" style={{ color: TEXT }}>{item.issuer}{item.issuer && item.date ? ' | ' : ''}{item.date}</p>}
           </div>
@@ -245,7 +245,7 @@ function WatercolorSectionContent({ section, lang }: { section: any; lang?: stri
     return (
       <div className="flex flex-wrap gap-3">
         {items.map((item: any) => (
-          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5" style={{ backgroundColor: WASH, border: `1px solid ${ACCENT}30` }}>
+          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5" style={{ backgroundColor: WASH, border: `1px solid var(--resume-accent-color-30)` }}>
             <span className="h-2 w-2 rounded-full" style={{ background: `linear-gradient(135deg, ${ACCENT}, ${PRIMARY})` }} />
             <span className="text-sm font-medium" style={{ color: PRIMARY }}>{item.language}</span>
             <span className="text-xs" style={{ color: TEXT }}>{item.proficiency}</span>

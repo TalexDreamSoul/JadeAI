@@ -108,7 +108,7 @@ export function buildTwoColumnHtml(resume: ResumeWithSections): string {
   const rightSections = sections.filter(s => !LEFT_TYPES.has(s.type));
 
   return `<div class="mx-auto flex max-w-[210mm] overflow-hidden bg-white shadow-lg" style="font-family:Inter,sans-serif;min-height:297mm">
-    <div class="w-[35%] shrink-0 p-6 text-white" style="background:linear-gradient(180deg,#1a1a2e 0%,#16213e 100%)">
+    <div class="w-[35%] shrink-0 p-6 text-white" style="background:linear-gradient(180deg,var(--resume-primary-color,#1a1a2e) 0%,var(--resume-accent-color,#16213e) 100%)">
       <div class="mb-6 text-center">
         ${pi.avatar ? `<div class="mx-auto mb-3 h-24 w-24 overflow-hidden rounded-full"><img src="${esc(pi.avatar)}" alt="" class="h-full w-full object-cover"/></div>` : ''}
         <h1 class="text-xl font-bold tracking-tight text-white">${esc(pi.fullName || 'Your Name')}</h1>
@@ -138,7 +138,7 @@ export function buildTwoColumnHtml(resume: ResumeWithSections): string {
     </div>
     <div class="flex-1 p-6">
       ${rightSections.map(s => `<div class="mb-5" data-section data-section-type="${esc(s.type)}">
-        <h2 class="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style="color:#1a1a2e;border-color:#1a1a2e">${esc(s.title)}</h2>
+        <h2 class="mb-2 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider" style="color:var(--resume-primary-color,#1a1a2e);border-color:var(--resume-primary-color,#1a1a2e)">${esc(s.title)}</h2>
         ${buildTwoColumnRightContent(s, lang)}
       </div>`).join('')}
     </div>

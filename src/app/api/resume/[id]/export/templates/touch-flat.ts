@@ -11,7 +11,7 @@ import type {
 } from '@/types/resume';
 import { buildHighlights, buildQrCodesHtml, degreeField, esc, getPersonalInfo, md, visibleSections, type ResumeWithSections, type Section } from '../utils';
 
-const ACCENT = '#0f766e';
+const ACCENT = 'var(--resume-accent-color,#0f766e)';
 
 function dateRange(start?: string, end?: string | null, current?: boolean, lang?: string) {
   const present = lang === 'zh' ? '至今' : 'Present';

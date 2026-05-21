@@ -7,6 +7,7 @@ import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { TouchSimpleSectionContent } from './touch-simple';
 
 const SIDE_TYPES = new Set(['skills', 'languages', 'certifications', 'qr_codes']);
+const INK = 'var(--resume-primary-color, #18181b)';
 
 export function TouchGridTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -24,7 +25,7 @@ export function TouchGridTemplate({ resume }: { resume: Resume }) {
   );
 
   return (
-    <div className="mx-auto grid max-w-[210mm] grid-cols-[32%_1fr] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: '#18181b' }}>
+    <div className="mx-auto grid max-w-[210mm] grid-cols-[32%_1fr] bg-white shadow-lg" style={{ fontFamily: 'Inter, Arial, sans-serif', color: INK }}>
       <aside className="bg-zinc-50 p-6 ring-1 ring-inset ring-zinc-100">
         {pi.avatar && <AvatarImage src={pi.avatar} avatarStyle={resume.themeConfig?.avatarStyle} size={72} className="mb-4 border border-zinc-200" />}
         <h1 className="text-2xl font-bold tracking-tight text-zinc-950">{pi.fullName || 'Your Name'}</h1>

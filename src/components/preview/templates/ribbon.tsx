@@ -17,9 +17,9 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#1e293b';
-const ACCENT = '#b91c1c';
-const RIBBON = '#dc2626';
+const PRIMARY = 'var(--resume-primary-color, #1e293b)';
+const ACCENT = 'var(--resume-accent-color, #b91c1c)';
+const RIBBON = 'var(--resume-accent-color, #dc2626)';
 
 export function RibbonTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -154,7 +154,7 @@ function RibbonSectionContent({ section, resume }: { section: any; resume: Resum
             <p className="mb-1 text-xs font-semibold text-zinc-500">{cat.name}</p>
             <div className="flex flex-wrap gap-1.5">
               {(cat.skills || []).map((skill: string, i: number) => (
-                <span key={i} className="rounded-sm border px-2 py-0.5 text-xs" style={{ borderColor: `${RIBBON}40`, color: ACCENT }}>
+                <span key={i} className="rounded-sm border px-2 py-0.5 text-xs" style={{ borderColor: `var(--resume-accent-color-40)`, color: ACCENT }}>
                   {skill}
                 </span>
               ))}

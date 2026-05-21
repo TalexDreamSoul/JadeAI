@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#18181b';
-const ACCENT = '#6366f1';
+const PRIMARY = 'var(--resume-primary-color,#18181b)';
+const ACCENT = 'var(--resume-accent-color,#6366f1)';
 const CARD_BG = '#fafafa';
 
 function buildCardSectionContent(section: Section, lang: string = 'en'): string {

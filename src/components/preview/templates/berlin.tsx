@@ -17,10 +17,10 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const BLUE = '#2563eb';
+const BLUE = 'var(--resume-accent-color, #2563eb)';
 const YELLOW = '#eab308';
 const RED_B = '#dc2626';
-const TEXT = '#18181b';
+const TEXT = 'var(--resume-primary-color, #18181b)';
 
 export function BerlinTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

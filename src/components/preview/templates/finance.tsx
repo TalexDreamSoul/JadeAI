@@ -5,8 +5,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const SLATE_800 = '#1e293b';
-const GOLD = '#c4a747';
+const SLATE_800 = 'var(--resume-primary-color, #1e293b)';
+const GOLD = 'var(--resume-accent-color, #c4a747)';
 
 export function FinanceTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

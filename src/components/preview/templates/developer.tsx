@@ -6,8 +6,8 @@ import { isSectionEmpty, md, degreeField } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
 const DARK = '#282c34';
-const GREEN = '#98c379';
-const BLUE = '#61afef';
+const GREEN = 'var(--resume-accent-color, #98c379)';
+const BLUE = 'var(--resume-primary-color, #61afef)';
 const ORANGE = '#e5c07b';
 
 export function DeveloperTemplate({ resume }: { resume: Resume }) {

@@ -6,7 +6,7 @@ import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
 // intentional: infographic template visual identity — rotating rainbow palette; #ec4899 (pink) is one of 6 intentional accent colors
-const COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'];
+const COLORS = ['var(--resume-accent-color, #3b82f6)', 'var(--resume-primary-color, #ef4444)', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'];
 
 export function InfographicTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');
@@ -15,7 +15,7 @@ export function InfographicTemplate({ resume }: { resume: Resume }) {
   return (
     <div className="mx-auto max-w-[210mm] bg-white shadow-lg" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
-      <div className="relative overflow-hidden px-8 py-8" style={{ background: 'linear-gradient(135deg, #1e40af, #7c3aed)' }}>
+      <div className="relative overflow-hidden px-8 py-8" style={{ background: 'linear-gradient(135deg, var(--resume-primary-color, #1e40af), var(--resume-accent-color, #7c3aed))' }}>
         <div className="relative flex items-center gap-5">
           {pi.avatar && (
             <AvatarImage src={pi.avatar} avatarStyle={resume.themeConfig?.avatarStyle} size={80} className="shrink-0" style={{ border: '3px solid rgba(255,255,255,0.3)' }} />

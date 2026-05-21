@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#1e1b4b';
-const ACCENT = '#f43f5e';
+const PRIMARY = 'var(--resume-primary-color, #1e1b4b)';
+const ACCENT = 'var(--resume-accent-color, #f43f5e)';
 const HIGHLIGHT = '#fbbf24';
 
 export function ArtisticTemplate({ resume }: { resume: Resume }) {
@@ -66,7 +66,7 @@ export function ArtisticTemplate({ resume }: { resume: Resume }) {
                 <h2 className="text-sm font-extrabold uppercase tracking-widest" style={{ color: PRIMARY }}>
                   {section.title}
                 </h2>
-                <div className="h-0.5 flex-1" style={{ borderTop: `2px dashed ${ACCENT}40` }} />
+                <div className="h-0.5 flex-1" style={{ borderTop: `2px dashed var(--resume-accent-color-40)` }} />
               </div>
               <ArtisticSectionContent section={section} resume={resume} />
             </div>
@@ -82,7 +82,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
 
   if (section.type === 'summary') {
     return (
-      <div className="rounded-lg p-4" style={{ border: `2px dashed ${ACCENT}30`, backgroundColor: `${PRIMARY}05` }}>
+      <div className="rounded-lg p-4" style={{ border: `2px dashed var(--resume-accent-color-30)`, backgroundColor: `var(--resume-accent-color-08)` }}>
         <p className="text-sm leading-relaxed text-zinc-600 italic" dangerouslySetInnerHTML={{ __html: md((content as SummaryContent).text) }} />
       </div>
     );
@@ -93,7 +93,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="space-y-4">
         {items.map((item: any) => (
-          <div key={item.id} className="relative rounded-lg p-4" style={{ border: `1px dashed ${ACCENT}30` }}>
+          <div key={item.id} className="relative rounded-lg p-4" style={{ border: `1px dashed var(--resume-accent-color-30)` }}>
             <div className="absolute -left-1.5 top-4 h-3 w-3 rounded-full" style={{ backgroundColor: ACCENT }} />
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: PRIMARY }}>{item.position}</h3>
@@ -133,7 +133,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed ${ACCENT}30` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed var(--resume-accent-color-30)` }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: PRIMARY }}>{item.institution}</h3>
               <span className="text-xs text-zinc-400">{item.startDate} - {item.endDate || (resume.language === 'zh' ? '至今' : 'Present')}</span>
@@ -168,7 +168,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
                 <span
                   key={i}
                   className="flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-                  style={{ backgroundColor: `${PRIMARY}10`, color: PRIMARY }}
+                  style={{ backgroundColor: `var(--resume-accent-color-10)`, color: PRIMARY }}
                 >
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: i % 2 === 0 ? ACCENT : HIGHLIGHT }} />
                   {skill}
@@ -186,7 +186,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed ${ACCENT}30` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed var(--resume-accent-color-30)` }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: PRIMARY }}>{item.name}</h3>
               {item.startDate && (
@@ -226,7 +226,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="flex flex-wrap gap-2">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg px-4 py-2" style={{ border: `1px dashed ${ACCENT}30`, backgroundColor: `${HIGHLIGHT}10` }}>
+          <div key={item.id} className="rounded-lg px-4 py-2" style={{ border: `1px dashed var(--resume-accent-color-30)`, backgroundColor: `var(--resume-accent-color-10)` }}>
             <p className="text-sm font-bold" style={{ color: PRIMARY }}>{item.name}</p>
             {(item.issuer || item.date) && <p className="text-xs text-zinc-500">{item.issuer}{item.issuer && item.date ? ' | ' : ''}{item.date}</p>}
           </div>
@@ -240,7 +240,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="flex flex-wrap gap-3">
         {items.map((item: any) => (
-          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5" style={{ border: `2px dashed ${ACCENT}30` }}>
+          <div key={item.id} className="flex items-center gap-2 rounded-full px-4 py-1.5" style={{ border: `2px dashed var(--resume-accent-color-30)` }}>
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ACCENT }} />
             <span className="text-sm font-medium" style={{ color: PRIMARY }}>{item.language}</span>
             <span className="text-xs text-zinc-400">{item.proficiency}</span>
@@ -255,7 +255,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed ${ACCENT}30` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed var(--resume-accent-color-30)` }}>
             <div className="flex items-baseline justify-between">
               <span className="text-sm font-bold" style={{ color: PRIMARY }}>{item.name}</span>
               <span className="text-xs text-zinc-400">{'\u2B50'} {item.stars?.toLocaleString()}</span>
@@ -273,7 +273,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="space-y-3">
         {items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed ${ACCENT}30` }}>
+          <div key={item.id} className="rounded-lg p-4" style={{ border: `1px dashed var(--resume-accent-color-30)` }}>
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-bold" style={{ color: PRIMARY }}>{item.title}</h3>
               {item.date && <span className="text-xs text-zinc-400">{item.date}</span>}
@@ -295,7 +295,7 @@ function ArtisticSectionContent({ section, resume }: { section: any; resume: Res
     return (
       <div className="space-y-2">
         {content.items.map((item: any) => (
-          <div key={item.id} className="rounded-lg p-3" style={{ border: `1px dashed ${ACCENT}30` }}>
+          <div key={item.id} className="rounded-lg p-3" style={{ border: `1px dashed var(--resume-accent-color-30)` }}>
             <span className="text-sm font-medium" style={{ color: PRIMARY }}>{item.name || item.title || item.language}</span>
             {item.description && <p className="text-sm text-zinc-600" dangerouslySetInnerHTML={{ __html: md(item.description) }} />}
           </div>

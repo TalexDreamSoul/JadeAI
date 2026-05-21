@@ -11,7 +11,7 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#1e293b';
+const PRIMARY = 'var(--resume-primary-color,#1e293b)';
 const TILE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 const TILE_BGS = ['#eff6ff', '#ecfdf5', '#fffbeb', '#f5f3ff'];
 

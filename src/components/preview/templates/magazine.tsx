@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#1a1a1a';
-const ACCENT = '#dc2626';
+const PRIMARY = 'var(--resume-primary-color, #1a1a1a)';
+const ACCENT = 'var(--resume-accent-color, #dc2626)';
 const SECONDARY = '#44403c';
 
 export function MagazineTemplate({ resume }: { resume: Resume }) {

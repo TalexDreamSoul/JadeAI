@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#1c1917';
-const ACCENT = '#a8a29e';
+const PRIMARY = 'var(--resume-primary-color,#1c1917)';
+const ACCENT = 'var(--resume-accent-color,#a8a29e)';
 
 function buildJapaneseSectionContent(section: Section, lang: string): string {
   const c = section.content as any;

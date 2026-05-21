@@ -18,8 +18,8 @@ import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 import { degreeField, isSectionEmpty, md } from '../utils';
 
-const ACCENT = '#0f766e';
-const INK = '#111827';
+const ACCENT = 'var(--resume-accent-color, #0f766e)';
+const INK = 'var(--resume-primary-color, #111827)';
 
 function dateRange(start?: string, end?: string | null, current?: boolean, lang?: string) {
   const present = lang === 'zh' ? '至今' : 'Present';

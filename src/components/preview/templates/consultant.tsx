@@ -5,8 +5,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const GRAY_700 = '#374151';
-const BLUE_600 = '#2563eb';
+const GRAY_700 = 'var(--resume-primary-color, #374151)';
+const BLUE_600 = 'var(--resume-accent-color, #2563eb)';
 
 export function ConsultantTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

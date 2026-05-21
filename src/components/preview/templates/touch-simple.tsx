@@ -18,7 +18,7 @@ import { getPersonalInfoPreviewItems } from '../personal-info-utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 import { degreeField, isSectionEmpty, md } from '../utils';
 
-const INK = '#18181b';
+const INK = 'var(--resume-primary-color, #18181b)';
 const MUTED = '#71717a';
 
 function dateRange(start?: string, end?: string | null, current?: boolean, lang?: string) {

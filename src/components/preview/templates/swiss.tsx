@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const RED = '#dc2626';
-const TEXT = '#18181b';
+const RED = 'var(--resume-accent-color, #dc2626)';
+const TEXT = 'var(--resume-primary-color, #18181b)';
 
 export function SwissTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

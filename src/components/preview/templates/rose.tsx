@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#881337';
-const ACCENT = '#be185d';
+const PRIMARY = 'var(--resume-primary-color, #881337)';
+const ACCENT = 'var(--resume-accent-color, #be185d)';
 const ROSE_50 = '#fff1f2';
 const ROSE_100 = '#ffe4e6';
 

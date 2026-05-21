@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const GOLD = '#d4af37';
-const TEXT = '#000000';
+const GOLD = 'var(--resume-accent-color,#d4af37)';
+const TEXT = 'var(--resume-primary-color,#000000)';
 const BG = '#fafaf9';
 
 function buildLuxeSectionContent(section: Section, lang: string): string {

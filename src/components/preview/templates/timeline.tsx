@@ -5,8 +5,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const BLUE_GRAY = '#475569';
-const ACCENT = '#3b82f6';
+const BLUE_GRAY = 'var(--resume-primary-color, #475569)';
+const ACCENT = 'var(--resume-accent-color, #3b82f6)';
 
 export function TimelineTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

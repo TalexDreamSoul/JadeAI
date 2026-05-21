@@ -17,8 +17,8 @@ import { AvatarImage } from '../avatar-image';
 import { degreeField, isSectionEmpty, md } from '../utils';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const PRIMARY = '#18181b';
-const ACCENT = '#6366f1';
+const PRIMARY = 'var(--resume-primary-color, #18181b)';
+const ACCENT = 'var(--resume-accent-color, #6366f1)';
 const CARD_BG = '#fafafa';
 
 export function CardTemplate({ resume }: { resume: Resume }) {

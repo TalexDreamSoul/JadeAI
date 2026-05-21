@@ -5,7 +5,7 @@ import { degreeField, isSectionEmpty, md } from '../utils';
 import { AvatarImage } from '../avatar-image';
 import { QrCodesPreview } from '../qr-codes-preview';
 
-const GOLD = '#d4af37';
+const GOLD = 'var(--resume-accent-color, #d4af37)';
 
 export function ElegantTemplate({ resume }: { resume: Resume }) {
   const personalInfo = resume.sections.find((s) => s.type === 'personal_info');

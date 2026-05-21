@@ -11,8 +11,8 @@ import type {
 } from '@/types/resume';
 import { esc, md, degreeField, getPersonalInfo, visibleSections, buildQrCodesHtml, type ResumeWithSections, type Section } from '../utils';
 
-const PRIMARY = '#78350f';
-const ACCENT = '#92400e';
+const PRIMARY = 'var(--resume-primary-color,#78350f)';
+const ACCENT = 'var(--resume-accent-color,#92400e)';
 const BG = '#fefce8';
 const TEXT = '#57534e';
 
@@ -101,7 +101,7 @@ export function buildRetroHtml(resume: ResumeWithSections): string {
 
   const sectionHtml = sections.map((s, idx) => {
     const divider = idx < sections.length - 1
-      ? `<div class="mb-4 flex items-center justify-center gap-2 text-xs" style="color:${PRIMARY}40"><div class="h-px w-12" style="background-color:${PRIMARY}20"></div><span>&#10022;</span><div class="h-px w-12" style="background-color:${PRIMARY}20"></div></div>`
+      ? `<div class="mb-4 flex items-center justify-center gap-2 text-xs" style="color:var(--resume-accent-color-40)"><div class="h-px w-12" style="background-color:var(--resume-accent-color-20)"></div><span>&#10022;</span><div class="h-px w-12" style="background-color:var(--resume-accent-color-20)"></div></div>`
       : '';
     return `<div data-section data-section-type="${esc(s.type)}">
       <div class="mb-2 text-center"><h2 class="inline-block text-xs font-bold uppercase tracking-[0.3em]" style="color:${PRIMARY};border-bottom:1px solid ${PRIMARY};border-top:1px solid ${PRIMARY};padding:4px 16px">${esc(s.title)}</h2></div>
@@ -115,8 +115,8 @@ export function buildRetroHtml(resume: ResumeWithSections): string {
       ${pi.avatar ? `<img src="${esc(pi.avatar)}" alt="" class="mx-auto mb-3 h-20 w-20 rounded-full object-cover" style="border:2px solid ${PRIMARY}"/>` : ''}
       <h1 class="text-3xl font-bold" style="color:${PRIMARY};font-family:'Courier New',monospace">${esc(pi.fullName || 'Your Name')}</h1>
       ${pi.jobTitle ? `<p class="mt-1 text-sm italic" style="color:${ACCENT}">${esc(pi.jobTitle)}</p>` : ''}
-      ${contacts.length ? `<div class="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs" style="color:${ACCENT}">${contacts.map((c, i) => `<span class="flex items-center gap-1.5" style="font-family:'Courier New',monospace">${esc(c)}${i < contacts.length - 1 ? `<span style="color:${PRIMARY}40">&bull;</span>` : ''}</span>`).join('')}</div>` : ''}
-      <div class="mx-auto mt-3 flex items-center justify-center gap-2 text-sm" style="color:${PRIMARY}60"><span>~</span><span>&diams;</span><span>~</span></div>
+      ${contacts.length ? `<div class="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs" style="color:${ACCENT}">${contacts.map((c, i) => `<span class="flex items-center gap-1.5" style="font-family:'Courier New',monospace">${esc(c)}${i < contacts.length - 1 ? `<span style="color:var(--resume-accent-color-40)">&bull;</span>` : ''}</span>`).join('')}</div>` : ''}
+      <div class="mx-auto mt-3 flex items-center justify-center gap-2 text-sm" style="color:var(--resume-accent-color-50)"><span>~</span><span>&diams;</span><span>~</span></div>
     </div>
     ${sectionHtml}
   </div>`;

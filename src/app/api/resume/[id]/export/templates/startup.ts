@@ -13,8 +13,8 @@ import { esc, md, degreeField, getPersonalInfo, visibleSections, buildHighlights
 
 function buildStartupSectionContent(section: Section, lang: string): string {
   const c = section.content as any;
-  const PURPLE = '#6366f1';
-  const CYAN = '#06b6d4';
+  const PURPLE = 'var(--resume-primary-color,#6366f1)';
+  const CYAN = 'var(--resume-accent-color,#06b6d4)';
   if (section.type === 'summary') return `<div class="text-sm leading-relaxed text-zinc-600">${md((c as SummaryContent).text)}</div>`;
   if (section.type === 'work_experience') {
     return `<div class="space-y-4">${((c as WorkExperienceContent).items || []).map((it: any) => `<div class="pl-4" style="border-left-width:3px;border-left-style:solid;border-color:${CYAN}">
@@ -79,8 +79,8 @@ export function buildStartupHtml(resume: ResumeWithSections): string {
   const pi = getPersonalInfo(resume);
   const sections = visibleSections(resume);
   const contacts = [pi.age, pi.politicalStatus, pi.gender, pi.ethnicity, pi.hometown, pi.maritalStatus, pi.yearsOfExperience, pi.educationLevel, pi.email, pi.phone, pi.wechat, pi.location, pi.website].filter(Boolean);
-  const PURPLE = '#6366f1';
-  const CYAN = '#06b6d4';
+  const PURPLE = 'var(--resume-primary-color,#6366f1)';
+  const CYAN = 'var(--resume-accent-color,#06b6d4)';
 
   return `<div class="mx-auto max-w-[210mm] overflow-hidden bg-white shadow-lg" style="font-family:Inter,sans-serif">
     <div class="relative px-8 py-8 text-white" style="background:linear-gradient(135deg,${PURPLE},${CYAN})">
