@@ -2,6 +2,29 @@
 
 JadeAI Resume MCP 是本地 stdio MCP 服务，让 Codex、Claude、Cursor 读取 JadeAI 简历、JD 分析和知识图谱，并在写入前强制创建版本或只返回预览 diff。
 
+## 页面内配置
+
+推荐普通用户在产品内完成配置：打开 `设置 -> MCP`，创建自己的访问 token，然后把页面展示的 endpoint 和客户端配置片段复制到支持 HTTP MCP server 的客户端。
+
+页面内配置的特点：
+
+- 每个登录用户/本地指纹用户都有独立 token。
+- token 明文只在创建或重置后展示一次，服务端只保存 hash。
+- 远程 MCP endpoint 为 `/api/mcp/resume`，客户端通过 `Authorization: Bearer <token>` 绑定到对应用户。
+- 撤销或重置 token 后，旧客户端配置立即失效。
+
+HTTP JSON-RPC smoke：
+
+```bash
+pnpm run smoke:mcp:remote
+```
+
+该脚本会在临时 SQLite 数据库中创建用户、生成 MCP token，并验证 token 可解析到用户、`initialize`、`tools/list` 与 `list_resumes` 可用。
+
+## 本地 stdio fallback
+
+如果 MCP 客户端暂不支持 HTTP MCP server，可以继续使用本地 stdio 脚本。
+
 ## 启动
 
 ```bash

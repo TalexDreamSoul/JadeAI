@@ -47,4 +47,6 @@ touchresume-data/*
 
 .superpowers
 
+.playwright-mcp/
+
 test

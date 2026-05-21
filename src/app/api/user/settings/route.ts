@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { hasServerImageAIConfig, selectServerAIConfig } from '@/lib/ai/server-config';
+import { sanitizeMcpSettings } from '@/lib/mcp/user-mcp-access';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     const settings = await userRepository.getSettings(user.id);
     const serverAI = await selectServerAIConfig();
     return NextResponse.json({
-      ...settings,
+      ...sanitizeMcpSettings(settings),
       aiCredits: user.aiCredits,
       serverAIConfigured: !!serverAI.apiKey && !!user.email && user.aiCredits > 0,
       serverAIProvider: serverAI.provider,

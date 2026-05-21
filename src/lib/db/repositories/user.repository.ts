@@ -126,4 +126,9 @@ export const userRepository = {
     await db.update(users).set({ settings: merged, updatedAt: new Date() }).where(eq(users.id, id));
     return merged;
   },
+
+  async replaceSettings(id: string, settings: Record<string, unknown>) {
+    await db.update(users).set({ settings, updatedAt: new Date() }).where(eq(users.id, id));
+    return settings;
+  },
 };

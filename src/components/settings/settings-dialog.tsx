@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useLocale } from 'next-intl';
 import { useTheme } from 'next-themes';
-import { Settings, Cpu, Paintbrush, PenTool, Eye, EyeOff, Sun, Moon, Monitor, ChevronsUpDown, Check, Loader2 } from 'lucide-react';
+import { Settings, Cpu, Paintbrush, PenTool, Eye, EyeOff, Sun, Moon, Monitor, ChevronsUpDown, Check, Loader2, PlugZap } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ import { useTourStore } from '@/stores/tour-store';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { locales, localeNames } from '@/i18n/config';
 import { cn } from '@/lib/utils';
+import { McpSettingsPanel } from './mcp-settings-panel';
 
 const AI_PROVIDERS: { value: AIProvider; label: string }[] = [
   { value: 'openai', label: 'OpenAI' },
@@ -151,7 +152,7 @@ export function SettingsDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent className="sm:max-w-[540px] p-0 gap-0">
+      <DialogContent className="sm:max-w-[680px] p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-zinc-500" />
@@ -173,6 +174,10 @@ export function SettingsDialog() {
               <TabsTrigger value="editor" className="flex-1 gap-1.5 cursor-pointer">
                 <PenTool className="h-3.5 w-3.5" />
                 {t('editorTab.title')}
+              </TabsTrigger>
+              <TabsTrigger value="mcp" className="flex-1 gap-1.5 cursor-pointer">
+                <PlugZap className="h-3.5 w-3.5" />
+                {t('mcp.title')}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -492,6 +497,11 @@ export function SettingsDialog() {
                 {t('editorTab.restartTour')}
               </Button>
             </div>
+          </TabsContent>
+
+          {/* MCP Tab */}
+          <TabsContent value="mcp" className="px-6 pb-6 pt-4">
+            <McpSettingsPanel />
           </TabsContent>
         </Tabs>
       </DialogContent>
