@@ -24,6 +24,8 @@ export const applicableSuggestionSchema = z.object({
   evidenceRequired: z.boolean().default(false).describe('Whether the user must verify facts before applying'),
 });
 
+export type ApplicableSuggestion = z.infer<typeof applicableSuggestionSchema>;
+
 // Output schema for JD analysis - used with generateObject
 export const jdAnalysisOutputSchema = z.object({
   overallScore: z.number().min(0).max(100).describe('Overall match score from 0 to 100'),
