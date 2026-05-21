@@ -591,6 +591,8 @@
     "jdPreview": "JD 摘要",
     "viewDetail": "查看详情",
     "loadingHistory": "加载历史...",
+    "pendingStatus": "分析中",
+    "failedStatus": "失败",
     "jobDescriptionLabel": "职位描述"
   },
   "translate": {
@@ -690,7 +692,9 @@
     "deleted": "已删除",
     "issueCountLabel": "{count} 个问题",
     "viewDetail": "查看详情",
-    "loadingHistory": "加载历史..."
+    "loadingHistory": "加载历史...",
+    "pendingStatus": "检查中",
+    "failedStatus": "失败"
   },
   "export": {
     "title": "导出简历",
@@ -1033,6 +1037,8 @@
     "aiReviewSelection": "AI 评审",
     "aiReviewHistory": "AI 分析历史",
     "noAiReviewHistory": "暂无 AI 分析历史",
+    "analysisPending": "分析中",
+    "analysisFailedStatus": "失败",
     "refresh": "刷新",
     "basicInfo": "基本信息",
     "jdMatch": "JD 匹配度",
@@ -1262,6 +1268,11 @@
     "title": "AI Review",
     "run": "开始 Review",
     "failed": "AI Review 失败",
+    "history": "AI 分析历史",
+    "noHistory": "暂无 AI 分析历史",
+    "refresh": "刷新",
+    "pendingStatus": "分析中",
+    "failedStatus": "失败",
     "strengths": "优势",
     "risks": "风险",
     "actions": "行动建议"

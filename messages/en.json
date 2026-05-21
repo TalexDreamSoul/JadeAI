@@ -591,6 +591,8 @@
     "jdPreview": "JD Preview",
     "viewDetail": "View Details",
     "loadingHistory": "Loading history...",
+    "pendingStatus": "Analyzing",
+    "failedStatus": "Failed",
     "jobDescriptionLabel": "Job Description"
   },
   "translate": {
@@ -690,7 +692,9 @@
     "deleted": "Record deleted",
     "issueCountLabel": "{count} issues",
     "viewDetail": "View Details",
-    "loadingHistory": "Loading history..."
+    "loadingHistory": "Loading history...",
+    "pendingStatus": "Checking",
+    "failedStatus": "Failed"
   },
   "export": {
     "title": "Export Resume",
@@ -1033,6 +1037,8 @@
     "aiReviewSelection": "AI review",
     "aiReviewHistory": "AI review history",
     "noAiReviewHistory": "No AI review history",
+    "analysisPending": "Analyzing",
+    "analysisFailedStatus": "Failed",
     "refresh": "Refresh",
     "basicInfo": "Basic info",
     "jdMatch": "JD match",
@@ -1262,6 +1268,11 @@
     "title": "AI Review",
     "run": "Run Review",
     "failed": "AI review failed",
+    "history": "AI review history",
+    "noHistory": "No AI review history",
+    "refresh": "Refresh",
+    "pendingStatus": "Analyzing",
+    "failedStatus": "Failed",
     "strengths": "Strengths",
     "risks": "Risks",
     "actions": "Actions"

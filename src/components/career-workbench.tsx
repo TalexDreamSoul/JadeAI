@@ -127,7 +127,7 @@ type JdHistoryItem = {
   atsScore: number;
   jobDescription: string;
   createdAt: string | number | Date;
-  status?: 'pending' | 'success' | 'failed';
+  status?: 'pending' | 'success' | 'failed' | 'running';
   error?: string;
 };
 
@@ -366,7 +366,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       ? data.map((item: JdHistoryItem) => ({ ...item, status: item.status || 'success' as const }))
       : [];
     setJdHistory((current) => {
-      const transientItems = current.filter((item) => item.status === 'pending' || item.status === 'failed');
+      const transientItems = current.filter((item) => item.status === 'running');
       const serverIds = new Set(serverItems.map((item: JdHistoryItem) => item.id));
       return [...transientItems.filter((item) => !serverIds.has(item.id)), ...serverItems];
     });
@@ -402,7 +402,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
   };
 
   const loadHistoryDetail = async (item: JdHistoryItem) => {
-    if (item.status === 'pending' || item.status === 'failed') return null;
+    if (item.status === 'pending' || item.status === 'running' || item.status === 'failed') return null;
     const res = await fetch(`/api/ai/jd-analysis/history?resumeId=${selectedResumeId}&id=${item.id}`, { headers: getRequestHeaders() });
     if (!res.ok) return null;
     return res.json();
@@ -416,7 +416,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
   };
 
   const openHistoryItem = async (item: JdHistoryItem) => {
-    if (item.status === 'pending' || item.status === 'failed') {
+    if (item.status === 'pending' || item.status === 'running' || item.status === 'failed') {
       setJobDescription(item.jobDescription || '');
       setAnalysis(null);
       setAppliedSuggestions({});
@@ -444,7 +444,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
         atsScore: 0,
         jobDescription: targetJobDescription.slice(0, 100),
         createdAt: new Date(),
-        status: 'pending',
+        status: 'running',
       }, ...current]);
     }
     setBusy(busyKey);
@@ -727,7 +727,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
   };
 
   const runHistoryAction = async (item: JdHistoryItem, action: JdHistoryAction) => {
-    if (item.status === 'pending') return;
+    if (item.status === 'pending' || item.status === 'running') return;
     const detail = item.status === 'failed' ? null : await loadHistoryDetail(item);
     if (detail) {
       applyHistoryDetail(detail);
@@ -882,30 +882,30 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
   };
 
   const renderHistoryStatus = (item: JdHistoryItem) => {
-    if (item.status === 'pending') return <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{t('analysisPending')}</Badge>;
+    if (item.status === 'pending' || item.status === 'running') return <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{t('analysisPending')}</Badge>;
     if (item.status === 'failed') return <Badge variant="destructive">{t('analysisFailedStatus')}</Badge>;
     return <Badge variant="secondary">{item.overallScore}</Badge>;
   };
 
   const renderHistoryActions = (item: JdHistoryItem) => (
     <div className="mt-3 flex flex-wrap gap-1.5 border-t pt-2 dark:border-zinc-800">
-      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'match-analysis')} disabled={!!busy || item.status === 'pending'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
+      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'match-analysis')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
         <Target className="h-3.5 w-3.5" />
         {t('analyze')}
       </Button>
-      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'cloud-analysis')} disabled={!!busy || item.status === 'pending'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
+      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'cloud-analysis')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
         <Sparkles className="h-3.5 w-3.5" />
         {t('cloudAnalyze')}
       </Button>
-      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'derive-resume')} disabled={!!busy || item.status === 'pending'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
+      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'derive-resume')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
         <GitBranch className="h-3.5 w-3.5" />
         {t('derive')}
       </Button>
-      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'build-knowledge')} disabled={!!busy || item.status === 'pending'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
+      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'build-knowledge')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
         <Brain className="h-3.5 w-3.5" />
         {t('buildKnowledge')}
       </Button>
-      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'create-interview')} disabled={!!busy || item.status === 'pending'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
+      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'create-interview')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
         <MessageSquareText className="h-3.5 w-3.5" />
         {t('createInterview')}
       </Button>

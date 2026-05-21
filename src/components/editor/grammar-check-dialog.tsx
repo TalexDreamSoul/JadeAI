@@ -50,6 +50,8 @@ interface HistoryItem {
   id: string;
   score: number;
   issueCount: number;
+  status?: 'pending' | 'success' | 'failed';
+  error?: string;
   createdAt: string | number;
 }
 
@@ -116,7 +118,7 @@ function ScoreCircle({ score, label, size = 'lg' }: { score: number; label: stri
 }
 
 function ScoreTrend({ current, previous }: { current: number; previous?: number }) {
-  if (previous === undefined) return null;
+  if (current <= 0 || previous === undefined || previous <= 0) return null;
   const diff = current - previous;
   if (diff > 0) return <ArrowUp className="h-3.5 w-3.5 text-emerald-500" />;
   if (diff < 0) return <ArrowDown className="h-3.5 w-3.5 text-red-500" />;
@@ -124,7 +126,7 @@ function ScoreTrend({ current, previous }: { current: number; previous?: number 
 }
 
 function formatDate(value: string | number): string {
-  const d = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
+  const d = typeof value === 'number' && value < 10_000_000_000 ? new Date(value * 1000) : new Date(value);
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
@@ -289,15 +291,16 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        await fetchHistory();
         throw new Error(data.error || 'Grammar check failed');
       }
 
-      const data: GrammarCheckResult = await res.json();
-      setResult(data);
+      setResult(data as GrammarCheckResult);
       fetchHistory();
     } catch (err: any) {
+      await fetchHistory();
       setError(err.message || 'Failed to check grammar');
     } finally {
       setIsChecking(false);
@@ -487,12 +490,15 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   <div className="px-6 py-4 space-y-2.5">
                     {history.map((item, idx) => {
+                      const failed = item.status === 'failed';
+                      const pending = item.status === 'pending';
                       const prevScore = idx < history.length - 1 ? history[idx + 1].score : undefined;
                       return (
                         <div
                           key={item.id}
-                          className="group flex items-center gap-3 rounded-lg border border-zinc-100 bg-white p-3 transition-colors hover:border-zinc-200 hover:bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50 cursor-pointer"
+                          className={`group flex items-center gap-3 rounded-lg border p-3 transition-colors ${failed ? 'border-red-100 bg-red-50/80 dark:border-red-900/50 dark:bg-red-950/20' : 'border-zinc-100 bg-white hover:border-zinc-200 hover:bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50'} ${pending ? 'cursor-default' : 'cursor-pointer'}`}
                           onClick={async () => {
+                            if (pending || failed) return;
                             setHistoryDetailLoading(true);
                             try {
                               const res = await fetch(`/api/ai/grammar-check/history?resumeId=${resumeId}&id=${item.id}`, {
@@ -510,8 +516,20 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
                           }}
                         >
                           <div className="flex items-center gap-1">
-                            <ScoreCircle score={item.score} label="" size="sm" />
-                            <ScoreTrend current={item.score} previous={prevScore} />
+                            {failed ? (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300">
+                                <AlertTriangle className="h-4 w-4" />
+                              </div>
+                            ) : pending ? (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              </div>
+                            ) : (
+                              <>
+                                <ScoreCircle score={item.score} label="" size="sm" />
+                                <ScoreTrend current={item.score} previous={prevScore} />
+                              </>
+                            )}
                           </div>
 
                           <div className="flex-1 min-w-0">
@@ -519,10 +537,19 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
                               <span className="text-xs text-zinc-400 dark:text-zinc-500">
                                 {formatDate(item.createdAt)}
                               </span>
-                              <Badge variant="secondary" className="text-xs">
-                                {t('issueCountLabel', { count: item.issueCount })}
-                              </Badge>
+                              {failed ? (
+                                <Badge variant="destructive" className="text-xs">{t('failedStatus')}</Badge>
+                              ) : pending ? (
+                                <Badge variant="secondary" className="bg-amber-100 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{t('pendingStatus')}</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">
+                                  {t('issueCountLabel', { count: item.issueCount })}
+                                </Badge>
+                              )}
                             </div>
+                            {failed && item.error && (
+                              <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-red-600 dark:text-red-400">{item.error}</p>
+                            )}
                           </div>
 
                           <button

@@ -71,13 +71,16 @@ export async function GET(
       if (typeof row.result === 'string') {
         try { parsed = JSON.parse(row.result); } catch { parsed = null; }
       }
+      const status = row.status || 'success';
       return {
         id: row.id,
         score: row.score,
-        result: parsed,
+        result: parsed && typeof parsed === 'object' && Object.keys(parsed as Record<string, unknown>).length > 0 ? parsed : null,
+        status,
+        error: row.error || undefined,
         createdAt: row.createdAt,
       };
-    }).filter((row: { result: unknown }) => row.result));
+    }));
   } catch (error) {
     console.error('GET /api/share/[token]/ai-review error:', error);
     return NextResponse.json({ error: 'Failed to fetch review history' }, { status: 500 });
@@ -105,57 +108,76 @@ export async function POST(
 
     const selectedText = compact(body.selectedText);
     const selectedAnchor = body.anchor && typeof body.anchor === 'object' ? body.anchor as ReviewAnchor : null;
-    const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-    const aiResult = await generateText({
-      model: getModel(aiConfig),
-      system: SYSTEM,
-      prompt: JSON.stringify({
-        resume: resume.sections,
-        focus: body.focus || (selectedText ? 'selection' : 'overall'),
-        selectedText: selectedText || undefined,
-        sectionId: body.sectionId ? String(body.sectionId) : undefined,
-      }),
-      maxOutputTokens: 4096,
-      providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
-    });
-
-    const review = extractJson(aiResult.text, aiReviewSchema);
-    const saved = await aiReviewRepository.create({
+    const attempt = await aiReviewRepository.createAttempt({
       resumeId: result.share!.resumeId,
       userId: user.id,
-      result: review,
-      score: review.score,
+    }).catch((error) => {
+      console.error('Failed to create shared AI review attempt:', error);
+      return null;
     });
+    const historyId = attempt?.id;
 
-    let comments: unknown[] = [];
-    if (body.createComments !== false) {
-      const reviewerDisplay = getReviewerDisplay(user);
-      const actions = review.actions?.length
-        ? review.actions.slice(0, selectedText ? 3 : 5)
-        : [{ section: selectedText ? 'selection' : 'overall', priority: 'medium' as const, suggestion: review.summary }];
-      comments = await Promise.all(actions.map((action) => shareRepository.createComment({
-        shareId: result.share!.id,
-        resumeId: result.share!.resumeId,
-        parentCommentId: null,
-        authorUserId: user.id,
-        authorName: reviewerDisplay.name,
-        authorEmail: reviewerDisplay.email,
-        sectionId: body.sectionId ? String(body.sectionId) : null,
-        selectedText: selectedText || (action.section ? `AI 评审分析：${action.section}` : 'AI 评审分析'),
-        anchor: selectedAnchor,
-        content: buildActionComment(action),
-      })));
+    try {
+      const aiConfig = await extractAIConfig(request);
+      const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
+      const aiResult = await generateText({
+        model: getModel(aiConfig),
+        system: SYSTEM,
+        prompt: JSON.stringify({
+          resume: resume.sections,
+          focus: body.focus || (selectedText ? 'selection' : 'overall'),
+          selectedText: selectedText || undefined,
+          sectionId: body.sectionId ? String(body.sectionId) : undefined,
+        }),
+        maxOutputTokens: 4096,
+        providerOptions: getProviderOptions(aiConfig),
+        output: Output.json(),
+      });
+
+      const review = extractJson(aiResult.text, aiReviewSchema);
+      const saved = historyId
+        ? await aiReviewRepository.markSuccess(historyId, { result: review, score: review.score })
+        : await aiReviewRepository.create({
+            resumeId: result.share!.resumeId,
+            userId: user.id,
+            result: review,
+            score: review.score,
+          });
+
+      let comments: unknown[] = [];
+      if (body.createComments !== false) {
+        const reviewerDisplay = getReviewerDisplay(user);
+        const actions = review.actions?.length
+          ? review.actions.slice(0, selectedText ? 3 : 5)
+          : [{ section: selectedText ? 'selection' : 'overall', priority: 'medium' as const, suggestion: review.summary }];
+        comments = await Promise.all(actions.map((action) => shareRepository.createComment({
+          shareId: result.share!.id,
+          resumeId: result.share!.resumeId,
+          parentCommentId: null,
+          authorUserId: user.id,
+          authorName: reviewerDisplay.name,
+          authorEmail: reviewerDisplay.email,
+          sectionId: body.sectionId ? String(body.sectionId) : null,
+          selectedText: selectedText || (action.section ? `AI 评审分析：${action.section}` : 'AI 评审分析'),
+          anchor: selectedAnchor,
+          content: buildActionComment(action),
+        })));
+      }
+
+      await chargeAICredit();
+      return NextResponse.json({ ...review, historyId: saved?.id || historyId, comments });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to review resume';
+      if (historyId) await aiReviewRepository.markFailed(historyId, message).catch(() => null);
+      if (error instanceof AIConfigError) {
+        return NextResponse.json({ error: message, historyId }, { status: 401 });
+      }
+      console.error('POST /api/share/[token]/ai-review error:', error);
+      return NextResponse.json({ error: message, historyId }, { status: 500 });
     }
-
-    await chargeAICredit();
-    return NextResponse.json({ ...review, historyId: saved?.id, comments });
   } catch (error) {
-    if (error instanceof AIConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
-    }
-    console.error('POST /api/share/[token]/ai-review error:', error);
-    return NextResponse.json({ error: 'Failed to review resume' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to review resume';
+    console.error('POST /api/share/[token]/ai-review setup error:', error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

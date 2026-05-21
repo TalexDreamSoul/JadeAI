@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import {
+  AlertTriangle,
   Bot,
   Briefcase,
   CircleDot,
@@ -124,7 +125,9 @@ interface JdSource {
 interface AIReviewHistoryItem {
   id: string;
   score: number;
-  result: AIReviewResult;
+  result: AIReviewResult | null;
+  status?: 'pending' | 'success' | 'failed';
+  error?: string;
   createdAt: string | number | Date;
 }
 
@@ -560,7 +563,10 @@ export function PublicResumeReview({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t('aiReview'));
+      if (!res.ok) {
+        await fetchAiReviewHistory({ silent: true });
+        throw new Error(data.error || t('aiReview'));
+      }
       setAiReview(data);
       if (Array.isArray(data.comments) && data.comments.length > 0) {
         setComments((prev) => [...data.comments, ...prev]);
@@ -573,6 +579,7 @@ export function PublicResumeReview({
         clearSelection();
       }
     } catch (err) {
+      await fetchAiReviewHistory({ silent: true });
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setAiLoading(false);
@@ -840,20 +847,36 @@ export function PublicResumeReview({
                   )}
                   {!aiReviewHistoryLoading && aiReviewHistory.length > 0 && (
                     <div className="space-y-2">
-                      {aiReviewHistory.slice(0, 5).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setAiReview(item.result)}
-                          className="w-full rounded-lg border border-zinc-100 bg-white px-2 py-2 text-left transition hover:border-brand dark:border-zinc-800 dark:bg-zinc-900"
-                        >
-                          <div className="mb-1 flex items-center justify-between gap-2">
-                            <span className="text-xs font-semibold text-brand">{item.score}</span>
-                            <span className="text-[10px] text-zinc-400">{formatDate(item.createdAt)}</span>
-                          </div>
-                          <p className="line-clamp-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{item.result.summary}</p>
-                        </button>
-                      ))}
+                      {aiReviewHistory.slice(0, 5).map((item) => {
+                        const failed = item.status === 'failed';
+                        const pending = item.status === 'pending';
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => item.result && setAiReview(item.result)}
+                            disabled={!item.result}
+                            className={`w-full rounded-lg border px-2 py-2 text-left transition disabled:cursor-default ${failed ? 'border-red-100 bg-red-50/80 dark:border-red-900/50 dark:bg-red-950/20' : 'border-zinc-100 bg-white hover:border-brand dark:border-zinc-800 dark:bg-zinc-900'}`}
+                          >
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <span className={`text-xs font-semibold ${failed ? 'text-red-600 dark:text-red-400' : pending ? 'text-amber-600 dark:text-amber-400' : 'text-brand'}`}>
+                                {failed ? safeCopy(t('analysisFailedStatus'), 'Failed') : pending ? safeCopy(t('analysisPending'), 'Analyzing') : item.score}
+                              </span>
+                              <span className="text-[10px] text-zinc-400">{formatDate(item.createdAt)}</span>
+                            </div>
+                            {failed ? (
+                              <div className="flex gap-1.5 text-xs leading-relaxed text-red-600 dark:text-red-400">
+                                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                                <span className="line-clamp-3 whitespace-pre-wrap">{item.error || safeCopy(t('aiReview'), 'AI review failed')}</span>
+                              </div>
+                            ) : pending ? (
+                              <p className="text-xs leading-relaxed text-amber-600 dark:text-amber-400">{safeCopy(t('analysisPending'), 'Analyzing')}</p>
+                            ) : (
+                              <p className="line-clamp-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{item.result?.summary}</p>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
