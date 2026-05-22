@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { getAIHeaders } from '@/stores/settings-store';
 import { useResumeStore } from '@/stores/resume-store';
 import { isLocalResumeId } from '@/lib/local-resumes';
+import { safeParseJson } from '@/lib/safe-json';
 
 interface AIReviewDialogProps {
   open: boolean;
@@ -29,6 +30,15 @@ interface ReviewHistoryItem {
   result: ReviewResult | null;
   status?: 'pending' | 'success' | 'failed';
   error?: string;
+  createdAt: string | number | Date;
+}
+
+interface ReviewHistoryRow {
+  id: string;
+  score?: number | null;
+  result?: unknown;
+  status?: 'pending' | 'success' | 'failed';
+  error?: string | null;
   createdAt: string | number | Date;
 }
 
@@ -63,11 +73,8 @@ export function AIReviewDialog({ open, onOpenChange, resumeId }: AIReviewDialogP
       const res = await fetch(`/api/resume/${resumeId}/ai-review`, { headers: authHeaders() });
       if (!res.ok) return;
       const rows = await res.json();
-      setHistory((Array.isArray(rows) ? rows : []).map((row: any) => {
-        let parsed = row.result;
-        if (typeof parsed === 'string') {
-          try { parsed = JSON.parse(parsed); } catch { parsed = null; }
-        }
+      setHistory((Array.isArray(rows) ? rows : []).map((row: ReviewHistoryRow) => {
+        const parsed = safeParseJson<ReviewResult | null>(row.result, null);
         return {
           id: row.id,
           score: row.score || 0,

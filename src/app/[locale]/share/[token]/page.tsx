@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, useCallback } from 'react';
+import { use, useState, useEffect, useCallback, useRef } from 'react';
 import { signIn } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,11 @@ import { Loader2, Lock, FileX2, Download, LogIn, Settings, WifiOff } from 'lucid
 import { Link } from '@/i18n/routing';
 import { PublicResumeReview } from '@/components/share/public-resume-review';
 import { SettingsDialog } from '@/components/settings/settings-dialog';
+import { IdlePrivacyLock } from '@/components/privacy/idle-privacy-lock';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useUIStore } from '@/stores/ui-store';
 import { useAuth } from '@/hooks/use-auth';
+import { useIdlePrivacyLock } from '@/hooks/use-idle-privacy-lock';
 import type { Resume } from '@/types/resume';
 
 interface ShareMeta {
@@ -25,6 +27,8 @@ interface ShareMeta {
 }
 
 type PublicResume = Resume & { shareMeta?: ShareMeta };
+
+const SHARE_IDLE_LOCK_TIMEOUT_MS = 10 * 60 * 1000;
 
 export default function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
@@ -43,6 +47,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
   const { openModal } = useUIStore();
   const { user } = useAuth();
   const displayName = user?.name || user?.email || t('visitorFallback');
+  const privacyLockedRef = useRef(false);
 
   const getHeaders = () => {
     const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
@@ -88,6 +93,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
   }, [token]);
 
   const fetchResume = useCallback(async (pwd?: string, options?: { silent?: boolean; poll?: boolean }) => {
+    if (privacyLockedRef.current) return;
     if (!options?.silent) setLoading(true);
     if (options?.silent) setRefreshing(true);
     setPasswordError(false);
@@ -135,6 +141,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
       }
 
       const data = await res.json();
+      if (privacyLockedRef.current) return;
       setResume(data);
       setNeedsPassword(false);
       setOffline(false);
@@ -145,23 +152,43 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
       setOffline(true);
       setNotFound(false);
     } finally {
+      if (privacyLockedRef.current) return;
       if (!options?.silent) setLoading(false);
       setRefreshing(false);
       setSubmitting(false);
     }
   }, [clearSensitiveShareState, purgeSharePageCaches, token]);
 
+  const { locked: privacyLocked, reloadToUnlock } = useIdlePrivacyLock({
+    timeoutMs: SHARE_IDLE_LOCK_TIMEOUT_MS,
+    enabled: !!resume && !needsPassword && !needsLogin,
+    onLock: async () => {
+      privacyLockedRef.current = true;
+      clearSensitiveShareState();
+      setPassword('');
+      setSubmitting(false);
+      setRefreshing(false);
+      setLoading(false);
+      setOffline(false);
+      await purgeSharePageCaches();
+    },
+  });
+
+  useEffect(() => {
+    privacyLockedRef.current = privacyLocked;
+  }, [privacyLocked]);
+
   useEffect(() => {
     fetchResume();
   }, [fetchResume]);
 
   useEffect(() => {
-    if (!resume || needsPassword || needsLogin) return;
+    if (privacyLocked || !resume || needsPassword || needsLogin) return;
     const interval = window.setInterval(() => {
       fetchResume(password || undefined, { silent: true, poll: true });
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [fetchResume, needsLogin, needsPassword, password, resume]);
+  }, [fetchResume, needsLogin, needsPassword, password, privacyLocked, resume]);
 
   useEffect(() => {
     const handleOffline = () => {
@@ -189,6 +216,17 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
     setSubmitting(true);
     fetchResume(password);
   };
+
+  if (privacyLocked) {
+    return (
+      <IdlePrivacyLock
+        onReload={reloadToUnlock}
+        title={t('privacyLockedTitle')}
+        description={t('privacyLockedDescription')}
+        reloadLabel={t('privacyReload')}
+      />
+    );
+  }
 
   if (loading && !needsPassword) {
     return (

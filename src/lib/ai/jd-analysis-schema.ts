@@ -28,12 +28,12 @@ export type ApplicableSuggestion = z.infer<typeof applicableSuggestionSchema>;
 
 // Output schema for JD analysis - used with generateObject
 export const jdAnalysisOutputSchema = z.object({
-  overallScore: z.number().min(0).max(100).describe('Overall match score from 0 to 100'),
-  keywordMatches: z.array(z.string()).describe('Keywords from the JD that are found in the resume'),
-  missingKeywords: z.array(z.string()).describe('Important keywords from the JD that are missing from the resume'),
-  suggestions: z.array(suggestionSchema).describe('Specific optimization suggestions for each section'),
+  overallScore: z.coerce.number().min(0).max(100).describe('Overall match score from 0 to 100'),
+  keywordMatches: z.array(z.string()).default([]).describe('Keywords from the JD that are found in the resume'),
+  missingKeywords: z.array(z.string()).default([]).describe('Important keywords from the JD that are missing from the resume'),
+  suggestions: z.array(suggestionSchema).default([]).describe('Specific optimization suggestions for each section'),
   applicableSuggestions: z.array(applicableSuggestionSchema).default([]).describe('Safe, section-level suggestions that can be applied after user confirmation'),
-  atsScore: z.number().min(0).max(100).describe('ATS (Applicant Tracking System) compatibility score from 0 to 100'),
+  atsScore: z.coerce.number().min(0).max(100).describe('ATS (Applicant Tracking System) compatibility score from 0 to 100'),
   summary: z.string().describe('Overall analysis summary with key findings and recommendations'),
 });
 

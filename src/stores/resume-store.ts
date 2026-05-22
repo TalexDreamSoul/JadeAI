@@ -140,6 +140,7 @@ interface ResumeStore {
   setTemplate: (template: string) => void;
   setTitle: (title: string) => void;
   save: () => Promise<void>;
+  persistLocalDraft: () => void;
   enableCloudSync: () => Promise<boolean>;
   disableCloudSync: () => Promise<boolean>;
   _scheduleSave: () => void;
@@ -306,6 +307,11 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
       isDirty: true,
     }));
     get()._scheduleSave();
+  },
+
+  persistLocalDraft: () => {
+    const { currentResume, sections } = get();
+    writeLocalDraft(currentResume, sections);
   },
 
   save: async () => {

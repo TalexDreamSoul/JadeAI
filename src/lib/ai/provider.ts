@@ -114,14 +114,13 @@ export function getModel(config: AIConfig, modelOverride?: string): LanguageMode
  */
 export function getProviderOptions(config: AIConfig) {
   if (config.provider !== 'openai') return {} as Record<string, never>;
+  if (config.openAIEndpoint !== 'responses') return {} as Record<string, never>;
 
   return {
-    openai: config.openAIEndpoint === 'responses'
-      ? {
-          // Responses API stores generations by default; keep TouchResume calls stateless.
-          store: false,
-        }
-      : {},
+    openai: {
+      // Responses API stores generations by default; keep TouchResume calls stateless.
+      store: false,
+    },
   };
 }
 

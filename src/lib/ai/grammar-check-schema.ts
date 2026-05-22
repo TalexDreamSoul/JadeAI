@@ -20,9 +20,9 @@ const grammarIssueSchema = z.object({
 
 // Output schema for the AI grammar check response
 export const grammarCheckOutputSchema = z.object({
-  issues: z.array(grammarIssueSchema).describe('Array of detected issues with suggestions'),
-  summary: z.string().describe('Brief overall summary of the writing quality'),
-  score: z.number().min(0).max(100).describe('Overall writing quality score from 0 to 100'),
+  issues: z.array(grammarIssueSchema).default([]).describe('Array of detected issues with suggestions'),
+  summary: z.string().default('').describe('Brief overall summary of the writing quality'),
+  score: z.coerce.number().min(0).max(100).describe('Overall writing quality score from 0 to 100'),
 });
 
 export type GrammarCheckOutput = z.infer<typeof grammarCheckOutputSchema>;

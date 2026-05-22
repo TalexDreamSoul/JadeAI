@@ -28,10 +28,13 @@ import { AIReviewDialog } from '@/components/editor/ai-review-dialog';
 import { TourOverlay, type TourStepConfig } from '@/components/tour/tour-overlay';
 import { useEditorStore } from '@/stores/editor-store';
 import { useUIStore } from '@/stores/ui-store';
+import { useResumeStore } from '@/stores/resume-store';
 import { useSettingsStore, useIsLocalOnly } from '@/stores/settings-store';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsDialog } from '@/components/settings/settings-dialog';
+import { IdlePrivacyLock } from '@/components/privacy/idle-privacy-lock';
+import { useIdlePrivacyLock } from '@/hooks/use-idle-privacy-lock';
 import { useRouter, usePathname } from '@/i18n/routing';
 import { cn } from '@/lib/utils';
 
@@ -43,13 +46,15 @@ const EDITOR_TOUR_STEPS: TourStepConfig[] = [
   { target: 'theme', placement: 'bottom', i18nKey: 'theme' },
 ];
 
+const EDITOR_IDLE_LOCK_TIMEOUT_MS = 30 * 60 * 1000;
+
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isLoading: fpLoading } = useFingerprint();
-  const { resume, sections, updateSection, addSection, removeSection, reorderSections, loadResume, refreshResume, hasLoaded } = useEditor(id);
+  const { resume, sections, updateSection, addSection, removeSection, reorderSections, refreshResume, hasLoaded } = useEditor(id);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<'resume' | 'career'>(() => (
@@ -65,6 +70,18 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const { hydrate, _hydrated, _localOnlyHydrated } = useSettingsStore();
   const localOnly = useIsLocalOnly();
   const startTour = useTourStore((s) => s.startTour);
+  const { locked: privacyLocked, reloadToUnlock } = useIdlePrivacyLock({
+    timeoutMs: EDITOR_IDLE_LOCK_TIMEOUT_MS,
+    enabled: !!resume,
+    onBeforeLock: () => {
+      useResumeStore.getState().persistLocalDraft();
+    },
+    onLock: () => {
+      closeModal();
+      useResumeStore.getState().reset();
+      useEditorStore.getState().reset();
+    },
+  });
   const visibleSections = useMemo(
     () => sections.filter((section) => section.visible !== false),
     [sections]
@@ -162,6 +179,18 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     const modal = searchParams.get('modal');
     if (modal) openModal(modal as Parameters<typeof openModal>[0]);
   }, [openModal, searchParams]);
+
+  if (privacyLocked) {
+    return (
+      <IdlePrivacyLock
+        onReload={reloadToUnlock}
+        title="页面已锁定"
+        description="由于长时间无操作，为保护简历隐私，当前编辑内容已隐藏。请重新加载页面以重新获取数据。"
+        hint="如果有未保存修改，系统已尽力保存到本地草稿，重新加载后会自动恢复。"
+        reloadLabel="重新加载"
+      />
+    );
+  }
 
   if (fpLoading || (!hasLoaded && !resume)) {
     return (

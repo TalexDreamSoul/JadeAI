@@ -32,6 +32,7 @@ import { useEditorStore } from '@/stores/editor-store';
 import { useResumeStore } from '@/stores/resume-store';
 import { getAIHeaders } from '@/stores/settings-store';
 import { isLocalResumeId } from '@/lib/local-resumes';
+import { safeParseJson } from '@/lib/safe-json';
 
 interface JdAnalysisResult {
   overallScore: number;
@@ -128,7 +129,7 @@ function formatDate(value: string | number): string {
 }
 
 /* ── Result view (shared between new analysis & history detail) ── */
-function JdAnalysisResultView({ result, jobDescription, t }: { result: JdAnalysisResult; jobDescription?: string; t: any }) {
+function JdAnalysisResultView({ result, jobDescription, t }: { result: JdAnalysisResult; jobDescription?: string; t: (key: string) => string }) {
   const [jdExpanded, setJdExpanded] = useState(false);
 
   return (
@@ -342,9 +343,9 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
       setResult(data as JdAnalysisResult);
       // Refresh history count
       fetchHistory();
-    } catch (err: any) {
+    } catch (err) {
       await fetchHistory();
-      setError(err.message || 'Failed to analyze');
+      setError(err instanceof Error ? err.message : 'Failed to analyze');
     } finally {
       setIsAnalyzing(false);
     }
@@ -552,8 +553,11 @@ export function JdAnalysisDialog({ open, onOpenChange, resumeId }: JdAnalysisDia
                               if (res.ok) {
                                 const data = await res.json();
                                 if (data.result) {
-                                  setHistoryDetail(typeof data.result === 'string' ? JSON.parse(data.result) : data.result);
-                                  setHistoryDetailJd(data.jobDescription || '');
+                                  const parsed = safeParseJson(data.result, null);
+                                  if (parsed) {
+                                    setHistoryDetail(parsed);
+                                    setHistoryDetailJd(data.jobDescription || '');
+                                  }
                                 }
                               }
                             } catch { /* ignore */ } finally {

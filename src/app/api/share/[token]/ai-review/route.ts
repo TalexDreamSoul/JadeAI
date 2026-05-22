@@ -1,27 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText, Output } from 'ai';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
-import { extractJson } from '@/lib/ai/extract-json';
+import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
+import { aiReviewSchema } from '@/lib/ai/ai-review-schema';
 import { extractAIConfig, getModel, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { aiReviewRepository } from '@/lib/db/repositories/ai-review.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { getReviewerDisplay, sanitizeResumeForShare } from '@/lib/share/review';
 import { hashPassword } from '@/lib/utils/share';
-
-const aiReviewSchema = z.object({
-  score: z.number().min(0).max(100),
-  summary: z.string(),
-  strengths: z.array(z.string()).default([]),
-  risks: z.array(z.string()).default([]),
-  actions: z.array(z.object({
-    section: z.string(),
-    priority: z.enum(['high', 'medium', 'low']).default('medium'),
-    suggestion: z.string(),
-  })).default([]),
-});
+import { safeParseJson } from '@/lib/safe-json';
 
 const SYSTEM = `You are a senior resume reviewer. Review the resume for recruiter readability, ATS quality, impact, clarity, and role alignment.
 If selected text is provided, focus on that selected passage and produce precise, actionable comments for it.
@@ -67,10 +56,7 @@ export async function GET(
 
     const rows: Awaited<ReturnType<typeof aiReviewRepository.findByResumeId>> = await aiReviewRepository.findByResumeId(result.share!.resumeId, 20);
     return NextResponse.json(rows.map((row: Awaited<ReturnType<typeof aiReviewRepository.findByResumeId>>[number]) => {
-      let parsed = row.result;
-      if (typeof row.result === 'string') {
-        try { parsed = JSON.parse(row.result); } catch { parsed = null; }
-      }
+      const parsed = safeParseJson(row.result, null);
       const status = row.status || 'success';
       return {
         id: row.id,
@@ -120,8 +106,10 @@ export async function POST(
     try {
       const aiConfig = await extractAIConfig(request);
       const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-      const aiResult = await generateText({
+      const { data: review } = await generateJsonWithRetry({
+        label: 'shared-ai-review',
         model: getModel(aiConfig),
+        schema: aiReviewSchema,
         system: SYSTEM,
         prompt: JSON.stringify({
           resume: resume.sections,
@@ -131,10 +119,7 @@ export async function POST(
         }),
         maxOutputTokens: 4096,
         providerOptions: getProviderOptions(aiConfig),
-        output: Output.json(),
       });
-
-      const review = extractJson(aiResult.text, aiReviewSchema);
       const saved = historyId
         ? await aiReviewRepository.markSuccess(historyId, { result: review, score: review.score })
         : await aiReviewRepository.create({
@@ -167,7 +152,7 @@ export async function POST(
       await chargeAICredit();
       return NextResponse.json({ ...review, historyId: saved?.id || historyId, comments });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to review resume';
+      const message = getAIJsonErrorMessage(error, 'Failed to review resume');
       if (historyId) await aiReviewRepository.markFailed(historyId, message).catch(() => null);
       if (error instanceof AIConfigError) {
         return NextResponse.json({ error: message, historyId }, { status: 401 });

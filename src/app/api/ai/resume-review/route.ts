@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText, Output } from 'ai';
-import { z } from 'zod';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { extractJson } from '@/lib/ai/extract-json';
+import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
+import { aiReviewSchema } from '@/lib/ai/ai-review-schema';
 import { getResumeSectionsContext, normalizeResumeSnapshot } from '@/lib/ai/resume-snapshot';
-
-const aiReviewSchema = z.object({
-  score: z.number().min(0).max(100),
-  summary: z.string(),
-  strengths: z.array(z.string()).default([]),
-  risks: z.array(z.string()).default([]),
-  actions: z.array(z.object({
-    section: z.string(),
-    priority: z.enum(['high', 'medium', 'low']).default('medium'),
-    suggestion: z.string(),
-  })).default([]),
-});
 
 const SYSTEM = `You are a senior resume reviewer. Review the resume for recruiter readability, ATS quality, impact, clarity, and role alignment.
 Return JSON only with fields: score, summary, strengths, risks, actions. Match the resume language.`;
@@ -33,8 +20,10 @@ export async function POST(request: NextRequest) {
     const user = await resolveUser(getUserIdFromRequest(request));
     const aiConfig = await extractAIConfig(request);
     const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-    const result = await generateText({
+    const { data: review } = await generateJsonWithRetry({
+      label: 'local-resume-review',
       model: getModel(aiConfig),
+      schema: aiReviewSchema,
       system: SYSTEM,
       prompt: JSON.stringify({
         resume: JSON.parse(getResumeSectionsContext(resume)),
@@ -45,10 +34,7 @@ export async function POST(request: NextRequest) {
       }),
       maxOutputTokens: 4096,
       providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
     });
-
-    const review = extractJson(result.text, aiReviewSchema);
     await chargeAICredit();
     return NextResponse.json(review);
   } catch (error) {
@@ -56,6 +42,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
     console.error('POST /api/ai/resume-review error:', error);
-    return NextResponse.json({ error: 'Failed to review resume' }, { status: 500 });
+    return NextResponse.json({ error: getAIJsonErrorMessage(error, 'Failed to review resume') }, { status: 500 });
   }
 }

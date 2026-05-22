@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
@@ -8,7 +7,7 @@ import { isLocalResumeId } from '@/lib/local-resumes';
 import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { jdAnalysisInputSchema, jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
-import { extractJson } from '@/lib/ai/extract-json';
+import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
 
 const JD_ANALYSIS_PROMPT = `You are an expert resume analyst and career coach. Analyze the match between the provided resume and job description.
 
@@ -85,16 +84,15 @@ export async function POST(request: NextRequest) {
       const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
       const model = getModel(aiConfig);
 
-      const result = await generateText({
+      const { data: analysisData } = await generateJsonWithRetry({
+        label: 'jd-analysis',
         model,
+        schema: jdAnalysisOutputSchema,
         maxOutputTokens: 8192,
         system: JD_ANALYSIS_PROMPT,
         prompt: `Resume:\n${resumeContext}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
         providerOptions: getProviderOptions(aiConfig),
-        output: Output.json(),
       });
-
-      const analysisData = extractJson(result.text, jdAnalysisOutputSchema);
 
       if (historyId) {
         await analysisRepository.markJdAnalysisSuccess(historyId, {
@@ -107,7 +105,7 @@ export async function POST(request: NextRequest) {
       await chargeAICredit();
       return NextResponse.json({ ...analysisData, historyId });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to analyze job description match';
+      const message = getAIJsonErrorMessage(error, 'Failed to analyze job description match');
       if (historyId) {
         await analysisRepository.markJdAnalysisFailed(historyId, message).catch((e) => {
           console.error('Failed to mark JD analysis failed:', e);

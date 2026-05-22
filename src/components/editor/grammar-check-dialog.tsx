@@ -30,6 +30,7 @@ import { useEditorStore } from '@/stores/editor-store';
 import { useResumeStore } from '@/stores/resume-store';
 import { getAIHeaders } from '@/stores/settings-store';
 import { isLocalResumeId } from '@/lib/local-resumes';
+import { safeParseJson } from '@/lib/safe-json';
 
 interface GrammarIssue {
   sectionId: string;
@@ -130,7 +131,7 @@ function formatDate(value: string | number): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function SeverityBadge({ severity, t }: { severity: GrammarIssue['severity']; t: any }) {
+function SeverityBadge({ severity, t }: { severity: GrammarIssue['severity']; t: (key: string) => string }) {
   const styles = {
     high: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800',
     medium: 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-300 dark:border-yellow-800',
@@ -144,7 +145,7 @@ function SeverityBadge({ severity, t }: { severity: GrammarIssue['severity']; t:
   return <Badge className={styles[severity]}>{labels[severity]}</Badge>;
 }
 
-function TypeBadge({ type, t }: { type: GrammarIssue['type']; t: any }) {
+function TypeBadge({ type, t }: { type: GrammarIssue['type']; t: (key: string) => string }) {
   const labelMap: Record<GrammarIssue['type'], string> = {
     grammar: t('typeGrammar'),
     weak_verb: t('typeWeakVerb'),
@@ -160,7 +161,7 @@ function TypeBadge({ type, t }: { type: GrammarIssue['type']; t: any }) {
 }
 
 /* ── Result view (shared between new check & history detail) ── */
-function GrammarCheckResultView({ result, t }: { result: GrammarCheckResult; t: any }) {
+function GrammarCheckResultView({ result, t }: { result: GrammarCheckResult; t: (key: string) => string }) {
   return (
     <div className="px-6 py-4 space-y-6">
       {/* Score */}
@@ -299,9 +300,9 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
 
       setResult(data as GrammarCheckResult);
       fetchHistory();
-    } catch (err: any) {
+    } catch (err) {
       await fetchHistory();
-      setError(err.message || 'Failed to check grammar');
+      setError(err instanceof Error ? err.message : 'Failed to check grammar');
     } finally {
       setIsChecking(false);
     }
@@ -507,7 +508,8 @@ export function GrammarCheckDialog({ open, onOpenChange, resumeId }: GrammarChec
                               if (res.ok) {
                                 const data = await res.json();
                                 if (data.result) {
-                                  setHistoryDetail(typeof data.result === 'string' ? JSON.parse(data.result) : data.result);
+                                  const parsed = safeParseJson(data.result, null);
+                                  if (parsed) setHistoryDetail(parsed);
                                 }
                               }
                             } catch { /* ignore */ } finally {

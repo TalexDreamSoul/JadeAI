@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText, Output } from 'ai';
-import { z } from 'zod';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
-import { extractJson } from '@/lib/ai/extract-json';
+import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
+import { aiReviewSchema } from '@/lib/ai/ai-review-schema';
 import { aiReviewRepository } from '@/lib/db/repositories/ai-review.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
-
-const aiReviewSchema = z.object({
-  score: z.number().min(0).max(100),
-  summary: z.string(),
-  strengths: z.array(z.string()).default([]),
-  risks: z.array(z.string()).default([]),
-  actions: z.array(z.object({
-    section: z.string(),
-    priority: z.enum(['high', 'medium', 'low']).default('medium'),
-    suggestion: z.string(),
-  })).default([]),
-});
 
 const SYSTEM = `You are a senior resume reviewer. Review the resume for recruiter readability, ATS quality, impact, clarity, role alignment, and visual presentation fit.
 When a JD is provided, judge whether the resume's template/style/theme, information density, section order, and tone fit the target role and industry. Do not only review text; include visual and layout risks when relevant.
@@ -64,8 +51,10 @@ export async function POST(
     try {
       const aiConfig = await extractAIConfig(request);
       const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-      const result = await generateText({
+      const { data: review } = await generateJsonWithRetry({
+        label: 'resume-ai-review',
         model: getModel(aiConfig),
+        schema: aiReviewSchema,
         system: SYSTEM,
         prompt: JSON.stringify({
           resume: resume.sections,
@@ -78,10 +67,7 @@ export async function POST(
         }),
         maxOutputTokens: 4096,
         providerOptions: getProviderOptions(aiConfig),
-        output: Output.json(),
       });
-
-      const review = extractJson(result.text, aiReviewSchema);
       if (historyId) await aiReviewRepository.markSuccess(historyId, { result: review, score: review.score });
       await resumeRepository.createEvent({
         resumeId: id,
@@ -93,7 +79,7 @@ export async function POST(
       await chargeAICredit();
       return NextResponse.json({ ...review, historyId });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to review resume';
+      const message = getAIJsonErrorMessage(error, 'Failed to review resume');
       if (historyId) await aiReviewRepository.markFailed(historyId, message).catch(() => null);
       if (error instanceof AIConfigError) {
         return NextResponse.json({ error: error.message, historyId }, { status: 401 });
