@@ -87,7 +87,9 @@ async function main() {
     check('Codex install dry-run script exists', assertFile('scripts/install-jadeai-resume-mcp.ts')),
     check('Behavior smoke script exists', assertFile('scripts/smoke-jadeai-resume-mcp.ts')),
     check('Package scripts expose MCP commands', hasText('package.json', '"mcp:resume"') && hasText('package.json', '"smoke:mcp:resume"') && hasText('package.json', '"mcp:resume:install"')),
-    check('MCP docs cover local clients and safety gates', hasText('docs/mcp/jadeai-resume-mcp.md', 'Codex 配置示例') && hasText('docs/mcp/jadeai-resume-mcp.md', '写入安全约束')),
+    check('MCP config endpoint avoids wildcard host', hasText('src/app/api/mcp/config/route.ts', 'x-forwarded-host') && hasText('src/app/api/mcp/config/route.ts', 'isWildcardHost')),
+    check('MCP settings normalize to browser origin and expose pi skill snippet', hasText('src/components/settings/mcp-settings-panel.tsx', 'currentWebsiteEndpoint') && hasText('src/components/settings/mcp-settings-panel.tsx', 'buildSkillInstallSnippet') && hasText('messages/zh.json', '也可以做成 Skill')),
+    check('MCP docs cover local clients and safety gates', hasText('docs/mcp/jadeai-resume-mcp.md', 'Codex 配置示例') && hasText('docs/mcp/jadeai-resume-mcp.md', '写入安全约束') && hasText('docs/mcp/jadeai-resume-mcp.md', 'Skill 用法')),
     check('Codex config installed', codexInstalled, { codexConfigPath, required: requireCodexConfig }),
   ];
 

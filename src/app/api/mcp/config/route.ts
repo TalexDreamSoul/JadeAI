@@ -4,9 +4,54 @@ import { getUserMcpAccess } from '@/lib/mcp/user-mcp-access';
 
 export const dynamic = 'force-dynamic';
 
+function firstHeaderValue(value: string | null) {
+  return value?.split(',')[0]?.trim() || '';
+}
+
+function hostnameFromHostHeader(host: string) {
+  const trimmed = host.trim();
+  if (trimmed.startsWith('[')) {
+    const end = trimmed.indexOf(']');
+    return end > 0 ? trimmed.slice(1, end) : trimmed;
+  }
+  return trimmed.split(':')[0];
+}
+
+function isWildcardHost(host: string) {
+  const hostname = hostnameFromHostHeader(host).toLowerCase();
+  return hostname === '0.0.0.0' || hostname === '::';
+}
+
+function configuredBaseUrl() {
+  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  const clean = configured?.replace(/\/$/, '') || '';
+  if (!clean) return '';
+
+  try {
+    const url = new URL(clean);
+    return isWildcardHost(url.host) ? '' : clean;
+  } catch {
+    return clean;
+  }
+}
+
 function baseUrl(request: NextRequest) {
-  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
-    || request.nextUrl.origin;
+  const configured = configuredBaseUrl();
+  if (configured) return configured;
+
+  // request.nextUrl.origin can become 0.0.0.0 when Next is bound to all
+  // interfaces. Prefer the browser/proxy Host headers so copied MCP config uses
+  // the current website origin.
+  const host = firstHeaderValue(request.headers.get('x-forwarded-host'))
+    || firstHeaderValue(request.headers.get('host'));
+  if (host && !isWildcardHost(host)) {
+    const proto = firstHeaderValue(request.headers.get('x-forwarded-proto'))
+      || request.nextUrl.protocol.replace(':', '')
+      || 'https';
+    return `${proto}://${host}`.replace(/\/$/, '');
+  }
+
+  return request.nextUrl.origin.replace(/\/$/, '');
 }
 
 export async function GET(request: NextRequest) {

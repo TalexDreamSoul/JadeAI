@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, Clipboard, KeyRound, Loader2, PlugZap, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { Check, Clipboard, KeyRound, Loader2, PlugZap, RefreshCw, ShieldCheck, Trash2, WandSparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +51,16 @@ function formatTime(value: string | null) {
   return date.toLocaleString();
 }
 
+function currentWebsiteEndpoint(endpoint: string) {
+  if (typeof window === 'undefined') return endpoint;
+  try {
+    const url = new URL(endpoint || '/api/mcp/resume', window.location.origin);
+    return `${window.location.origin}${url.pathname}${url.search}`;
+  } catch {
+    return `${window.location.origin}/api/mcp/resume`;
+  }
+}
+
 function buildConfigSnippet(endpoint: string, token: string | null) {
   return JSON.stringify({
     mcpServers: {
@@ -62,6 +72,60 @@ function buildConfigSnippet(endpoint: string, token: string | null) {
       },
     },
   }, null, 2);
+}
+
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildSkillMarkdown(endpoint: string, token: string | null) {
+  const endpointValue = endpoint || 'https://your-jadeai-domain.com/api/mcp/resume';
+  const tokenValue = token || '<your-token>';
+  const authHeader = `Authorization: Bearer ${tokenValue}`;
+
+  return `---
+name: jadeai-resume
+description: Use when the user asks to read, analyze, tailor, or safely update JadeAI/TouchResume resumes, JD analyses, knowledge graph data, or resume chat history via the user's JadeAI MCP API key.
+---
+
+# JadeAI Resume
+
+Use the user's JadeAI Resume MCP access token/API key to work with resume data.
+
+## Connection
+
+- Endpoint: \`${endpointValue}\`
+- Header: \`${authHeader}\`
+
+\`\`\`json
+${buildConfigSnippet(endpointValue, tokenValue)}
+\`\`\`
+
+If the MCP client does not import the JSON automatically, add the HTTP MCP server manually with the same endpoint and header.
+
+## JSON-RPC smoke test
+
+\`\`\`bash
+curl -s ${shellQuote(endpointValue)} \\
+  -H 'Content-Type: application/json' \\
+  -H ${shellQuote(authHeader)} \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+\`\`\`
+
+## Workflow
+
+1. Prefer read tools first: \`list_resumes\`, \`get_resume\`, \`list_jd_analyses\`, \`search_knowledge\`, \`get_resume_context_pack\`.
+2. For edits, never write blindly. First call \`create_resume_version\`.
+3. Run write tools in preview mode first. Apply only when the user approves and pass \`versionId\` with \`apply: true\`.
+4. Do not print, commit, or share this token/API key.
+`;
+}
+
+function buildSkillInstallSnippet(endpoint: string, token: string | null) {
+  return `mkdir -p ~/.pi/agent/skills/jadeai-resume
+cat > ~/.pi/agent/skills/jadeai-resume/SKILL.md <<'EOF'
+${buildSkillMarkdown(endpoint, token)}
+EOF`;
 }
 
 export function McpSettingsPanel() {
@@ -82,7 +146,8 @@ export function McpSettingsPanel() {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to load MCP config');
-      setConfig(await res.json());
+      const data = await res.json();
+      setConfig({ ...data, endpoint: currentWebsiteEndpoint(data.endpoint || '') });
     } catch {
       toast.error(t('loadFailed'));
     } finally {
@@ -96,6 +161,11 @@ export function McpSettingsPanel() {
 
   const snippet = useMemo(
     () => buildConfigSnippet(config?.endpoint || '', freshToken),
+    [config?.endpoint, freshToken],
+  );
+
+  const skillSnippet = useMemo(
+    () => buildSkillInstallSnippet(config?.endpoint || '', freshToken),
     [config?.endpoint, freshToken],
   );
 
@@ -302,6 +372,35 @@ export function McpSettingsPanel() {
           value={snippet}
           className="min-h-36 resize-none font-mono text-xs"
         />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <WandSparkles className="h-4 w-4 text-brand" />
+              {t('skill')}
+            </div>
+            <p className="text-xs text-zinc-500">{t('skillHint')}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer gap-2"
+            onClick={() => copyText('skill', skillSnippet)}
+          >
+            {copied === 'skill' ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+            {t('copySkill')}
+          </Button>
+        </div>
+        <Textarea
+          readOnly
+          value={skillSnippet}
+          className="min-h-40 resize-none font-mono text-xs"
+        />
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          {freshToken ? t('skillFreshTokenHint') : t('skillPlaceholderHint')}
+        </p>
       </div>
 
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">

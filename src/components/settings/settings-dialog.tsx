@@ -152,7 +152,7 @@ export function SettingsDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent className="sm:max-w-[680px] p-0 gap-0">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px] p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-zinc-500" />

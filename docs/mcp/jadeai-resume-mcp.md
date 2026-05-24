@@ -8,10 +8,21 @@ JadeAI Resume MCP 是本地 stdio MCP 服务，让 Codex、Claude、Cursor 读�
 
 页面内配置的特点：
 
+- 连接地址优先使用当前网站访问域名（前端会按浏览器 `window.location.origin` 校正，后端代理场景读取 `x-forwarded-host` / `host`），避免开发服务绑定 `0.0.0.0` 时复制出 `https://0.0.0.0:3000/...`；生产环境也可以用 `NEXT_PUBLIC_APP_URL` 或 `APP_URL` 显式指定外部访问地址。
 - 每个登录用户/本地指纹用户都有独立 token。
 - token 明文只在创建或重置后展示一次，服务端只保存 hash。
 - 远程 MCP endpoint 为 `/api/mcp/resume`，客户端通过 `Authorization: Bearer <token>` 绑定到对应用户。
 - 撤销或重置 token 后，旧客户端配置立即失效。
+
+## Skill 用法
+
+设置页同时提供一个 pi Skill 安装脚本。创建 token 后复制脚本并在本机执行，会写入：
+
+```bash
+~/.pi/agent/skills/jadeai-resume/SKILL.md
+```
+
+之后用户可以直接要求 Agent 使用 `jadeai-resume` skill 读取、分析或优化简历。该 Skill 会包含 MCP endpoint 与 `Authorization: Bearer <token>`，因此只应安装在可信本机环境；不要把生成的 Skill 文件提交到仓库或分享给他人。
 
 HTTP JSON-RPC smoke：
 
