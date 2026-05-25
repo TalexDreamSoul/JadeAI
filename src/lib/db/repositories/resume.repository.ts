@@ -34,6 +34,9 @@ type ResumeUpdateData = Partial<{
   versionLabel: string;
 }>;
 
+type RestoreSnapshotSection = Partial<{ id: string; type: string; title: string; sortOrder: number; visible: boolean; content: unknown }>;
+type RestoreSnapshot = Partial<ResumeCreateData & { sections?: RestoreSnapshotSection[] }>;
+
 export const resumeRepository = {
   async findAllByUserId(userId: string) {
     return db.select().from(resumes).where(eq(resumes.userId, userId)).orderBy(desc(resumes.updatedAt));
@@ -180,6 +183,65 @@ export const resumeRepository = {
       .from(resumeVersions)
       .where(eq(resumeVersions.resumeId, resumeId))
       .orderBy(desc(resumeVersions.createdAt));
+  },
+
+  async restoreFromSnapshot(
+    id: string,
+    snapshot: RestoreSnapshot,
+    options: { restoreMetadata?: boolean; restoreSections?: boolean } = {}
+  ) {
+    const restoreMetadata = options.restoreMetadata ?? true;
+    const restoreSections = options.restoreSections ?? true;
+    const current = await this.findById(id);
+    if (!current) return null;
+
+    if (restoreMetadata) {
+      await this.update(id, {
+        ...(snapshot.title !== undefined ? { title: snapshot.title } : {}),
+        ...(snapshot.template !== undefined ? { template: snapshot.template } : {}),
+        ...(snapshot.themeConfig !== undefined ? { themeConfig: snapshot.themeConfig } : {}),
+        ...(snapshot.language !== undefined ? { language: snapshot.language } : {}),
+        ...(snapshot.isBase !== undefined ? { isBase: snapshot.isBase } : {}),
+        ...(snapshot.baseResumeId !== undefined ? { baseResumeId: snapshot.baseResumeId } : {}),
+        ...(snapshot.targetCompany !== undefined ? { targetCompany: snapshot.targetCompany } : {}),
+        ...(snapshot.targetJobTitle !== undefined ? { targetJobTitle: snapshot.targetJobTitle } : {}),
+        ...(snapshot.jobDescription !== undefined ? { jobDescription: snapshot.jobDescription } : {}),
+        ...(snapshot.versionLabel !== undefined ? { versionLabel: snapshot.versionLabel } : {}),
+      });
+    }
+
+    if (restoreSections && Array.isArray(snapshot.sections)) {
+      const existing = current.sections as Array<{ id: string }>;
+      const existingIds = new Set(existing.map((section) => section.id));
+      const incoming = snapshot.sections.filter((section) => section.id && section.type && section.title);
+      const incomingIds = new Set(incoming.map((section) => section.id as string));
+
+      for (const section of existing) {
+        if (!incomingIds.has(section.id)) await this.deleteSection(section.id);
+      }
+
+      for (const [index, section] of incoming.entries()) {
+        const sectionId = section.id as string;
+        const payload = {
+          title: section.title || '',
+          sortOrder: typeof section.sortOrder === 'number' ? section.sortOrder : index,
+          visible: section.visible ?? true,
+          content: section.content ?? {},
+        };
+        if (existingIds.has(sectionId)) {
+          await this.updateSection(sectionId, payload);
+        } else {
+          await this.createSection({
+            id: sectionId,
+            resumeId: id,
+            type: section.type as string,
+            ...payload,
+          });
+        }
+      }
+    }
+
+    return this.findById(id);
   },
 
   async createEvent(data: {

@@ -46,3 +46,51 @@ export async function POST(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+function normalizeSnapshot(snapshot: unknown) {
+  return snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+    ? snapshot as Record<string, unknown>
+    : null;
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const result = await requireOwnedResume(request, id);
+    if (result.error) return result.error;
+
+    const body = await request.json().catch(() => ({}));
+    const versionId = String(body.versionId || '').trim();
+    if (!versionId) return NextResponse.json({ error: 'versionId is required' }, { status: 400 });
+
+    const versions = await resumeRepository.findVersions(id);
+    const version = versions.find((item: Awaited<ReturnType<typeof resumeRepository.findVersions>>[number]) => item.id === versionId);
+    if (!version) return NextResponse.json({ error: 'Version not found' }, { status: 404 });
+
+    const snapshot = normalizeSnapshot(version.snapshot);
+    if (!snapshot) return NextResponse.json({ error: 'Invalid version snapshot' }, { status: 400 });
+
+    await resumeRepository.createVersion(id, `restore-before-${new Date().toISOString()}`, result.resume, 'manual');
+    const restored = await resumeRepository.restoreFromSnapshot(id, snapshot, {
+      restoreMetadata: body.restoreMetadata !== false,
+      restoreSections: body.restoreSections !== false,
+    });
+    if (!restored) return NextResponse.json({ error: 'Restore failed' }, { status: 500 });
+
+    const afterVersion = await resumeRepository.createVersion(id, `restore-after-${version.label}`, restored, 'manual');
+    await resumeRepository.createEvent({
+      resumeId: id,
+      userId: result.user!.id,
+      type: 'resume.version.restored',
+      title: 'Resume version restored',
+      metadata: { versionId, label: version.label, afterVersionId: afterVersion?.id || null },
+    });
+
+    return NextResponse.json({ resume: restored, version, afterVersion });
+  } catch (error) {
+    console.error('PATCH /api/resume/[id]/versions error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

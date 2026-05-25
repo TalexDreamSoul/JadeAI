@@ -8,10 +8,20 @@ import type {
   LanguagesContent,
   PersonalInfoContent,
   ProjectsContent,
+  QrCodesContent,
   Resume,
   SkillsContent,
   SummaryContent,
   WorkExperienceContent,
+  ResumeSection,
+  WorkExperienceItem,
+  EducationItem,
+  SkillCategory,
+  ProjectItem,
+  CertificationItem,
+  LanguageItem,
+  GitHubRepoItem,
+  CustomItem,
 } from '@/types/resume';
 import { AvatarImage } from '../avatar-image';
 import { getPersonalInfoPreviewItems } from '../personal-info-utils';
@@ -61,7 +71,7 @@ export function TouchFlatTemplate({ resume }: { resume: Resume }) {
   );
 }
 
-function TouchFlatSectionContent({ section, resume }: { section: any; resume: Resume }) {
+function TouchFlatSectionContent({ section, resume }: { section: ResumeSection; resume: Resume }) {
   const content = section.content;
   if (!content) return null;
 
@@ -71,45 +81,45 @@ function TouchFlatSectionContent({ section, resume }: { section: any; resume: Re
 
   if (section.type === 'work_experience') {
     const items = (content as WorkExperienceContent).items || [];
-    return <div className="space-y-3">{items.map((item: any) => <FlatItem key={item.id} title={item.position} subtitle={[item.company, item.location].filter(Boolean).join(' · ')} date={dateRange(item.startDate, item.endDate, item.current, resume.language)} description={item.description} technologies={item.technologies} highlights={item.highlights} />)}</div>;
+    return <div className="space-y-3">{items.map((item: WorkExperienceItem) => <FlatItem key={item.id} title={item.position} subtitle={[item.company, item.location].filter(Boolean).join(' · ')} date={dateRange(item.startDate, item.endDate, item.current, resume.language)} description={item.description} technologies={item.technologies} highlights={item.highlights} />)}</div>;
   }
 
   if (section.type === 'education') {
     const items = (content as EducationContent).items || [];
-    return <div className="space-y-3">{items.map((item: any) => <FlatItem key={item.id} title={degreeField(item.degree, item.field)} subtitle={[item.institution, item.location].filter(Boolean).join(' · ')} date={dateRange(item.startDate, item.endDate, false, resume.language)} description={item.gpa ? `GPA: ${item.gpa}` : ''} highlights={item.highlights} />)}</div>;
+    return <div className="space-y-3">{items.map((item: EducationItem) => <FlatItem key={item.id} title={degreeField(item.degree, item.field)} subtitle={[item.institution, item.location].filter(Boolean).join(' · ')} date={dateRange(item.startDate, item.endDate, false, resume.language)} description={item.gpa ? `GPA: ${item.gpa}` : ''} highlights={item.highlights} />)}</div>;
   }
 
   if (section.type === 'skills') {
     const categories = (content as SkillsContent).categories || [];
-    return <div className="grid gap-2 sm:grid-cols-2">{categories.map((cat: any) => <div key={cat.id} className="rounded-xl bg-zinc-50 px-3 py-2"><div className="mb-1 text-xs font-semibold text-zinc-500">{cat.name}</div><div className="flex flex-wrap gap-1.5">{(cat.skills || []).map((skill: string, i: number) => <span key={i} className="rounded-md bg-white px-2 py-0.5 text-xs text-zinc-700 ring-1 ring-zinc-200">{skill}</span>)}</div></div>)}</div>;
+    return <div className="grid gap-2 sm:grid-cols-2">{categories.map((cat: SkillCategory) => <div key={cat.id} className="rounded-xl bg-zinc-50 px-3 py-2"><div className="mb-1 text-xs font-semibold text-zinc-500">{cat.name}</div><div className="flex flex-wrap gap-1.5">{(cat.skills || []).map((skill: string, i: number) => <span key={i} className="rounded-md bg-white px-2 py-0.5 text-xs text-zinc-700 ring-1 ring-zinc-200">{skill}</span>)}</div></div>)}</div>;
   }
 
   if (section.type === 'projects') {
     const items = (content as ProjectsContent).items || [];
-    return <div className="space-y-3">{items.map((item: any) => <FlatItem key={item.id} title={item.name} date={dateRange(item.startDate, item.endDate, false, resume.language)} description={item.description} technologies={item.technologies} highlights={item.highlights} />)}</div>;
+    return <div className="space-y-3">{items.map((item: ProjectItem) => <FlatItem key={item.id} title={item.name} date={dateRange(item.startDate, item.endDate, false, resume.language)} description={item.description} technologies={item.technologies} highlights={item.highlights} />)}</div>;
   }
 
   if (section.type === 'certifications') {
     const items = (content as CertificationsContent).items || [];
-    return <div className="space-y-1.5">{items.map((item: any) => <p key={item.id} className="text-sm text-zinc-700"><span className="font-semibold text-zinc-900">{item.name}</span>{item.issuer && ` · ${item.issuer}`}{item.date && <span className="text-zinc-500"> · {item.date}</span>}</p>)}</div>;
+    return <div className="space-y-1.5">{items.map((item: CertificationItem) => <p key={item.id} className="text-sm text-zinc-700"><span className="font-semibold text-zinc-900">{item.name}</span>{item.issuer && ` · ${item.issuer}`}{item.date && <span className="text-zinc-500"> · {item.date}</span>}</p>)}</div>;
   }
 
   if (section.type === 'languages') {
     const items = (content as LanguagesContent).items || [];
-    return <p className="text-sm text-zinc-700">{items.map((item: any) => `${item.language} (${item.proficiency})`).join(' · ')}</p>;
+    return <p className="text-sm text-zinc-700">{items.map((item: LanguageItem) => `${item.language} (${item.proficiency})`).join(' · ')}</p>;
   }
 
   if (section.type === 'github') {
     const items = (content as GitHubContent).items || [];
-    return <div className="space-y-2">{items.map((item: any) => <FlatItem key={item.id} title={item.name} date={`★ ${item.stars?.toLocaleString() ?? 0}`} description={item.description} />)}</div>;
+    return <div className="space-y-2">{items.map((item: GitHubRepoItem) => <FlatItem key={item.id} title={item.name} date={`★ ${item.stars?.toLocaleString() ?? 0}`} description={item.description} />)}</div>;
   }
 
   if (section.type === 'custom') {
     const items = (content as CustomContent).items || [];
-    return <div className="space-y-2">{items.map((item: any) => <FlatItem key={item.id} title={item.title} subtitle={item.subtitle} date={item.date} description={item.description} />)}</div>;
+    return <div className="space-y-2">{items.map((item: CustomItem) => <FlatItem key={item.id} title={item.title} subtitle={item.subtitle} date={item.date} description={item.description} />)}</div>;
   }
 
-  if (section.type === 'qr_codes') return <QrCodesPreview items={(content as any).items || []} />;
+  if (section.type === 'qr_codes') return <QrCodesPreview items={(content as QrCodesContent).items || []} />;
 
   return null;
 }
@@ -117,13 +127,11 @@ function TouchFlatSectionContent({ section, resume }: { section: any; resume: Re
 function FlatItem({ title, subtitle, date, description, technologies, highlights }: { title?: string; subtitle?: string; date?: string; description?: string; technologies?: string[]; highlights?: string[] }) {
   return (
     <div className="rounded-xl bg-zinc-50 px-3 py-2">
-      <div className="flex items-baseline justify-between gap-4">
-        <div className="min-w-0">
-          <span className="text-sm font-semibold text-zinc-900">{title}</span>
-          {subtitle && <span className="text-sm text-zinc-600"> · {subtitle}</span>}
-        </div>
-        {date && <span className="shrink-0 text-xs text-zinc-500">{date}</span>}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-1">
+        <div className="min-w-0 text-sm font-semibold text-zinc-900">{title}</div>
+        {date && <div className="shrink-0 text-right text-xs text-zinc-500">{date}</div>}
       </div>
+      {subtitle && <p className="mt-0.5 text-sm text-zinc-600">{subtitle}</p>}
       {description && <p className="mt-1 text-sm leading-relaxed text-zinc-600" dangerouslySetInnerHTML={{ __html: md(description) }} />}
       {technologies?.length ? <p className="mt-1 text-xs text-zinc-500">{technologies.join(' / ')}</p> : null}
       {highlights?.length ? <ul className="mt-1 list-disc space-y-0.5 pl-4">{highlights.map((h, i) => <li key={i} className="text-sm text-zinc-700" dangerouslySetInnerHTML={{ __html: md(h) }} />)}</ul> : null}

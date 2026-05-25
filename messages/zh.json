@@ -223,12 +223,24 @@
       "snapshot": "版本快照",
       "empty": "暂无历史版本",
       "localOnly": "仅离线简历暂无云端历史版本",
+      "restore": "恢复此版本",
+      "restoreConfirm": "恢复后会先保存当前内容为恢复前版本，然后用该历史版本覆盖当前简历。确定继续吗？",
+      "restoreFailed": "恢复版本失败，请稍后重试",
+      "diffTitle": "与当前编辑内容的差异",
+      "diff": {
+        "changed": "处修改",
+        "added": "处新增",
+        "removed": "处删除",
+        "meta": "项信息",
+        "noChanges": "内容无差异"
+      },
       "source": {
         "all": "全部",
         "manual": "手动",
         "autosave": "自动",
         "ai": "AI",
-        "jd": "JD"
+        "jd": "JD",
+        "mcp": "MCP"
       }
     },
     "aiPolish": "AI 润色",

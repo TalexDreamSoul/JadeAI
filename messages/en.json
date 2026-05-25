@@ -223,12 +223,24 @@
       "snapshot": "Version snapshot",
       "empty": "No saved versions yet",
       "localOnly": "Offline-only resumes do not have cloud saved versions",
+      "restore": "Restore this version",
+      "restoreConfirm": "The current resume will be saved as a pre-restore version, then overwritten by this saved version. Continue?",
+      "restoreFailed": "Failed to restore this version. Please try again.",
+      "diffTitle": "Difference from current edit",
+      "diff": {
+        "changed": "changed",
+        "added": "added",
+        "removed": "removed",
+        "meta": "meta",
+        "noChanges": "No content changes"
+      },
       "source": {
         "all": "All",
         "manual": "Manual",
         "autosave": "Auto",
         "ai": "AI",
-        "jd": "JD"
+        "jd": "JD",
+        "mcp": "MCP"
       }
     },
     "aiPolish": "AI Polish",

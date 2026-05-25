@@ -3,6 +3,9 @@ import { buildSuggestionUpdate } from '../career/suggestion-application';
 import { JOB_TEMPLATES, type JobTemplate } from '../career/job-templates';
 import { applicableSuggestionSchema, type ApplicableSuggestion } from '../ai/jd-analysis-schema';
 import { dbReady } from '../db';
+import { shareRepository } from '../db/repositories/share.repository';
+import { generateShareToken } from '../utils/share';
+import { diffResumes, resumeSectionPlainText } from '../resume-version-utils';
 import { analysisRepository } from '../db/repositories/analysis.repository';
 import { chatRepository } from '../db/repositories/chat.repository';
 import { jobTemplateRepository, toJobTemplate } from '../db/repositories/job-template.repository';
@@ -10,6 +13,9 @@ import { knowledgeRepository } from '../db/repositories/knowledge.repository';
 import { resumeRepository } from '../db/repositories/resume.repository';
 import { userProfileMemoryRepository } from '../db/repositories/user-profile-memory.repository';
 import { userRepository } from '../db/repositories/user.repository';
+import { generateJsonWithRetry } from '../ai/generate-json';
+import { getModel, getProviderOptions, type AIConfig } from '../ai/provider';
+import { textAnnotationSchema, type TextAnnotationResult } from '../ai/text-annotation-schema';
 import type { ResumeSection } from '../../types/resume';
 
 export type McpToolResult = {
@@ -31,6 +37,7 @@ export type ResumeMcpToolContext = {
 type OwnedResume = NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>>;
 type ResumeListItem = Awaited<ReturnType<typeof resumeRepository.findAllByUserId>>[number];
 type ResumeVersion = Awaited<ReturnType<typeof resumeRepository.findVersions>>[number];
+type ResumeShare = Awaited<ReturnType<typeof shareRepository.findByResumeId>>[number];
 type KnowledgeNode = Awaited<ReturnType<typeof knowledgeRepository.listNodes>>[number];
 type KnowledgeEdge = Awaited<ReturnType<typeof knowledgeRepository.listEdges>>[number];
 type UserProfileMemory = Awaited<ReturnType<typeof userProfileMemoryRepository.listByUserId>>[number];
@@ -155,6 +162,86 @@ function textOfValue(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function arrayArg(args: Record<string, unknown>, key: string): unknown[] {
+  const value = args[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function optionalObjectArg(args: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = args[key];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function compactText(value: unknown, maxLength = 6000) {
+  return truncateText(textOfValue(value).replace(/\s+/g, ' ').trim(), maxLength);
+}
+
+function resumeSectionText(section: ResumeSection) {
+  return resumeSectionPlainText(section);
+}
+
+function findTextInSections(sections: ResumeSection[], text: string, sectionId?: string, sectionType?: string) {
+  const needle = text.trim();
+  if (!needle) return null;
+  const candidates = sections.filter((section) => {
+    if (sectionId && section.id !== sectionId) return false;
+    if (sectionType && section.type !== sectionType) return false;
+    return true;
+  });
+  const normalizedNeedle = needle.replace(/\s+/g, ' ').toLowerCase();
+  return candidates.find((section) => resumeSectionText(section).replace(/\s+/g, ' ').toLowerCase().includes(normalizedNeedle)) || null;
+}
+
+function inferSectionFromAnalysis(section: unknown, sections: ResumeSection[]) {
+  const value = textOfValue(section).toLowerCase();
+  if (!value) return null;
+  return sections.find((item) => (
+    item.id.toLowerCase() === value
+    || item.type.toLowerCase() === value
+    || item.title.toLowerCase() === value
+    || item.title.toLowerCase().includes(value)
+    || value.includes(item.type.toLowerCase())
+    || value.includes(item.title.toLowerCase())
+  )) || null;
+}
+
+function normalizeTextAnnotations(result: TextAnnotationResult, sections: ResumeSection[], selectedText: string, fallbackSection?: ResumeSection | null) {
+  const fallbackId = fallbackSection?.id || null;
+  return recordsOf(result.annotations).map((item, index) => {
+    const inferred = inferSectionFromAnalysis(item.section, sections);
+    const quote = compactText(item.quote || selectedText, 800);
+    const quoteSection = quote ? findTextInSections(sections, quote) : null;
+    return {
+      id: textOfValue(item.id) || `ann-${index + 1}`,
+      section: textOfValue(item.section || inferred?.title || quoteSection?.title || fallbackSection?.title || ''),
+      sectionId: textOfValue(item.sectionId || inferred?.id || quoteSection?.id || fallbackId || ''),
+      quote,
+      severity: textOfValue(item.severity || 'medium'),
+      category: textOfValue(item.category || 'analysis'),
+      comment: compactText(item.comment, 1600),
+      suggestion: compactText(item.suggestion, 1600),
+      evidence: compactText(item.evidence, 1200),
+    };
+  }).filter((item) => item.comment || item.suggestion || item.quote);
+}
+
+function buildAnnotationMarkdown(annotation: Record<string, unknown>) {
+  const parts = [
+    textOfValue(annotation.category) ? `类别：${textOfValue(annotation.category)}` : '',
+    textOfValue(annotation.severity) ? `优先级：${textOfValue(annotation.severity)}` : '',
+    textOfValue(annotation.comment) ? `分析：${textOfValue(annotation.comment)}` : '',
+    textOfValue(annotation.suggestion) ? `建议：${textOfValue(annotation.suggestion)}` : '',
+    textOfValue(annotation.evidence) ? `依据：${textOfValue(annotation.evidence)}` : '',
+  ].filter(Boolean);
+  return parts.join('\n');
 }
 
 function hasMetric(value: unknown) {
@@ -424,6 +511,42 @@ function summarizeSection(section: ResumeSection) {
     };
   }
   return { id: section.id, type: section.type, title: section.title, content };
+}
+
+
+function summarizeResumeSnapshot(snapshot: unknown) {
+  const resume = asRecord(snapshot);
+  const sections = recordsOf(resume.sections);
+  return {
+    id: resume.id,
+    title: resume.title,
+    template: resume.template,
+    language: resume.language,
+    versionLabel: resume.versionLabel,
+    updatedAt: resume.updatedAt,
+    sections: sections.map((section) => ({
+      id: section.id,
+      type: section.type,
+      title: section.title,
+      visible: section.visible,
+      textLength: resumeSectionText(section as unknown as ResumeSection).length,
+    })),
+  };
+}
+
+function summarizeResumeDiff(before: unknown, after: unknown) {
+  return diffResumes(before as import('../../types/resume').Resume, after as import('../../types/resume').Resume);
+}
+
+function getMcpAIConfig(args: Record<string, unknown>): AIConfig | null {
+  const raw = optionalObjectArg(args, 'aiConfig');
+  const provider = textOfValue(raw.provider || process.env.JADEAI_MCP_AI_PROVIDER || process.env.AI_PROVIDER || 'openai');
+  const apiKey = textOfValue(raw.apiKey || process.env.JADEAI_MCP_AI_API_KEY || process.env.AI_API_KEY || '');
+  const baseURL = textOfValue(raw.baseURL || raw.baseUrl || process.env.JADEAI_MCP_AI_BASE_URL || process.env.AI_BASE_URL || (provider === 'openai' ? 'https://api.openai.com/v1' : ''));
+  const model = textOfValue(raw.model || process.env.JADEAI_MCP_AI_MODEL || process.env.AI_MODEL || '');
+  const openAIEndpoint: AIConfig['openAIEndpoint'] = textOfValue(raw.openAIEndpoint || raw.openaiEndpoint || process.env.JADEAI_MCP_AI_OPENAI_ENDPOINT || process.env.AI_OPENAI_ENDPOINT || 'chat') === 'responses' ? 'responses' : 'chat';
+  if (!apiKey || !model) return null;
+  return { provider, apiKey, baseURL, model, mode: 'custom', openAIEndpoint };
 }
 
 function actionSuggestionsFromReadiness(readiness: Awaited<ReturnType<typeof analyzeResumeReadiness>>) {
@@ -857,6 +980,314 @@ async function summarizeResumeChats(args: Record<string, unknown>, context: Tool
   };
 }
 
+
+async function listResumeVersions(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const includeSnapshots = boolArg(args, 'includeSnapshots', false);
+  const limit = numberArg(args, 'limit', 20, 100);
+  await requireOwnedResume(resumeId, user);
+  const versions = (await resumeRepository.findVersions(resumeId)).slice(0, limit);
+  return {
+    resumeId,
+    versions: versions.map((version: ResumeVersion) => ({
+      id: version.id,
+      resumeId: version.resumeId,
+      label: version.label,
+      source: version.source,
+      createdAt: version.createdAt,
+      snapshotSummary: summarizeResumeSnapshot(version.snapshot),
+      api: { get: 'get_resume_version', compare: 'compare_resume_version', restore: 'restore_resume_version' },
+      ...(includeSnapshots ? { snapshot: version.snapshot } : {}),
+    })),
+  };
+}
+
+async function getResumeVersion(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const versionId = stringArg(args, 'versionId');
+  await requireOwnedResume(resumeId, user);
+  const versions = await resumeRepository.findVersions(resumeId);
+  const version = versions.find((item: ResumeVersion) => item.id === versionId);
+  if (!version) throw new Error('Version not found');
+  return { version };
+}
+
+async function compareResumeVersion(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const versionId = stringArg(args, 'versionId');
+  const compareTo = stringArg(args, 'compareTo', false) || 'current';
+  const resume = await requireOwnedResume(resumeId, user);
+  const versions = await resumeRepository.findVersions(resumeId);
+  const version = versions.find((item: ResumeVersion) => item.id === versionId);
+  if (!version) throw new Error('Version not found');
+  const before = version.snapshot;
+  const after = compareTo === 'current'
+    ? resume
+    : versions.find((item: ResumeVersion) => item.id === compareTo)?.snapshot;
+  if (!after) throw new Error('compareTo version not found');
+  return {
+    resumeId,
+    base: { id: version.id, label: version.label, source: version.source, createdAt: version.createdAt },
+    compareTo,
+    diff: summarizeResumeDiff(before, after),
+  };
+}
+
+async function restoreResumeVersion(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const versionId = stringArg(args, 'versionId');
+  const apply = boolArg(args, 'apply', false);
+  const restoreMetadata = boolArg(args, 'restoreMetadata', true);
+  const restoreSections = boolArg(args, 'restoreSections', true);
+  const resume = await requireOwnedResume(resumeId, user);
+  const versions = await resumeRepository.findVersions(resumeId);
+  const version = versions.find((item: ResumeVersion) => item.id === versionId);
+  if (!version) throw new Error('Version not found');
+  const snapshot = version.snapshot as import('../../types/resume').Resume;
+  const preview = {
+    version: { id: version.id, label: version.label, source: version.source, createdAt: version.createdAt },
+    restoreMetadata,
+    restoreSections,
+    diff: summarizeResumeDiff(snapshot, resume),
+  };
+  if (!apply) {
+    return { mode: 'preview', preview, safety: 'Call with apply=true only after user approval. Current resume will be saved before restore.' };
+  }
+  await resumeRepository.createVersion(resumeId, `mcp-restore-before-${new Date().toISOString()}`, resume, 'mcp');
+  const restored = await resumeRepository.restoreFromSnapshot(resumeId, snapshot, { restoreMetadata, restoreSections });
+  if (!restored) throw new Error('Restore failed');
+  const afterVersion = await resumeRepository.createVersion(resumeId, `mcp-restore-after-${version.label}`, restored, 'mcp').catch(() => null);
+  await resumeRepository.createEvent({
+    resumeId,
+    userId: user.id,
+    type: 'mcp.version.restored',
+    title: 'MCP resume version restored',
+    metadata: { versionId, label: version.label, afterVersionId: afterVersion?.id || null },
+  }).catch(() => null);
+  return { mode: 'applied', preview, resume: restored, afterVersion };
+}
+
+async function analyzeTextSelection(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId', false);
+  const text = stringArg(args, 'text');
+  const focus = stringArg(args, 'focus', false) || 'resume critique';
+  const jobDescription = stringArg(args, 'jobDescription', false);
+  const targetRole = stringArg(args, 'targetRole', false);
+  const sectionId = stringArg(args, 'sectionId', false);
+  const sectionType = stringArg(args, 'sectionType', false);
+  const language = stringArg(args, 'language', false) || 'zh';
+  const criteria = uniqueStrings(stringsOf(args.criteria));
+  const maxAnnotations = numberArg(args, 'maxAnnotations', 6, 20);
+
+  const resume = resumeId ? await requireOwnedResume(resumeId, user) : null;
+  const sections = (resume?.sections || []) as ResumeSection[];
+  const matchedSection = resume ? findTextInSections(sections, text, sectionId, sectionType) : null;
+  const contextPack = resume ? {
+    resume: {
+      id: resume.id,
+      title: resume.title,
+      language: resume.language,
+      targetCompany: resume.targetCompany,
+      targetJobTitle: targetRole || resume.targetJobTitle,
+      sections: sections.map(summarizeSection),
+    },
+    matchedSection: matchedSection ? summarizeSection(matchedSection) : null,
+  } : null;
+
+  const aiConfig = getMcpAIConfig(args);
+  if (aiConfig) {
+    const { data } = await generateJsonWithRetry({
+      label: 'mcp-text-annotation',
+      model: getModel(aiConfig),
+      schema: textAnnotationSchema,
+      system: `You are a senior resume reviewer and writing coach. Analyze the selected text precisely. Return JSON only. Use ${language === 'en' ? 'English' : 'Chinese'} unless the selected text strongly requires another language.`,
+      prompt: JSON.stringify({
+        selectedText: text,
+        focus,
+        criteria,
+        maxAnnotations,
+        targetRole,
+        jobDescription: truncateText(jobDescription, 6000),
+        context: contextPack,
+        outputRules: [
+          'Each annotation should point to a concrete quote when possible.',
+          'Explain the issue, why it matters, and a specific rewrite or action.',
+          'Do not invent facts or metrics; mark evidence gaps explicitly.',
+        ],
+      }),
+      maxOutputTokens: 4096,
+      providerOptions: getProviderOptions(aiConfig),
+    });
+    const annotations = normalizeTextAnnotations(data, sections, text, matchedSection).slice(0, maxAnnotations);
+    return {
+      mode: 'ai',
+      resumeId: resume?.id || null,
+      matchedSection: matchedSection ? summarizeSection(matchedSection) : null,
+      summary: data.summary,
+      overallScore: data.overallScore,
+      annotations,
+      rewrite: data.rewrite,
+      keywords: data.keywords,
+      questions: data.questions,
+      nextMcpSteps: resumeId ? [
+        'Call list_review_shares to choose an existing review share, or pass shareId/shareToken to create_review_annotations.',
+        'Call create_review_annotations with apply=false to preview comments, then apply=true if you want them visible in review preview.',
+      ] : [],
+    };
+  }
+
+  const keywords = extractKeywordsFromText(text, 12).map((item) => item.keyword);
+  const annotations = [
+    {
+      id: 'heuristic-density',
+      section: matchedSection?.title || sectionType || '',
+      sectionId: matchedSection?.id || sectionId || '',
+      quote: truncateText(text, 240),
+      severity: hasMetric(text) ? 'medium' : 'high',
+      category: 'impact',
+      comment: hasMetric(text) ? '这段文本已有一定量化信息，但仍可检查动作、范围、结果是否完整。' : '这段文本缺少量化结果或可验证影响，容易显得泛泛而谈。',
+      suggestion: '按“动作 + 技术/方法 + 场景规模 + 量化结果/业务影响”重写，并只补充真实可证明的数据。',
+      evidence: keywords.length ? `关键词：${keywords.join('、')}` : '',
+    },
+  ];
+  return {
+    mode: 'heuristic',
+    resumeId: resume?.id || null,
+    matchedSection: matchedSection ? summarizeSection(matchedSection) : null,
+    summary: '未提供 MCP AI 配置，已返回基于规则的文本批注。若要详细分析，请在工具参数传入 aiConfig。',
+    overallScore: hasMetric(text) ? 72 : 55,
+    annotations,
+    rewrite: '',
+    keywords,
+    questions: ['这段经历是否有真实指标、用户规模、性能数据或业务结果可以补充？'],
+  };
+}
+
+async function listReviewShares(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  await requireOwnedResume(resumeId, user);
+  const shares = await shareRepository.findSummariesByResumeId(resumeId);
+  return {
+    resumeId,
+    shares: shares.map((share: ResumeShare & { commentCount?: number; lastCommentAt?: Date | string | null }) => ({
+      id: share.id,
+      token: share.token,
+      label: share.label,
+      reviewEnabled: !!share.reviewEnabled,
+      isActive: !!share.isActive,
+      commentCount: Number(share.commentCount || 0),
+      lastCommentAt: share.lastCommentAt || null,
+      createdAt: share.createdAt,
+      updatedAt: share.updatedAt,
+    })),
+  };
+}
+
+async function createReviewAnnotations(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const shareId = stringArg(args, 'shareId', false);
+  const shareToken = stringArg(args, 'shareToken', false);
+  const authorName = stringArg(args, 'authorName', false) || 'MCP 批注';
+  const apply = boolArg(args, 'apply', false);
+  const rawAnnotations = arrayArg(args, 'annotations');
+  const resume = await requireOwnedResume(resumeId, user);
+  const sections = resume.sections as ResumeSection[];
+  if (rawAnnotations.length === 0) throw new Error('annotations is required');
+
+  const shares = await shareRepository.findByResumeId(resumeId);
+  const share = shares.find((item: ResumeShare) => (shareId && item.id === shareId) || (shareToken && item.token === shareToken))
+    || shares.find((item: ResumeShare) => item.reviewEnabled && item.isActive)
+    || shares[0];
+  if (!share) throw new Error('No share link exists for this resume. Create a review-enabled share link in the app first.');
+  if (!share.reviewEnabled) throw new Error('Selected share link has review disabled. Enable review before creating annotations.');
+  if (!share.isActive) throw new Error('Selected share link is inactive. Activate it before creating annotations.');
+
+  const normalized = rawAnnotations.map((raw, index) => {
+    const item = asRecord(raw);
+    const section = textOfValue(item.sectionId)
+      ? sections.find((candidate) => candidate.id === textOfValue(item.sectionId))
+      : inferSectionFromAnalysis(item.section || item.sectionType, sections);
+    const quote = compactText(item.quote || item.selectedText || '', 800);
+    const quoteSection = quote ? findTextInSections(sections, quote) : null;
+    const targetSection = section || quoteSection;
+    return {
+      index,
+      shareId: share.id,
+      resumeId,
+      sectionId: targetSection?.id || null,
+      selectedText: quote || (targetSection ? `${targetSection.title} 批注` : 'MCP 批注'),
+      anchor: optionalObjectArg(item, 'anchor'),
+      content: buildAnnotationMarkdown(item),
+      authorName,
+    };
+  }).filter((item) => item.content.trim());
+
+  if (!apply) {
+    return {
+      mode: 'preview',
+      share: { id: share.id, token: share.token, label: share.label },
+      commentCount: normalized.length,
+      comments: normalized,
+      nextMcpSteps: ['Call create_review_annotations with apply=true after the user approves.'],
+    };
+  }
+
+  const comments = await Promise.all(normalized.map((item) => shareRepository.createComment({
+    shareId: item.shareId,
+    resumeId: item.resumeId,
+    parentCommentId: null,
+    authorUserId: user.id,
+    authorName: item.authorName,
+    authorEmail: user.email || null,
+    sectionId: item.sectionId,
+    selectedText: item.selectedText,
+    anchor: Object.keys(item.anchor).length > 0 ? item.anchor : null,
+    content: item.content,
+  })));
+  await resumeRepository.createEvent({
+    resumeId,
+    userId: user.id,
+    type: 'mcp.review_annotations.created',
+    title: 'MCP review annotations created',
+    metadata: { shareId: share.id, commentIds: comments.map((comment) => comment?.id).filter(Boolean) },
+  }).catch(() => null);
+
+  return { mode: 'applied', share: { id: share.id, token: share.token, label: share.label }, comments };
+}
+
+async function ensureReviewShare(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const label = stringArg(args, 'label', false) || 'MCP 批注';
+  const apply = boolArg(args, 'apply', false);
+  await requireOwnedResume(resumeId, user);
+  const existing = (await shareRepository.findByResumeId(resumeId)).find((share: ResumeShare) => share.reviewEnabled && share.isActive);
+  if (existing) {
+    return { mode: 'existing', share: { id: existing.id, token: existing.token, label: existing.label, reviewEnabled: !!existing.reviewEnabled, isActive: !!existing.isActive } };
+  }
+  const preview = { resumeId, label, reviewEnabled: true, downloadEnabled: true, viewRequiresLogin: false };
+  if (!apply) {
+    return { mode: 'preview', preview, note: 'Creating a share link exposes a review URL. Call with apply=true only after user approval.' };
+  }
+  const token = generateShareToken();
+  const share = await shareRepository.create({ resumeId, token, label, reviewEnabled: true, downloadEnabled: true });
+  await resumeRepository.createEvent({
+    resumeId,
+    userId: user.id,
+    type: 'mcp.review_share.created',
+    title: 'MCP review share created',
+    metadata: { shareId: share.id, token: share.token, label },
+  }).catch(() => null);
+  return { mode: 'applied', share: { id: share.id, token: share.token, label: share.label, reviewEnabled: !!share.reviewEnabled, isActive: !!share.isActive } };
+}
+
 async function createResumeVersion(args: Record<string, unknown>, context: ToolHandlerContext) {
   const user = context.user;
   const resumeId = stringArg(args, 'resumeId');
@@ -1087,6 +1518,80 @@ const inputSchemas = {
     required: ['resumeId'],
     additionalProperties: false,
   },
+
+  listVersions: {
+    type: 'object',
+    properties: { resumeId: { type: 'string' }, limit: { type: 'number' }, includeSnapshots: { type: 'boolean', default: false } },
+    required: ['resumeId'],
+    additionalProperties: false,
+  },
+  getVersion: {
+    type: 'object',
+    properties: { resumeId: { type: 'string' }, versionId: { type: 'string' } },
+    required: ['resumeId', 'versionId'],
+    additionalProperties: false,
+  },
+  compareVersion: {
+    type: 'object',
+    properties: { resumeId: { type: 'string' }, versionId: { type: 'string' }, compareTo: { type: 'string' } },
+    required: ['resumeId', 'versionId'],
+    additionalProperties: false,
+  },
+  restoreVersion: {
+    type: 'object',
+    properties: {
+      resumeId: { type: 'string' },
+      versionId: { type: 'string' },
+      apply: { type: 'boolean', default: false },
+      restoreMetadata: { type: 'boolean', default: true },
+      restoreSections: { type: 'boolean', default: true },
+    },
+    required: ['resumeId', 'versionId'],
+    additionalProperties: false,
+  },
+  analyzeTextSelection: {
+    type: 'object',
+    properties: {
+      resumeId: { type: 'string' },
+      text: { type: 'string' },
+      focus: { type: 'string' },
+      sectionId: { type: 'string' },
+      sectionType: { type: 'string' },
+      targetRole: { type: 'string' },
+      jobDescription: { type: 'string' },
+      criteria: { type: 'array', items: { type: 'string' } },
+      maxAnnotations: { type: 'number' },
+      language: { type: 'string' },
+      aiConfig: JSON_OBJECT_SCHEMA,
+    },
+    required: ['text'],
+    additionalProperties: false,
+  },
+  listReviewShares: {
+    type: 'object',
+    properties: { resumeId: { type: 'string' } },
+    required: ['resumeId'],
+    additionalProperties: false,
+  },
+  createReviewAnnotations: {
+    type: 'object',
+    properties: {
+      resumeId: { type: 'string' },
+      shareId: { type: 'string' },
+      shareToken: { type: 'string' },
+      annotations: { type: 'array', items: JSON_OBJECT_SCHEMA },
+      authorName: { type: 'string' },
+      apply: { type: 'boolean', default: false },
+    },
+    required: ['resumeId', 'annotations'],
+    additionalProperties: false,
+  },
+  ensureReviewShare: {
+    type: 'object',
+    properties: { resumeId: { type: 'string' }, label: { type: 'string' }, apply: { type: 'boolean', default: false } },
+    required: ['resumeId'],
+    additionalProperties: false,
+  },
   createVersion: {
     type: 'object',
     properties: { resumeId: { type: 'string' }, label: { type: 'string' } },
@@ -1147,6 +1652,14 @@ export const resumeMcpTools: ToolDefinition[] = [
   { name: 'list_resume_chats', description: 'List chat sessions for one owned resume.', inputSchema: inputSchemas.listResumeChats, handler: listResumeChats },
   { name: 'get_resume_chat', description: 'Read one chat session with messages for an owned resume.', inputSchema: inputSchemas.getResumeChat, handler: getResumeChat },
   { name: 'summarize_resume_chats', description: 'Read-only summary of recent resume chats: themes, action items, memory drafts, and follow-up questions.', inputSchema: inputSchemas.summarizeChats, handler: summarizeResumeChats },
+  { name: 'list_resume_versions', description: 'List saved versions for a resume, with compact snapshot summaries by default.', inputSchema: inputSchemas.listVersions, handler: listResumeVersions },
+  { name: 'get_resume_version', description: 'Get one saved resume version including its snapshot.', inputSchema: inputSchemas.getVersion, handler: getResumeVersion },
+  { name: 'compare_resume_version', description: 'Compare a saved version to the current resume or another saved version.', inputSchema: inputSchemas.compareVersion, handler: compareResumeVersion },
+  { name: 'restore_resume_version', description: 'Preview or restore a saved version into the current resume. Applying creates MCP before/after restore snapshots.', inputSchema: inputSchemas.restoreVersion, handler: restoreResumeVersion },
+  { name: 'analyze_text_selection', description: 'Analyze a selected text passage and return detailed annotations, rewrite suggestions, evidence gaps, and follow-up questions. Can use aiConfig for full AI analysis or heuristic fallback.', inputSchema: inputSchemas.analyzeTextSelection, handler: analyzeTextSelection },
+  { name: 'list_review_shares', description: 'List share links and review status so MCP annotations can target the correct review preview.', inputSchema: inputSchemas.listReviewShares, handler: listReviewShares },
+  { name: 'create_review_annotations', description: 'Preview or create review comments from annotations. Applying makes them visible in review preview. Requires a review-enabled active share link.', inputSchema: inputSchemas.createReviewAnnotations, handler: createReviewAnnotations },
+  { name: 'ensure_review_share', description: 'Preview or create a review-enabled share link for MCP annotations. Creating a share link requires apply=true.', inputSchema: inputSchemas.ensureReviewShare, handler: ensureReviewShare },
   { name: 'create_resume_version', description: 'Create a resume snapshot version before any MCP write.', inputSchema: inputSchemas.createVersion, handler: createResumeVersion },
   { name: 'update_resume_section', description: 'Preview or apply a section content update. Applying requires versionId from create_resume_version.', inputSchema: inputSchemas.updateSection, handler: updateResumeSection },
   { name: 'apply_suggestion', description: 'Preview or apply a JD suggestion. Applying requires versionId from create_resume_version.', inputSchema: inputSchemas.applySuggestion, handler: applySuggestion },

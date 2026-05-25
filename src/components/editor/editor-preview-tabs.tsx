@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { GitBranch, MessageSquareText, PencilRuler } from 'lucide-react';
 import { useResumeStore } from '@/stores/resume-store';
@@ -15,6 +15,25 @@ import type { Resume } from '@/types/resume';
 type PreviewMode = 'edit' | 'review';
 type EditView = 'live' | 'versions';
 
+type VersionRecord = {
+  id: string;
+  label: string;
+  source: string;
+  createdAt: string;
+};
+
+function getHeaders() {
+  const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
+  return fingerprint ? { 'x-fingerprint': fingerprint } : undefined;
+}
+
+function formatDate(value?: string | Date | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '—';
+  return date.toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
 export function EditorPreviewTabs({ resumeId, readonly = false }: { resumeId: string; readonly?: boolean }) {
   const t = useTranslations('editor.previewTabs');
   const toolbarT = useTranslations('editor.toolbar');
@@ -24,6 +43,36 @@ export function EditorPreviewTabs({ resumeId, readonly = false }: { resumeId: st
   const [editView, setEditView] = useState<EditView>('live');
   const [selectedVersionId, setSelectedVersionId] = useState('live');
   const [versionOptions, setVersionOptions] = useState<VersionOption[]>([]);
+  const currentVersionLabel = useMemo(() => {
+    if (selectedVersionId === 'live') return t('current');
+    return versionOptions.find((version) => version.id === selectedVersionId)?.label || t('selectVersion');
+  }, [selectedVersionId, t, versionOptions]);
+
+  const handleVersionOptionsChange = useCallback((options: VersionOption[]) => {
+    setVersionOptions((current) => {
+      const currentSignature = current.map((option) => `${option.id}:${option.label}:${option.source}:${option.createdAt}`).join('|');
+      const nextSignature = options.map((option) => `${option.id}:${option.label}:${option.source}:${option.createdAt}`).join('|');
+      return currentSignature === nextSignature ? current : options;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (readonly || resumeId.startsWith('local_')) return;
+    let cancelled = false;
+    async function fetchVersionOptions() {
+      const res = await fetch(`/api/resume/${resumeId}/versions`, { headers: getHeaders(), cache: 'no-store' });
+      if (!res.ok || cancelled) return;
+      const data = await res.json() as VersionRecord[];
+      handleVersionOptionsChange(data.map((version) => ({
+        id: version.id,
+        label: `${version.label} · ${formatDate(version.createdAt)}`,
+        source: version.source,
+        createdAt: version.createdAt,
+      })));
+    }
+    fetchVersionOptions().catch(() => null);
+    return () => { cancelled = true; };
+  }, [handleVersionOptionsChange, readonly, resumeId]);
   const [selectedReviewId, setSelectedReviewId] = useState('all');
   const [reviewOptions, setReviewOptions] = useState<ReviewOption[]>([]);
 
@@ -113,7 +162,7 @@ export function EditorPreviewTabs({ resumeId, readonly = false }: { resumeId: st
           >
             <SelectTrigger size="sm" className="hidden w-[220px] cursor-pointer md:flex">
               <GitBranch className="h-3.5 w-3.5 text-zinc-400" />
-              <SelectValue placeholder={t('selectVersion')} />
+              <SelectValue placeholder={currentVersionLabel}>{currentVersionLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent align="end" className="max-h-80">
               <SelectItem value="live" className="cursor-pointer">{t('current')}</SelectItem>
@@ -158,7 +207,7 @@ export function EditorPreviewTabs({ resumeId, readonly = false }: { resumeId: st
             liveResume={liveResume}
             selectedVersionId={selectedVersionId}
             onSelectedVersionIdChange={setSelectedVersionId}
-            onVersionOptionsChange={setVersionOptions}
+            onVersionOptionsChange={handleVersionOptionsChange}
           />
         ) : (
           <PreviewZoom resume={liveResume} title={toolbarT('preview')} initialZoom={80} mobileFit={isMobile} />
