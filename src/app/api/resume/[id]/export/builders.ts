@@ -1,5 +1,6 @@
-import { esc, buildExportThemeCSS, DEFAULT_THEME, type ResumeWithSections } from './utils';
+import { esc, buildExportThemeCSS, DEFAULT_THEME, type ResumeWithSections, type Section } from './utils';
 import { EXPORT_TAILWIND_CSS } from '@/lib/pdf/export-tailwind-css';
+import { annotateResumeHtml } from '@/lib/resume-dom-classes';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import { generateQrSvg } from '@/lib/qrcode';
 import { buildTouchPureHtml } from './templates/touch-pure';
@@ -165,24 +166,37 @@ function isValidQrUrl(str: string): boolean {
 
 /** Pre-generate QR code SVGs and attach to qr_codes section content
  *  so sync template builders can render them inline. */
+type ExportQrCodeItem = {
+  id: string;
+  url: string;
+};
+
+type ExportQrCodesContent = {
+  items?: ExportQrCodeItem[];
+  _qrSvgs?: Record<string, string>;
+};
+
 async function preGenerateQrSvgs(resume: ResumeWithSections): Promise<void> {
-  const qrSection = resume.sections.find((s: any) => s.type === 'qr_codes');
+  const qrSection = resume.sections.find((s: Section) => s.type === 'qr_codes');
   if (!qrSection || qrSection.visible === false) return;
-  const items = ((qrSection.content as any).items || []).filter((q: any) => isValidQrUrl(q.url));
+
+  const content = qrSection.content as ExportQrCodesContent;
+  const items = (content.items || []).filter((q) => isValidQrUrl(q.url));
   if (items.length === 0) return;
+
   const svgs: Record<string, string> = {};
   for (const qr of items) {
     try { svgs[qr.id] = await generateQrSvg(qr.url, 80); } catch { /* skip */ }
   }
-  (qrSection.content as any)._qrSvgs = svgs;
+  content._qrSvgs = svgs;
 }
 
 export async function generateHtml(resume: ResumeWithSections, forPdf = false): Promise<string> {
   // Pre-generate QR SVGs so sync template builders can use them
   await preGenerateQrSvgs(resume);
   const builder = TEMPLATE_BUILDERS[resume.template] || buildClassicHtml;
-  const bodyHtml = builder(resume);
-  const theme = { ...DEFAULT_THEME, ...((resume as any).themeConfig || {}) };
+  const bodyHtml = annotateResumeHtml(builder(resume), resume.template);
+  const theme = { ...DEFAULT_THEME, ...(resume.themeConfig || {}) };
   const themeCSS = buildExportThemeCSS(theme, resume.template);
   const isBackground = BACKGROUND_TEMPLATES.has(resume.template);
 
@@ -297,7 +311,7 @@ export async function generateHtml(resume: ResumeWithSections, forPdf = false): 
   </style>
 </head>
 <body>
-  <div class="resume-export" data-avatar-style="${esc((resume as any).themeConfig?.avatarStyle || 'oneInch')}">
+  <div class="resume-export resume-preview-scope" data-avatar-style="${esc(resume.themeConfig?.avatarStyle || 'oneInch')}">
     ${bodyHtml}
   </div>
 </body>

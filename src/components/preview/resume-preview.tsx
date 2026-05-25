@@ -1,9 +1,10 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { Resume, ThemeConfig } from '@/types/resume';
 import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import { buildTemplateCustomizationCSS } from '@/lib/template-customization';
+import { annotateResumeDom } from '@/lib/resume-dom-classes';
 import { useEditorStore } from '@/stores/editor-store';
 import { TouchPureTemplate } from './templates/touch-pure';
 import { TouchSimpleTemplate } from './templates/touch-simple';
@@ -257,6 +258,7 @@ function buildThemeCSS(scopeId: string, theme: ThemeConfig, template: string): s
 export function ResumePreview({ resume }: ResumePreviewProps) {
   const Template = templateMap[resume.template] || ClassicTemplate;
   const scopeId = useId();
+  const scopeRef = useRef<HTMLDivElement>(null);
   const highlightedSectionType = useEditorStore((state) => state.highlightedSectionType);
   const theme: ThemeConfig = { ...DEFAULT_THEME, ...(resume.themeConfig || {}) };
   const scopeSelector = `[data-theme-scope="${scopeId}"]`;
@@ -281,6 +283,16 @@ export function ResumePreview({ resume }: ResumePreviewProps) {
     ),
   };
 
+  useEffect(() => {
+    const root = scopeRef.current;
+    if (!root) return;
+
+    annotateResumeDom(root, safeResume.template);
+    const observer = new MutationObserver(() => annotateResumeDom(root, safeResume.template));
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  });
+
   return (
     <>
       {/* Load the same Google Fonts used in PDF/HTML export so preview renders
@@ -288,7 +300,7 @@ export function ResumePreview({ resume }: ResumePreviewProps) {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-      <div data-theme-scope={scopeId}>
+      <div ref={scopeRef} data-theme-scope={scopeId} className="resume-preview-scope">
         <style dangerouslySetInnerHTML={{ __html: `${buildThemeCSS(scopeId, theme, safeResume.template)}\n${customCss}\n${highlightCss}` }} />
         <Template resume={safeResume} />
       </div>

@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+
 interface AvatarImageProps {
   src: string;
   avatarStyle?: 'circle' | 'oneInch';
@@ -26,7 +28,7 @@ export function AvatarImage({
     <img
       src={src}
       alt=""
-      className={className}
+      className={cn('resume-avatar resume-image', className)}
       style={{
         width,
         height,
@@ -40,7 +42,7 @@ export function AvatarImage({
   if (wrapperClassName || wrapperStyle) {
     return (
       <div
-        className={wrapperClassName}
+        className={cn('resume-avatar-wrapper', wrapperClassName)}
         style={{ borderRadius, ...wrapperStyle }}
       >
         {imgEl}

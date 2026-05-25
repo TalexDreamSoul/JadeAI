@@ -3,6 +3,7 @@ import { BACKGROUND_TEMPLATES } from '@/lib/constants';
 import { buildTemplateCustomizationCSS } from '@/lib/template-customization';
 import type {
   PersonalInfoContent,
+  QrCodeItem,
   SkillsContent,
   SummaryContent,
   ThemeConfig,
@@ -70,14 +71,16 @@ export function md(text: unknown): string {
 
 // ─── Section empty check ──────────────────────────────────────
 
+type SectionWithItems = { items?: unknown[] };
+
 export function isSectionEmpty(section: Section): boolean {
-  const content = section.content as any;
+  const content = section.content;
   if (section.type === 'summary') return !(content as SummaryContent).text;
   if (section.type === 'skills') {
     const categories = (content as SkillsContent).categories;
-    return !categories?.length || categories.every((cat: any) => !cat.skills?.length);
+    return !categories?.length || categories.every((cat) => !cat.skills?.length);
   }
-  if ('items' in content) return !content.items?.length;
+  if (content && typeof content === 'object' && 'items' in content) return !((content as SectionWithItems).items)?.length;
   return false;
 }
 
@@ -104,13 +107,18 @@ export function buildHighlights(highlights: string[] | undefined, liClass: strin
 
 // ─── QR codes inline HTML (SVGs pre-generated in builders.ts) ─
 
+type QrCodesExportContent = {
+  items?: QrCodeItem[];
+  _qrSvgs?: Record<string, string>;
+};
+
 export function buildQrCodesHtml(section: Section): string {
-  const c = section.content as any;
-  const svgs = (c._qrSvgs || {}) as Record<string, string>;
-  const items = (c.items || []).filter((q: any) => q.url?.trim() && svgs[q.id]);
+  const c = section.content as QrCodesExportContent;
+  const svgs = c._qrSvgs || {};
+  const items = (c.items || []).filter((q) => q.url?.trim() && svgs[q.id]);
   if (items.length === 0) return '';
-  return `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px 24px;padding-top:4px">${items.map((qr: any) =>
-    `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:96px">${svgs[qr.id]}<span style="font-size:10px;color:#6b7280;line-height:1.2;text-align:center;word-break:break-all;max-width:96px">${esc(qr.label)}</span></div>`
+  return `<div class="resume-qr-list" style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px 24px;padding-top:4px">${items.map((qr) =>
+    `<div class="resume-qr-item" data-qr-id="${esc(qr.id)}" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:96px"><div class="resume-qr-code">${svgs[qr.id]}</div><span class="resume-qr-label" style="font-size:10px;color:#6b7280;line-height:1.2;text-align:center;word-break:break-all;max-width:96px">${esc(qr.label)}</span></div>`
   ).join('')}</div>`;
 }
 

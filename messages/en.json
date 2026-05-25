@@ -551,8 +551,8 @@
     "undoAiCss": "Undo AI CSS",
     "aiCssApplied": "AI CSS applied",
     "aiCssFailed": "Failed to generate CSS",
-    "customCssPlaceholder": "Example:\nh1 '{' font-weight: 800; '}'\n[data-section] '{' border-radius: 12px; '}'",
-    "customCssHint": "CSS is automatically scoped to this resume preview. Avoid script or @import.",
+    "customCssPlaceholder": "Example:\n.resume-name '{' font-weight: 800; '}'\n.resume-section-work_experience .resume-item '{' border-left: 2px solid var(--resume-accent-color); '}'\n.resume-avatar '{' border-radius: 9999px; '}'",
+    "customCssHint": "CSS is automatically scoped to this resume preview. Stable classes include .resume-root, .resume-header, .resume-name, .resume-section, .resume-section-<type>, .resume-section-title, .resume-section-content, .resume-item, .resume-list-item, and .resume-avatar. Avoid script or @import.",
     "inherit": "Use template default",
     "auto": "Auto",
     "align": {

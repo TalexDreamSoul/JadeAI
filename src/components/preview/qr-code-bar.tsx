@@ -12,9 +12,9 @@ interface QrCodeBarProps {
 
 export function QrCodeBar({ resume, template }: QrCodeBarProps) {
   const qrSection = resume.sections.find((s) => s.type === 'qr_codes');
-  if (!qrSection || !qrSection.visible) return null;
-
-  const items = ((qrSection.content as QrCodesContent).items || []).filter((q) => q.url.trim());
+  const items = qrSection?.visible
+    ? ((qrSection.content as QrCodesContent).items || []).filter((q) => q.url.trim())
+    : [];
 
   const [svgs, setSvgs] = useState<Record<string, string>>({});
 
@@ -39,7 +39,7 @@ export function QrCodeBar({ resume, template }: QrCodeBarProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(items)]);
 
-  if (items.length === 0) return null;
+  if (!qrSection || !qrSection.visible || items.length === 0) return null;
 
   const hasAnySvg = items.some((qr) => svgs[qr.id]);
   if (!hasAnySvg) return null;
@@ -48,6 +48,7 @@ export function QrCodeBar({ resume, template }: QrCodeBarProps) {
 
   return (
     <div
+      className="resume-qr-bar"
       style={{
         breakInside: 'avoid',
         ...(sidebarInfo
@@ -58,13 +59,17 @@ export function QrCodeBar({ resume, template }: QrCodeBarProps) {
       {/* Section heading — theme CSS applies primaryColor, accentColor, fontSize */}
       <div
         data-section
+        data-section-id={qrSection.id}
+        data-section-type="qr_codes"
+        className="resume-qr-bar-heading resume-section resume-section-qr_codes"
         style={sidebarInfo ? { marginLeft: sidebarInfo.width, padding: '0 20px' } : { padding: '0 20px' }}
       >
-        <h2 className="mb-3 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider">
+        <h2 className="resume-section-title mb-3 border-b-2 pb-1 text-sm font-bold uppercase tracking-wider">
           {qrSection.title}
         </h2>
       </div>
       <div
+        className="resume-qr-bar-list"
         style={{
           display: 'flex',
           justifyContent: 'center',
@@ -77,13 +82,14 @@ export function QrCodeBar({ resume, template }: QrCodeBarProps) {
           const svg = svgs[qr.id];
           if (!svg) return null;
           return (
-            <div key={qr.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+            <div key={qr.id} className="resume-qr-item" data-qr-id={qr.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <div
+                className="resume-qr-code"
                 style={{ width: 80, height: 80 }}
                 dangerouslySetInnerHTML={{ __html: svg }}
               />
               {qr.label && (
-                <span style={{ fontSize: '10px', color: '#6b7280', lineHeight: 1.2 }}>{qr.label}</span>
+                <span className="resume-qr-label" style={{ fontSize: '10px', color: '#6b7280', lineHeight: 1.2 }}>{qr.label}</span>
               )}
             </div>
           );

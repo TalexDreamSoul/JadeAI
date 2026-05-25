@@ -51,15 +51,15 @@ export function QrCodesPreview({ items }: QrCodesPreviewProps) {
   if (!hasAnySvg) return null;
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '16px 24px', paddingTop: '4px' }}>
+    <div className="resume-qr-list" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '16px 24px', paddingTop: '4px' }}>
       {filtered.map((qr) => {
         const svg = svgs[qr.id];
         if (!svg) return null;
         return (
-          <div key={qr.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: 96 }}>
-            <div style={{ width: 80, height: 80 }} dangerouslySetInnerHTML={{ __html: svg }} />
+          <div key={qr.id} className="resume-qr-item" data-qr-id={qr.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: 96 }}>
+            <div className="resume-qr-code" style={{ width: 80, height: 80 }} dangerouslySetInnerHTML={{ __html: svg }} />
             {qr.label && (
-              <span style={{ fontSize: '10px', color: '#6b7280', lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all', maxWidth: 96 }}>{qr.label}</span>
+              <span className="resume-qr-label" style={{ fontSize: '10px', color: '#6b7280', lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all', maxWidth: 96 }}>{qr.label}</span>
             )}
           </div>
         );

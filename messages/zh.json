@@ -551,8 +551,8 @@
     "undoAiCss": "撤销 AI 样式",
     "aiCssApplied": "AI 样式已应用",
     "aiCssFailed": "生成 CSS 失败",
-    "customCssPlaceholder": "例如：\nh1 '{' font-weight: 800; '}'\n[data-section] '{' border-radius: 12px; '}'",
-    "customCssHint": "CSS 会自动限制在当前简历预览内；建议只写选择器和样式，不要使用 script 或 @import。",
+    "customCssPlaceholder": "例如：\n.resume-name '{' font-weight: 800; '}'\n.resume-section-work_experience .resume-item '{' border-left: 2px solid var(--resume-accent-color); '}'\n.resume-avatar '{' border-radius: 9999px; '}'",
+    "customCssHint": "CSS 会自动限制在当前简历预览内；可用 .resume-root、.resume-header、.resume-name、.resume-section、.resume-section-<type>、.resume-section-title、.resume-section-content、.resume-item、.resume-list-item、.resume-avatar 等稳定类名。不要使用 script 或 @import。",
     "inherit": "继承模板",
     "auto": "自动",
     "align": {
