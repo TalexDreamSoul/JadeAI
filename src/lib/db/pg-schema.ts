@@ -255,6 +255,13 @@ export const knowledgeEdges = pgTable('knowledge_edges', {
 export const jdAnalyses = pgTable('jd_analyses', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   resumeId: text('resume_id').notNull(),
+  resumeVersionId: text('resume_version_id'),
+  resumeVersionLabel: text('resume_version_label'),
+  resumeTitleSnapshot: text('resume_title_snapshot'),
+  targetCompanySnapshot: text('target_company_snapshot'),
+  targetJobTitleSnapshot: text('target_job_title_snapshot'),
+  jdHash: text('jd_hash'),
+  analysisGroupId: text('analysis_group_id'),
   jobDescription: text('job_description').notNull(),
   result: text('result').notNull(),
   overallScore: integer('overall_score').notNull(),
@@ -262,6 +269,30 @@ export const jdAnalyses = pgTable('jd_analyses', {
   status: text('status').notNull().default('success'),
   error: text('error'),
   createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const resumeChangeProposals = pgTable('resume_change_proposals', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  resumeId: text('resume_id').notNull(),
+  userId: text('user_id'),
+  source: text('source').notNull().default('ai'),
+  sourceId: text('source_id'),
+  shareId: text('share_id'),
+  commentId: text('comment_id'),
+  sectionId: text('section_id'),
+  sectionType: text('section_type').notNull(),
+  targetField: text('target_field').notNull().default('text'),
+  current: text('current').notNull().default(''),
+  suggested: text('suggested').notNull().default(''),
+  reason: text('reason').notNull().default(''),
+  evidenceRequired: integer('evidence_required').notNull().default(0),
+  status: text('status').notNull().default('pending'),
+  metadata: text('metadata').default('{}'),
+  beforeVersionId: text('before_version_id'),
+  appliedVersionId: text('applied_version_id'),
+  undoContent: text('undo_content'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
 });
 
 export const grammarChecks = pgTable('grammar_checks', {

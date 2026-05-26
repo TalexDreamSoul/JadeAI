@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { anonymizeDisplayName, getReviewerDisplay, isReviewLoginRequired } from '@/lib/share/review';
 import { hashPassword } from '@/lib/utils/share';
@@ -82,6 +83,7 @@ export async function POST(
     };
 
     const selectedText = String(body.selectedText || '').trim();
+    const sectionId = body.sectionId ? String(body.sectionId) : null;
     const comment = await shareRepository.createComment({
       shareId: result.share!.id,
       resumeId: result.share!.resumeId,
@@ -89,11 +91,32 @@ export async function POST(
       authorUserId: reviewer?.id || null,
       authorName: reviewerDisplay.name,
       authorEmail: reviewerDisplay.email,
-      sectionId: body.sectionId ? String(body.sectionId) : null,
+      sectionId,
       selectedText: selectedText || null,
       anchor: body.anchor && typeof body.anchor === 'object' ? body.anchor : null,
       content,
     });
+    const suggestedText = typeof body.suggestedText === 'string' ? body.suggestedText.trim() : '';
+    if (comment && suggestedText) {
+      const resume = await resumeRepository.findById(result.share!.resumeId).catch(() => null);
+      const section = sectionId && resume?.sections ? resume.sections.find((item: { id: string }) => item.id === sectionId) : null;
+      await analysisRepository.createChangeProposal({
+        resumeId: result.share!.resumeId,
+        userId: reviewer?.id || null,
+        source: 'review',
+        sourceId: comment.id,
+        shareId: result.share!.id,
+        commentId: comment.id,
+        sectionId,
+        sectionType: section?.type || String(body.sectionType || 'summary'),
+        targetField: String(body.targetField || 'text'),
+        current: selectedText,
+        suggested: suggestedText,
+        reason: content,
+        evidenceRequired: false,
+        metadata: { token },
+      }).catch((error) => console.error('Failed to create review change proposal:', error));
+    }
     const owner = await resumeRepository.findOwnerByResumeId(result.share!.resumeId);
     if (owner?.id && owner.id !== reviewer?.id) {
       await resumeRepository.createEvent({

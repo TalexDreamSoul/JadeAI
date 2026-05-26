@@ -132,32 +132,42 @@ export const resumeRepository = {
   ) {
     const original = await this.findById(id);
     if (!original) return null;
+    return this.createFromSnapshot(original, userId, titleOverride, options);
+  },
 
+  async createFromSnapshot(
+    snapshot: RestoreSnapshot & { id?: string; title?: string; template?: string; language?: string; themeConfig?: unknown; sections?: RestoreSnapshotSection[] },
+    userId: string,
+    titleOverride?: string,
+    options?: Partial<Pick<ResumeCreateData, 'baseResumeId' | 'targetCompany' | 'targetJobTitle' | 'jobDescription' | 'versionLabel'>> & { sourceResumeId?: string | null }
+  ) {
     const newId = crypto.randomUUID();
     await db.insert(resumes).values({
       id: newId,
       userId,
-      title: titleOverride ?? `${original.title} (副本)`,
-      template: original.template,
-      themeConfig: original.themeConfig,
-      language: original.language,
-      sourceResumeId: original.id,
-      baseResumeId: options?.baseResumeId ?? original.baseResumeId ?? (original.isBase ? original.id : null),
-      targetCompany: options?.targetCompany ?? null,
-      targetJobTitle: options?.targetJobTitle ?? null,
-      jobDescription: options?.jobDescription ?? null,
-      versionLabel: options?.versionLabel ?? 'v1',
+      title: titleOverride ?? `${snapshot.title || '未命名简历'} (副本)`,
+      template: snapshot.template || DEFAULT_TEMPLATE,
+      themeConfig: snapshot.themeConfig ?? {},
+      language: snapshot.language || 'zh',
+      sourceResumeId: options?.sourceResumeId ?? snapshot.id ?? null,
+      baseResumeId: options?.baseResumeId ?? snapshot.baseResumeId ?? (snapshot.isBase ? snapshot.id || null : null),
+      targetCompany: options?.targetCompany ?? snapshot.targetCompany ?? null,
+      targetJobTitle: options?.targetJobTitle ?? snapshot.targetJobTitle ?? null,
+      jobDescription: options?.jobDescription ?? snapshot.jobDescription ?? null,
+      versionLabel: options?.versionLabel ?? snapshot.versionLabel ?? 'v1',
     });
 
-    for (const section of original.sections) {
+    const sections = Array.isArray(snapshot.sections) ? snapshot.sections : [];
+    for (const [index, section] of sections.entries()) {
+      if (!section.type || !section.title) continue;
       await db.insert(resumeSections).values({
         id: crypto.randomUUID(),
         resumeId: newId,
         type: section.type,
         title: section.title,
-        sortOrder: section.sortOrder,
-        visible: section.visible,
-        content: section.content,
+        sortOrder: typeof section.sortOrder === 'number' ? section.sortOrder : index,
+        visible: section.visible ?? true,
+        content: section.content ?? {},
       });
     }
 

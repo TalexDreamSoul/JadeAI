@@ -215,6 +215,7 @@ export function PublicResumeReview({
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [previewZoom, setPreviewZoom] = useState(100);
   const [draft, setDraft] = useState('');
+  const [suggestedDraft, setSuggestedDraft] = useState('');
   const [activeLeftTab, setActiveLeftTab] = useState<'info' | 'review' | 'jd'>('info');
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
@@ -418,7 +419,7 @@ export function PublicResumeReview({
     }, 0);
   }, [clearSelection, clearSelectionMarker, previewZoom, shareMeta.reviewEnabled]);
 
-  const createComment = async (content: string, options?: { parentCommentId?: string }) => {
+  const createComment = async (content: string, options?: { parentCommentId?: string; suggestedText?: string }) => {
     const trimmed = content.trim();
     if (!trimmed || submitting) return null;
     if (shareMeta.reviewEnabled && !isAuthenticated) {
@@ -437,6 +438,7 @@ export function PublicResumeReview({
           parentCommentId: options?.parentCommentId,
           sectionId: options?.parentCommentId ? undefined : selection?.sectionId || undefined,
           selectedText: options?.parentCommentId ? undefined : selection?.text || undefined,
+          suggestedText: options?.parentCommentId ? undefined : options?.suggestedText || undefined,
           anchor: options?.parentCommentId ? undefined : selection?.anchor || undefined,
         }),
       });
@@ -455,6 +457,7 @@ export function PublicResumeReview({
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const createAiReviewComment = async (content: string, actionSection?: string) => {
     const target = actionSection ? normalizeForMatch(actionSection) : '';
     const matchedSection = Array.from(previewRef.current?.querySelectorAll<HTMLElement>('[data-section-id], [data-section]') || [])
@@ -493,9 +496,10 @@ export function PublicResumeReview({
   };
 
   const submitComment = async () => {
-    const created = await createComment(draft);
+    const created = await createComment(draft, { suggestedText: suggestedDraft });
     if (created) {
       setDraft('');
+      setSuggestedDraft('');
       clearSelection();
     }
   };
@@ -1026,6 +1030,14 @@ export function PublicResumeReview({
                     placeholder={selection ? t('commentPlaceholder') : t('reviewPlaceholder')}
                     className="min-h-24 bg-white text-sm dark:bg-zinc-900"
                   />
+                  {selection && (
+                    <Textarea
+                      value={suggestedDraft}
+                      onChange={(e) => setSuggestedDraft(e.target.value)}
+                      placeholder={safeCopy(t('suggestedChangePlaceholder'), 'Optional: suggested replacement text for one-click apply')}
+                      className="min-h-20 bg-white text-sm dark:bg-zinc-900"
+                    />
+                  )}
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                     <Button onClick={submitComment} disabled={submitting || !draft.trim()} className="cursor-pointer bg-brand hover:bg-brand-hover">
                       {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}

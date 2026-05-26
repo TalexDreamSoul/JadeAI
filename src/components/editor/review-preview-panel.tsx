@@ -2,12 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CheckCircle2, Clock3, Loader2, MessageSquareText, RefreshCw, RotateCcw } from 'lucide-react';
+import { Check, CheckCircle2, Clock3, Loader2, MessageSquareText, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ReviewedResumeView, type ReviewAnchorForPreview, type ReviewCommentForPreview } from '@/components/share/reviewed-resume-view';
 import { cn } from '@/lib/utils';
 import type { Resume } from '@/types/resume';
+
+type ChangeProposal = {
+  id: string;
+  status: string;
+  source?: string | null;
+  sourceId?: string | null;
+  commentId?: string | null;
+  sectionType: string;
+  targetField: string;
+  current: string;
+  suggested: string;
+  reason: string;
+  evidenceRequired?: boolean;
+};
 
 type ReviewComment = {
   id: string;
@@ -21,6 +35,7 @@ type ReviewComment = {
   anchor?: ReviewAnchorForPreview | null;
   content: string;
   status: string;
+  changeProposal?: ChangeProposal | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -84,11 +99,13 @@ export function ReviewPreviewPanel({
 }) {
   const t = useTranslations('editor.reviewPreview');
   const [data, setData] = useState<ReviewSummaryResponse | null>(null);
+  const [proposals, setProposals] = useState<ChangeProposal[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [previewZoom, setPreviewZoom] = useState(80);
   const [statusFilter, setStatusFilter] = useState<ReviewStatusFilter>('open');
   const [updatingCommentId, setUpdatingCommentId] = useState<string | null>(null);
+  const [updatingProposalId, setUpdatingProposalId] = useState<string | null>(null);
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
@@ -112,6 +129,11 @@ export function ReviewPreviewPanel({
             sharedAt: share.createdAt,
           })),
         ]);
+      }
+      const proposalRes = await fetch(`/api/resume/${resumeId}/change-proposals`, { headers: getHeaders(), cache: 'no-store' });
+      if (proposalRes.ok) {
+        const nextProposals = await proposalRes.json();
+        setProposals(Array.isArray(nextProposals) ? nextProposals : []);
       }
     } finally {
       setLoading(false);
@@ -140,6 +162,7 @@ export function ReviewPreviewPanel({
     })),
     [rootComments]
   );
+  const standaloneProposals = useMemo(() => proposals.filter((proposal) => !proposal.commentId), [proposals]);
   const repliesByParent = useMemo(() => {
     const map = new Map<string, ReviewComment[]>();
     for (const comment of selected?.comments || []) {
@@ -150,6 +173,24 @@ export function ReviewPreviewPanel({
     }
     return map;
   }, [selected]);
+  const updateProposal = useCallback(async (proposal: ChangeProposal, action: 'apply' | 'reject' | 'undo') => {
+    setUpdatingProposalId(proposal.id);
+    try {
+      const res = await fetch(`/api/resume/${resumeId}/change-proposals/${proposal.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getHeaders() || {}),
+        },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await fetchSummary();
+    } finally {
+      setUpdatingProposalId(null);
+    }
+  }, [fetchSummary, resumeId]);
+
   const updateCommentStatus = useCallback(async (comment: ReviewComment, status: 'open' | 'resolved') => {
     if (!comment.shareToken) return;
     setUpdatingCommentId(comment.id);
@@ -233,11 +274,48 @@ export function ReviewPreviewPanel({
           </div>
 
           <div className="space-y-3 p-4">
-            {filteredRootComments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-400">
-                <MessageSquareText className="mb-3 h-10 w-10" />
-                <p className="text-sm">{t('noComments')}</p>
+            {standaloneProposals.length > 0 && (
+              <div className="mb-3 space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-900/60 dark:bg-violet-950/20">
+                <div className="text-xs font-semibold text-violet-700 dark:text-violet-300">{t('changeProposals')}</div>
+                {standaloneProposals.map((proposal) => (
+                  <div key={proposal.id} className="rounded-lg bg-white p-3 shadow-sm dark:bg-zinc-900">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{proposal.source || 'AI'}</Badge>
+                      <Badge variant="secondary">{proposal.sectionType}</Badge>
+                      <Badge variant="secondary">{proposal.status}</Badge>
+                    </div>
+                    <p className="whitespace-pre-wrap text-xs leading-5 text-zinc-700 dark:text-zinc-200">{proposal.suggested}</p>
+                    {proposal.reason && <p className="mt-2 text-xs text-zinc-500">{proposal.reason}</p>}
+                    <div className="mt-3 flex justify-end gap-2">
+                      {proposal.status === 'applied' ? (
+                        <Button type="button" size="xs" variant="outline" disabled={updatingProposalId === proposal.id} onClick={() => updateProposal(proposal, 'undo')}>
+                          {updatingProposalId === proposal.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                          {t('undoProposal')}
+                        </Button>
+                      ) : proposal.status === 'pending' ? (
+                        <>
+                          <Button type="button" size="xs" variant="outline" disabled={updatingProposalId === proposal.id} onClick={() => updateProposal(proposal, 'reject')}>
+                            <X className="h-3 w-3" />
+                            {t('rejectProposal')}
+                          </Button>
+                          <Button type="button" size="xs" disabled={updatingProposalId === proposal.id} onClick={() => updateProposal(proposal, 'apply')} className="bg-brand hover:bg-brand-hover">
+                            {updatingProposalId === proposal.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                            {t('applyProposal')}
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
+            {filteredRootComments.length === 0 ? (
+              standaloneProposals.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-400">
+                  <MessageSquareText className="mb-3 h-10 w-10" />
+                  <p className="text-sm">{t('noComments')}</p>
+                </div>
+              )
             ) : (
               filteredRootComments.map((comment) => (
                 <div
@@ -292,6 +370,41 @@ export function ReviewPreviewPanel({
                     </blockquote>
                   ) : null}
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">{comment.content}</p>
+                  {comment.changeProposal && (
+                    <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/70 p-3 text-xs dark:border-violet-900/60 dark:bg-violet-950/20">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-violet-700 dark:text-violet-300">{t('changeProposal')}</Badge>
+                        <Badge variant="secondary">{comment.changeProposal.sectionType}</Badge>
+                        <Badge variant="secondary">{comment.changeProposal.status}</Badge>
+                      </div>
+                      <div className="grid gap-2">
+                        <div>
+                          <p className="mb-1 font-semibold text-zinc-500">{t('suggestedChange')}</p>
+                          <p className="whitespace-pre-wrap leading-5 text-zinc-700 dark:text-zinc-200">{comment.changeProposal.suggested}</p>
+                        </div>
+                        {comment.changeProposal.reason && <p className="text-zinc-500">{comment.changeProposal.reason}</p>}
+                      </div>
+                      <div className="mt-3 flex justify-end gap-2">
+                        {comment.changeProposal.status === 'applied' ? (
+                          <Button type="button" size="xs" variant="outline" disabled={updatingProposalId === comment.changeProposal.id} onClick={(event) => { event.stopPropagation(); updateProposal(comment.changeProposal!, 'undo'); }}>
+                            {updatingProposalId === comment.changeProposal.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                            {t('undoProposal')}
+                          </Button>
+                        ) : comment.changeProposal.status === 'pending' ? (
+                          <>
+                            <Button type="button" size="xs" variant="outline" disabled={updatingProposalId === comment.changeProposal.id} onClick={(event) => { event.stopPropagation(); updateProposal(comment.changeProposal!, 'reject'); }}>
+                              <X className="h-3 w-3" />
+                              {t('rejectProposal')}
+                            </Button>
+                            <Button type="button" size="xs" disabled={updatingProposalId === comment.changeProposal.id} onClick={(event) => { event.stopPropagation(); updateProposal(comment.changeProposal!, 'apply'); }} className="bg-brand hover:bg-brand-hover">
+                              {updatingProposalId === comment.changeProposal.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              {t('applyProposal')}
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
                   {(repliesByParent.get(comment.id) || []).length > 0 && (
                     <div className="mt-3 space-y-2 border-l pl-3 dark:border-zinc-700">
                       {(repliesByParent.get(comment.id) || []).map((reply) => (

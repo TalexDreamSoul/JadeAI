@@ -38,6 +38,36 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       await this.db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_credits integer NOT NULL DEFAULT 20`);
       await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
       await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS error text`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS resume_version_id text`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS resume_version_label text`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS resume_title_snapshot text`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS target_company_snapshot text`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS target_job_title_snapshot text`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS jd_hash text`);
+      await this.db.execute(sql`ALTER TABLE jd_analyses ADD COLUMN IF NOT EXISTS analysis_group_id text`);
+      await this.db.execute(sql`CREATE TABLE IF NOT EXISTS resume_change_proposals (
+        id text PRIMARY KEY,
+        resume_id text NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
+        user_id text REFERENCES users(id),
+        source text NOT NULL DEFAULT 'ai',
+        source_id text,
+        share_id text,
+        comment_id text,
+        section_id text,
+        section_type text NOT NULL,
+        target_field text NOT NULL DEFAULT 'text',
+        current text NOT NULL DEFAULT '',
+        suggested text NOT NULL DEFAULT '',
+        reason text NOT NULL DEFAULT '',
+        evidence_required integer NOT NULL DEFAULT 0,
+        status text NOT NULL DEFAULT 'pending',
+        metadata text DEFAULT '{}',
+        before_version_id text,
+        applied_version_id text,
+        undo_content text,
+        created_at integer NOT NULL DEFAULT extract(epoch from now())::integer,
+        updated_at integer NOT NULL DEFAULT extract(epoch from now())::integer
+      )`);
       await this.db.execute(sql`ALTER TABLE resume_ai_reviews ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
       await this.db.execute(sql`ALTER TABLE resume_ai_reviews ADD COLUMN IF NOT EXISTS error text`);
       await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);

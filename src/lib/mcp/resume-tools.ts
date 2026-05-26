@@ -1222,7 +1222,10 @@ async function createReviewAnnotations(args: Record<string, unknown>, context: T
       shareId: share.id,
       resumeId,
       sectionId: targetSection?.id || null,
+      sectionType: targetSection?.type || textOfValue(item.sectionType || item.section || 'summary'),
+      targetField: textOfValue(item.targetField || 'text'),
       selectedText: quote || (targetSection ? `${targetSection.title} 批注` : 'MCP 批注'),
+      suggestedText: textOfValue(item.suggestedText || item.suggested || item.replacement || ''),
       anchor: optionalObjectArg(item, 'anchor'),
       content: buildAnnotationMarkdown(item),
       authorName,
@@ -1239,18 +1242,39 @@ async function createReviewAnnotations(args: Record<string, unknown>, context: T
     };
   }
 
-  const comments = await Promise.all(normalized.map((item) => shareRepository.createComment({
-    shareId: item.shareId,
-    resumeId: item.resumeId,
-    parentCommentId: null,
-    authorUserId: user.id,
-    authorName: item.authorName,
-    authorEmail: user.email || null,
-    sectionId: item.sectionId,
-    selectedText: item.selectedText,
-    anchor: Object.keys(item.anchor).length > 0 ? item.anchor : null,
-    content: item.content,
-  })));
+  const comments = await Promise.all(normalized.map(async (item) => {
+    const comment = await shareRepository.createComment({
+      shareId: item.shareId,
+      resumeId: item.resumeId,
+      parentCommentId: null,
+      authorUserId: user.id,
+      authorName: item.authorName,
+      authorEmail: user.email || null,
+      sectionId: item.sectionId,
+      selectedText: item.selectedText,
+      anchor: Object.keys(item.anchor).length > 0 ? item.anchor : null,
+      content: item.content,
+    });
+    if (comment && item.suggestedText) {
+      await analysisRepository.createChangeProposal({
+        resumeId: item.resumeId,
+        userId: user.id,
+        source: 'mcp',
+        sourceId: comment.id,
+        shareId: item.shareId,
+        commentId: comment.id,
+        sectionId: item.sectionId,
+        sectionType: item.sectionType,
+        targetField: item.targetField,
+        current: item.selectedText,
+        suggested: item.suggestedText,
+        reason: item.content,
+        evidenceRequired: false,
+        metadata: { source: 'create_review_annotations' },
+      }).catch(() => null);
+    }
+    return comment;
+  }));
   await resumeRepository.createEvent({
     resumeId,
     userId: user.id,
@@ -1286,6 +1310,63 @@ async function ensureReviewShare(args: Record<string, unknown>, context: ToolHan
     metadata: { shareId: share.id, token: share.token, label },
   }).catch(() => null);
   return { mode: 'applied', share: { id: share.id, token: share.token, label: share.label, reviewEnabled: !!share.reviewEnabled, isActive: !!share.isActive } };
+}
+
+async function createChangeProposal(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const rawSuggestion = objectArg(args, 'suggestion');
+  const parsed = applicableSuggestionSchema.safeParse(rawSuggestion);
+  if (!parsed.success) {
+    throw new Error(`Invalid suggestion: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`);
+  }
+  const resume = await requireOwnedResume(resumeId, user);
+  const section = (resume.sections as ResumeSection[]).find((item) => item.type === parsed.data.sectionType);
+  const proposal = await analysisRepository.createChangeProposal({
+    resumeId,
+    userId: user.id,
+    source: stringArg(args, 'source', false) || 'mcp',
+    sourceId: stringArg(args, 'sourceId', false) || null,
+    sectionId: section?.id || stringArg(args, 'sectionId', false) || null,
+    sectionType: parsed.data.sectionType,
+    targetField: parsed.data.targetField,
+    current: parsed.data.current,
+    suggested: parsed.data.suggested,
+    reason: parsed.data.reason,
+    evidenceRequired: parsed.data.evidenceRequired,
+    metadata: optionalObjectArg(args, 'metadata'),
+  });
+  await resumeRepository.createEvent({
+    resumeId,
+    userId: user.id,
+    type: 'mcp.change_proposal.created',
+    title: 'MCP change proposal created',
+    description: parsed.data.reason,
+    metadata: { proposalId: proposal?.id || null, sourceId: stringArg(args, 'sourceId', false) || null },
+  }).catch(() => null);
+  return { proposal, nextSteps: ['Review in JadeAI change proposals, or call apply_change_proposal with apply=true after user approval.'] };
+}
+
+async function listChangeProposals(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const resumeId = stringArg(args, 'resumeId');
+  const limit = numberArg(args, 'limit', 50, 100);
+  await requireOwnedResume(resumeId, user);
+  return { proposals: await analysisRepository.findChangeProposalsByResumeId(resumeId, limit) };
+}
+
+async function applyChangeProposalTool(args: Record<string, unknown>, context: ToolHandlerContext) {
+  const user = context.user;
+  const proposalId = stringArg(args, 'proposalId');
+  const apply = boolArg(args, 'apply', false);
+  const proposal = await analysisRepository.findChangeProposalById(proposalId);
+  if (!proposal) throw new Error('Proposal not found');
+  await requireOwnedResume(proposal.resumeId, user);
+  if (!apply) {
+    return { mode: 'preview', proposal, safety: 'Call with apply=true only after user approval. Applying creates before/after versions.' };
+  }
+  const { applyChangeProposal } = await import('../change-proposals');
+  return applyChangeProposal(proposalId, user.id);
 }
 
 async function createResumeVersion(args: Record<string, unknown>, context: ToolHandlerContext) {
@@ -1579,7 +1660,7 @@ const inputSchemas = {
       resumeId: { type: 'string' },
       shareId: { type: 'string' },
       shareToken: { type: 'string' },
-      annotations: { type: 'array', items: JSON_OBJECT_SCHEMA },
+      annotations: { type: 'array', items: JSON_OBJECT_SCHEMA, description: 'Each annotation may include quote, comment, suggestion, suggestedText/replacement, sectionId/sectionType, targetField.' },
       authorName: { type: 'string' },
       apply: { type: 'boolean', default: false },
     },
@@ -1590,6 +1671,31 @@ const inputSchemas = {
     type: 'object',
     properties: { resumeId: { type: 'string' }, label: { type: 'string' }, apply: { type: 'boolean', default: false } },
     required: ['resumeId'],
+    additionalProperties: false,
+  },
+  createChangeProposal: {
+    type: 'object',
+    properties: {
+      resumeId: { type: 'string' },
+      suggestion: JSON_OBJECT_SCHEMA,
+      source: { type: 'string' },
+      sourceId: { type: 'string' },
+      sectionId: { type: 'string' },
+      metadata: JSON_OBJECT_SCHEMA,
+    },
+    required: ['resumeId', 'suggestion'],
+    additionalProperties: false,
+  },
+  listChangeProposals: {
+    type: 'object',
+    properties: { resumeId: { type: 'string' }, limit: { type: 'number' } },
+    required: ['resumeId'],
+    additionalProperties: false,
+  },
+  applyChangeProposal: {
+    type: 'object',
+    properties: { proposalId: { type: 'string' }, apply: { type: 'boolean', default: false } },
+    required: ['proposalId'],
     additionalProperties: false,
   },
   createVersion: {
@@ -1660,6 +1766,9 @@ export const resumeMcpTools: ToolDefinition[] = [
   { name: 'list_review_shares', description: 'List share links and review status so MCP annotations can target the correct review preview.', inputSchema: inputSchemas.listReviewShares, handler: listReviewShares },
   { name: 'create_review_annotations', description: 'Preview or create review comments from annotations. Applying makes them visible in review preview. Requires a review-enabled active share link.', inputSchema: inputSchemas.createReviewAnnotations, handler: createReviewAnnotations },
   { name: 'ensure_review_share', description: 'Preview or create a review-enabled share link for MCP annotations. Creating a share link requires apply=true.', inputSchema: inputSchemas.ensureReviewShare, handler: ensureReviewShare },
+  { name: 'create_change_proposal', description: 'Create an apply-ready change proposal instead of writing immediately. The user can accept/reject it in JadeAI.', inputSchema: inputSchemas.createChangeProposal, handler: createChangeProposal },
+  { name: 'list_change_proposals', description: 'List apply-ready change proposals for a resume.', inputSchema: inputSchemas.listChangeProposals, handler: listChangeProposals },
+  { name: 'apply_change_proposal', description: 'Preview or apply a change proposal. Applying creates before/after versions.', inputSchema: inputSchemas.applyChangeProposal, handler: applyChangeProposalTool },
   { name: 'create_resume_version', description: 'Create a resume snapshot version before any MCP write.', inputSchema: inputSchemas.createVersion, handler: createResumeVersion },
   { name: 'update_resume_section', description: 'Preview or apply a section content update. Applying requires versionId from create_resume_version.', inputSchema: inputSchemas.updateSection, handler: updateResumeSection },
   { name: 'apply_suggestion', description: 'Preview or apply a JD suggestion. Applying requires versionId from create_resume_version.', inputSchema: inputSchemas.applySuggestion, handler: applySuggestion },

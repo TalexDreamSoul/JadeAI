@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Brain,
-  Briefcase,
   Check,
-  ClipboardPaste,
+  ChevronDown,
+  Copy,
   ExternalLink,
   FileText,
   GitBranch,
@@ -64,7 +64,7 @@ type CareerWorkbenchProps = {
 
 export type CareerWorkbenchTab = 'match' | 'history' | 'memory' | 'knowledge' | 'interview';
 export type CareerWorkbenchAiTool = 'ai-review' | 'translate' | 'cover-letter' | 'grammar-check';
-type JdHistoryAction = 'match-analysis' | 'cloud-analysis' | 'derive-resume' | 'build-knowledge' | 'create-interview';
+type JdHistoryAction = 'match-analysis' | 'cloud-analysis' | 'batch-analysis' | 'derive-resume' | 'build-knowledge' | 'create-interview';
 
 type JobTemplate = {
   id?: string;
@@ -96,11 +96,17 @@ type ApplicableSuggestion = {
   suggested: string;
   reason: string;
   evidenceRequired: boolean;
+  proposalId?: string;
 };
 
 type AppliedSuggestionState = {
   sectionId: string;
   previousContent: unknown;
+};
+
+type ChangeProposal = {
+  id: string;
+  status: 'pending' | 'applied' | 'rejected' | string;
 };
 
 type JdAnalysisResult = {
@@ -110,6 +116,7 @@ type JdAnalysisResult = {
   missingKeywords: string[];
   suggestions: { section: string; current: string; suggested: string }[];
   applicableSuggestions?: ApplicableSuggestion[];
+  changeProposals?: ChangeProposal[];
   summary: string;
   historyId?: string;
 };
@@ -117,18 +124,35 @@ type JdAnalysisResult = {
 type JdHistoryItem = {
   id: string;
   resumeId?: string;
+  resumeVersionId?: string | null;
   resumeTitle?: string;
   resumeVersionLabel?: string;
   targetCompany?: string;
   targetJobTitle?: string;
+  jdHash?: string | null;
+  analysisGroupId?: string | null;
   isCurrentResume?: boolean;
   isBaseResume?: boolean;
   overallScore: number;
   atsScore: number;
   jobDescription: string;
+  jobDescriptionPreview?: string;
   createdAt: string | number | Date;
   status?: 'pending' | 'success' | 'failed' | 'running';
   error?: string;
+};
+
+type VersionOption = {
+  id: string;
+  label: string;
+  source: string;
+  createdAt: string | number | Date;
+};
+
+type JdAnalysisDetail = {
+  id: string;
+  jobDescription: string;
+  result: JdAnalysisResult;
 };
 
 function getHeaders() {
@@ -200,6 +224,16 @@ function buildCharDiff(oldText: string, newText: string) {
     }
   }
   return { oldParts, newParts };
+}
+
+function formatDateTime(value: string | number | Date) {
+  const date = typeof value === 'number' && value < 10_000_000_000 ? new Date(value * 1000) : new Date(value);
+  if (!Number.isFinite(date.getTime())) return '—';
+  return date.toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatSigned(value: number) {
+  return value > 0 ? `+${value}` : String(value);
 }
 
 function renderDiffParts(parts: DiffPart[], side: 'old' | 'new') {
@@ -300,6 +334,9 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [jdHistory, setJdHistory] = useState<JdHistoryItem[]>([]);
+  const [resumeVersions, setResumeVersions] = useState<VersionOption[]>([]);
+  const [selectedAnalysisVersionId, setSelectedAnalysisVersionId] = useState('current');
+  const [expandedJdIds, setExpandedJdIds] = useState<Record<string, boolean>>({});
   const [selectedResumeId, setSelectedResumeId] = useState('');
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
   const [internalActiveTab, setInternalActiveTab] = useState<CareerWorkbenchTab>('match');
@@ -322,7 +359,10 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     [templates, selectedTemplateKey]
   );
   const suggestions = analysis?.applicableSuggestions?.length
-    ? analysis.applicableSuggestions
+    ? analysis.applicableSuggestions.map((suggestion, index) => ({
+      ...suggestion,
+      proposalId: analysis.changeProposals?.[index]?.id,
+    }))
     : analysis?.suggestions?.map((item) => ({
       sectionType: item.section,
       targetField: item.section === 'summary' ? 'text' : 'highlights',
@@ -331,6 +371,23 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       reason: item.suggested,
       evidenceRequired: true,
     })) || [];
+  const jdHistoryGroups = useMemo(() => {
+    const map = new Map<string, JdHistoryItem[]>();
+    for (const item of jdHistory) {
+      const key = item.jdHash || item.analysisGroupId || item.jobDescription.trim().replace(/\s+/g, ' ').toLowerCase();
+      if (!key) continue;
+      const list = map.get(key) || [];
+      list.push(item);
+      map.set(key, list);
+    }
+    return Array.from(map.entries()).map(([key, items]) => {
+      const sorted = [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const successful = sorted.filter((item) => !item.status || item.status === 'success');
+      const best = successful.reduce<JdHistoryItem | null>((current, item) => (!current || item.overallScore > current.overallScore ? item : current), null);
+      const baseline = successful[successful.length - 1] || null;
+      return { key, items: sorted, best, baseline };
+    }).sort((a, b) => new Date(b.items[0]?.createdAt || 0).getTime() - new Date(a.items[0]?.createdAt || 0).getTime());
+  }, [jdHistory]);
   const currentTab = activeTab || internalActiveTab;
   const setCurrentTab = onActiveTabChange || setInternalActiveTab;
 
@@ -372,6 +429,25 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     });
   };
 
+  const loadResumeVersions = async (targetResumeId = selectedResumeId) => {
+    if (!targetResumeId || targetResumeId.startsWith('local_')) {
+      setResumeVersions([]);
+      return;
+    }
+    const res = await fetch(`/api/resume/${targetResumeId}/versions`, { headers: getRequestHeaders() });
+    if (!res.ok) {
+      setResumeVersions([]);
+      return;
+    }
+    const data = await res.json();
+    setResumeVersions(Array.isArray(data) ? data.map((version: Partial<VersionOption>) => ({
+      id: String(version.id || ''),
+      label: String(version.label || ''),
+      source: String(version.source || ''),
+      createdAt: version.createdAt || '',
+    })).filter((version: VersionOption) => version.id) : []);
+  };
+
   useEffect(() => {
     if (fpLoading) return;
     load().catch((error) => {
@@ -388,6 +464,8 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
   useEffect(() => {
     if (!selectedResumeId) return;
     loadJdHistory(selectedResumeId).catch(() => null);
+    loadResumeVersions(selectedResumeId).catch(() => null);
+    setSelectedAnalysisVersionId('current');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedResumeId]);
 
@@ -408,7 +486,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     return res.json();
   };
 
-  const applyHistoryDetail = (detail: any) => {
+  const applyHistoryDetail = (detail: JdAnalysisDetail) => {
     setJobDescription(detail.jobDescription || '');
     setAnalysis({ ...detail.result, historyId: detail.id });
     setAppliedSuggestions({});
@@ -442,7 +520,8 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
         id: transientId,
         overallScore: 0,
         atsScore: 0,
-        jobDescription: targetJobDescription.slice(0, 100),
+        jobDescription: targetJobDescription,
+        jobDescriptionPreview: targetJobDescription.slice(0, 140),
         createdAt: new Date(),
         status: 'running',
       }, ...current]);
@@ -455,7 +534,13 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       const res = await fetch('/api/ai/jd-analysis', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ resumeId: selectedResumeId, jobDescription: targetJobDescription }),
+        body: JSON.stringify({
+          resumeId: selectedResumeId,
+          jobDescription: targetJobDescription,
+          ...(selectedAnalysisVersionId !== 'current' ? { versionId: selectedAnalysisVersionId } : {}),
+          ...(targetCompany ? { targetCompany } : {}),
+          ...(jobTitle || selectedTemplate?.title ? { targetJobTitle: jobTitle || selectedTemplate?.title || '' } : {}),
+        }),
       });
       const data = await res.json().catch(async () => ({ error: await res.text().catch(() => '') }));
       if (mode === 'cloud' && data.historyId) {
@@ -472,6 +557,9 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
           overallScore: data.overallScore || 0,
           atsScore: data.atsScore || 0,
           status: 'success',
+          resumeVersionId: data.resumeVersionId || item.resumeVersionId || null,
+          resumeVersionLabel: data.resumeVersionLabel || item.resumeVersionLabel || '',
+          jdHash: data.jdHash || item.jdHash || null,
         } : item));
       }
       await loadJdHistory();
@@ -489,6 +577,40 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       toast.error(message.includes('log in') || message.includes('Unauthorized') ? t('cloudAnalysisUnauthorized') : t('analysisFailed'), {
         description: message,
       });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runBatchAnalysisForVersions = async (jdOverride?: string) => {
+    const targetJobDescription = jdOverride ?? jobDescription;
+    if (!selectedResumeId || !targetJobDescription.trim()) {
+      toast.error(t('missingResumeOrJd'));
+      return;
+    }
+    const targets = ['current', ...resumeVersions.slice(0, 8).map((version) => version.id)];
+    setBusy('batch-analysis');
+    let successCount = 0;
+    try {
+      for (const targetVersionId of targets) {
+        const res = await fetch('/api/ai/jd-analysis', {
+          method: 'POST',
+          headers: { ...getHeaders(), 'x-ai-mode': 'server' },
+          body: JSON.stringify({
+            resumeId: selectedResumeId,
+            jobDescription: targetJobDescription,
+            ...(targetVersionId !== 'current' ? { versionId: targetVersionId } : {}),
+            ...(targetCompany ? { targetCompany } : {}),
+            ...(jobTitle || selectedTemplate?.title ? { targetJobTitle: jobTitle || selectedTemplate?.title || '' } : {}),
+          }),
+        });
+        if (res.ok) successCount += 1;
+      }
+      await loadJdHistory();
+      toast.success(t('batchAnalysisDone', { count: successCount }));
+    } catch (error) {
+      console.error(error);
+      toast.error(t('analysisFailed'));
     } finally {
       setBusy(null);
     }
@@ -533,7 +655,10 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       const res = await fetch('/api/career/apply-suggestion', {
         method: 'POST',
         headers: getRequestHeaders(),
-        body: JSON.stringify({ resumeId: selectedResumeId, suggestion }),
+        body: JSON.stringify(suggestion.proposalId
+          ? { resumeId: selectedResumeId, proposalId: suggestion.proposalId }
+          : { resumeId: selectedResumeId, suggestion }
+        ),
       });
       if (!res.ok) {
         const data = await res.json().catch(async () => ({ error: await res.text().catch(() => '') }));
@@ -740,6 +865,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     const targetJobDescription = detail?.jobDescription || item.jobDescription || '';
     if (action === 'match-analysis') void runAnalysis('current', targetJobDescription);
     if (action === 'cloud-analysis') void runAnalysis('cloud', targetJobDescription);
+    if (action === 'batch-analysis') void runBatchAnalysisForVersions(targetJobDescription);
     if (action === 'derive-resume') void deriveResume(targetJobDescription);
     if (action === 'build-knowledge') void createKnowledge(targetJobDescription);
     if (action === 'create-interview') void createInterview(targetJobDescription);
@@ -887,6 +1013,89 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     return <Badge variant="secondary">{item.overallScore}</Badge>;
   };
 
+  const copyJd = async (item: JdHistoryItem) => {
+    await navigator.clipboard?.writeText(item.jobDescription || '').catch(() => null);
+    toast.success(t('jdCopied'));
+  };
+
+  const toggleHistoryJd = (id: string) => {
+    setExpandedJdIds((current) => ({ ...current, [id]: !current[id] }));
+  };
+
+  const renderHistoryCard = (item: JdHistoryItem) => {
+    const expanded = !!expandedJdIds[item.id];
+    const title = item.targetCompany || item.targetJobTitle
+      ? [item.targetCompany, item.targetJobTitle].filter(Boolean).join(' · ')
+      : item.jobDescriptionPreview || item.jobDescription;
+    return (
+      <div key={item.id} className="rounded-md border bg-white p-3 transition hover:border-brand dark:bg-zinc-900">
+        <button type="button" onClick={() => openHistoryItem(item)} className="w-full text-left">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate text-sm font-medium">{title}</span>
+            {renderHistoryStatus(item)}
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2 text-xs text-zinc-500">
+            <span>ATS {item.atsScore}</span>
+            <span>{formatDateTime(item.createdAt)}</span>
+          </div>
+          {renderHistoryResumeMeta(item)}
+          {item.status === 'failed' && item.error && (
+            <p className="mt-2 line-clamp-2 text-xs text-red-500">{item.error}</p>
+          )}
+        </button>
+        <div className="mt-2 rounded-md bg-zinc-50 p-2 text-xs text-zinc-500 dark:bg-zinc-800/60 dark:text-zinc-400">
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => toggleHistoryJd(item.id)} className="flex min-w-0 cursor-pointer items-center gap-1 text-left hover:text-zinc-800 dark:hover:text-zinc-100">
+              <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+              <span className="truncate">{item.jobDescriptionPreview || item.jobDescription}</span>
+            </button>
+            <Button type="button" size="icon-xs" variant="ghost" onClick={() => copyJd(item)} title={t('copyJd')}>
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          {expanded && <p className="mt-2 max-h-44 overflow-y-auto whitespace-pre-wrap leading-5">{item.jobDescription}</p>}
+        </div>
+        {renderHistoryActions(item)}
+      </div>
+    );
+  };
+
+  const renderHistoryGroup = (group: { key: string; items: JdHistoryItem[]; best: JdHistoryItem | null; baseline: JdHistoryItem | null }) => {
+    const latest = group.items[0];
+    const best = group.best;
+    const baseline = group.baseline;
+    return (
+      <div key={group.key} className="rounded-lg border bg-white p-3 dark:bg-zinc-900">
+        <div className="mb-3 flex flex-col gap-2 border-b pb-3 dark:border-zinc-800 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-sm font-semibold">{latest.targetCompany || latest.targetJobTitle || latest.jobDescriptionPreview || latest.jobDescription}</h3>
+              <Badge variant="secondary">{t('analysisCount', { count: group.items.length })}</Badge>
+            </div>
+            <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{latest.jobDescriptionPreview || latest.jobDescription}</p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {best && (
+              <div className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                <div className="font-semibold">{t('bestVersion')} · {best.overallScore}</div>
+                {baseline && best.id !== baseline.id && <div>{t('scoreDelta', { delta: formatSigned(best.overallScore - baseline.overallScore) })}</div>}
+              </div>
+            )}
+            {group.items.length > 1 && (
+              <Button type="button" size="xs" variant="outline" onClick={() => runHistoryAction(latest, 'batch-analysis')} disabled={!!busy || resumeVersions.length === 0} className="gap-1">
+                <Sparkles className="h-3.5 w-3.5" />
+                {t('analyzeAllVersions')}
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="grid gap-2">
+          {group.items.map((item) => renderHistoryCard(item))}
+        </div>
+      </div>
+    );
+  };
+
   const renderHistoryActions = (item: JdHistoryItem) => (
     <div className="mt-3 flex flex-wrap gap-1.5 border-t pt-2 dark:border-zinc-800">
       <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'match-analysis')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
@@ -896,6 +1105,10 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'cloud-analysis')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
         <Sparkles className="h-3.5 w-3.5" />
         {t('cloudAnalyze')}
+      </Button>
+      <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'batch-analysis')} disabled={!!busy || resumeVersions.length === 0 || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
+        <GitBranch className="h-3.5 w-3.5" />
+        {t('analyzeAllVersions')}
       </Button>
       <Button type="button" size="xs" variant="ghost" onClick={() => runHistoryAction(item, 'derive-resume')} disabled={!!busy || item.status === 'pending' || item.status === 'running'} className="h-7 cursor-pointer gap-1 px-2 text-xs">
         <GitBranch className="h-3.5 w-3.5" />
@@ -1009,7 +1222,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
               <Button type="button" variant="outline" onClick={saveJdTemplate}>{t('saveJd')}</Button>
               <Button type="button" onClick={startNewAnalysis} disabled={busy === 'cloud-analysis'} className="bg-brand hover:bg-brand-hover">
                 {busy === 'cloud-analysis' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {t('cloudAnalyze')}
+                {selectedAnalysisVersionId === 'current' ? t('cloudAnalyze') : t('analyzeSelectedVersion')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1068,28 +1281,10 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
                   {t('refreshHistory')}
                 </Button>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="mt-4 grid gap-3">
                 {jdHistory.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-6 text-sm text-zinc-400 md:col-span-2">{t('noMatchHistory')}</div>
-                ) : jdHistory.map((item) => (
-                  <div key={item.id} className="rounded-md border bg-white p-3 transition hover:border-brand dark:bg-zinc-900">
-                    <button type="button" onClick={() => openHistoryItem(item)} className="w-full text-left">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-sm font-medium">{item.jobDescription}</span>
-                        {renderHistoryStatus(item)}
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-zinc-500">
-                        <span>ATS {item.atsScore}</span>
-                        <span>{new Date(item.createdAt).toLocaleString()}</span>
-                      </div>
-                      {renderHistoryResumeMeta(item)}
-                      {item.status === 'failed' && item.error && (
-                        <p className="mt-2 line-clamp-2 text-xs text-red-500">{item.error}</p>
-                      )}
-                    </button>
-                    {renderHistoryActions(item)}
-                  </div>
-                ))}
+                  <div className="rounded-md border border-dashed p-6 text-sm text-zinc-400">{t('noMatchHistory')}</div>
+                ) : jdHistoryGroups.map((group) => renderHistoryGroup(group))}
               </div>
             </section>
           ) : currentTab === 'memory' ? (
@@ -1152,31 +1347,34 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
             <div className="space-y-4">
               <section className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <h2 className="text-sm font-semibold">{t('matchHistory')}</h2>
-                  <Button onClick={() => setJdDialogOpen(true)} className="gap-2 bg-brand hover:bg-brand-hover">
-                    <Plus className="h-4 w-4" />
-                    {t('newAnalysis')}
-                  </Button>
+                  <div>
+                    <h2 className="text-sm font-semibold">{t('matchHistory')}</h2>
+                    <p className="mt-1 text-xs text-zinc-500">{t('matchVersionHint')}</p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select value={selectedAnalysisVersionId} onValueChange={setSelectedAnalysisVersionId}>
+                      <SelectTrigger className="h-9 w-full sm:w-64">
+                        <SelectValue placeholder={t('selectAnalysisVersion')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="current">{t('currentEditingVersion')}</SelectItem>
+                        {resumeVersions.map((version) => (
+                          <SelectItem key={version.id} value={version.id}>
+                            {version.label} · {formatDateTime(version.createdAt)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={() => setJdDialogOpen(true)} className="gap-2 bg-brand hover:bg-brand-hover">
+                      <Plus className="h-4 w-4" />
+                      {t('newAnalysis')}
+                    </Button>
+                  </div>
                 </div>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   {jdHistory.length === 0 ? (
                     <div className="rounded-md border border-dashed p-4 text-sm text-zinc-400 md:col-span-2">{t('noMatchHistory')}</div>
-                  ) : jdHistory.map((item) => (
-                    <div key={item.id} className="rounded-md border p-3 transition hover:border-brand">
-                      <button type="button" onClick={() => openHistoryItem(item)} className="w-full text-left">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium">{item.jobDescription}</span>
-                          {renderHistoryStatus(item)}
-                        </div>
-                        <p className="mt-1 text-xs text-zinc-500">ATS {item.atsScore}</p>
-                        {renderHistoryResumeMeta(item)}
-                        {item.status === 'failed' && item.error && (
-                          <p className="mt-2 line-clamp-2 text-xs text-red-500">{item.error}</p>
-                        )}
-                      </button>
-                      {renderHistoryActions(item)}
-                    </div>
-                  ))}
+                  ) : jdHistory.map((item) => renderHistoryCard(item))}
                 </div>
               </section>
 
@@ -1185,6 +1383,19 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
                   <h2 className="text-sm font-semibold">{t('matchResult')}</h2>
                   <p className="mt-1 text-xs text-zinc-500">{t('matchResultHint')}</p>
                 </div>
+
+                {jobDescription && (
+                  <div className="mt-4 rounded-md border bg-zinc-50 p-3 dark:bg-zinc-800/60">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-zinc-500">{t('currentAnalysisJd')}</p>
+                      <Button type="button" size="xs" variant="ghost" onClick={() => navigator.clipboard?.writeText(jobDescription)} className="gap-1">
+                        <Copy className="h-3.5 w-3.5" />
+                        {t('copyJd')}
+                      </Button>
+                    </div>
+                    <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs leading-5 text-zinc-600 dark:text-zinc-300">{jobDescription}</p>
+                  </div>
+                )}
 
                 <div className="mt-5 space-y-5">
                     <div className="grid gap-4 md:grid-cols-3">

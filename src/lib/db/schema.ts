@@ -248,6 +248,13 @@ export const knowledgeEdges = sqliteTable('knowledge_edges', {
 export const jdAnalyses = sqliteTable('jd_analyses', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   resumeId: text('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),
+  resumeVersionId: text('resume_version_id'),
+  resumeVersionLabel: text('resume_version_label'),
+  resumeTitleSnapshot: text('resume_title_snapshot'),
+  targetCompanySnapshot: text('target_company_snapshot'),
+  targetJobTitleSnapshot: text('target_job_title_snapshot'),
+  jdHash: text('jd_hash'),
+  analysisGroupId: text('analysis_group_id'),
   jobDescription: text('job_description').notNull(),
   result: text('result', { mode: 'json' }).notNull(),
   overallScore: integer('overall_score').notNull(),
@@ -255,6 +262,30 @@ export const jdAnalyses = sqliteTable('jd_analyses', {
   status: text('status').notNull().default('success'),
   error: text('error'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const resumeChangeProposals = sqliteTable('resume_change_proposals', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  resumeId: text('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id),
+  source: text('source').notNull().default('ai'),
+  sourceId: text('source_id'),
+  shareId: text('share_id'),
+  commentId: text('comment_id'),
+  sectionId: text('section_id'),
+  sectionType: text('section_type').notNull(),
+  targetField: text('target_field').notNull().default('text'),
+  current: text('current').notNull().default(''),
+  suggested: text('suggested').notNull().default(''),
+  reason: text('reason').notNull().default(''),
+  evidenceRequired: integer('evidence_required', { mode: 'boolean' }).notNull().default(false),
+  status: text('status').notNull().default('pending'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  beforeVersionId: text('before_version_id'),
+  appliedVersionId: text('applied_version_id'),
+  undoContent: text('undo_content', { mode: 'json' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
 export const grammarChecks = sqliteTable('grammar_checks', {

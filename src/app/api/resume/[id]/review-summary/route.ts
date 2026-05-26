@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
+import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
+import { serializeProposal } from '@/lib/change-proposals';
 
 export async function GET(
   request: NextRequest,
@@ -30,16 +32,17 @@ export async function GET(
           lastCommentAt: share.lastCommentAt || null,
           createdAt: share.createdAt,
           updatedAt: share.updatedAt,
-          comments: comments.map((comment: Awaited<ReturnType<typeof shareRepository.findCommentsByShareId>>[number]) => ({
+          comments: await Promise.all(comments.map(async (comment: Awaited<ReturnType<typeof shareRepository.findCommentsByShareId>>[number]) => ({
             ...comment,
             shareToken: share.token,
-          })),
+            changeProposal: serializeProposal(await analysisRepository.findChangeProposalByCommentId(comment.id) as any),
+          }))),
         };
       })
     );
 
     const aggregateComments = summaries.flatMap((share) =>
-      share.comments.map((comment: Awaited<ReturnType<typeof shareRepository.findCommentsByShareId>>[number]) => ({
+      share.comments.map((comment: any) => ({
         ...comment,
         shareId: share.id,
         shareToken: share.token,

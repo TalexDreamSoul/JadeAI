@@ -231,14 +231,26 @@ async function main() {
     reason: 'Smoke verifies suggestion application with version protection.',
     evidenceRequired: false,
   };
+  const proposalCreated = expectOk<{ proposal: { id: string; status: string } }>(
+    'create_change_proposal',
+    await call('create_change_proposal', { resumeId, suggestion, source: 'mcp-smoke' }),
+  );
+  assert(proposalCreated.proposal?.id, 'create_change_proposal should create a proposal');
+  const proposalList = expectOk<{ proposals: Array<{ id: string }> }>('list_change_proposals', await call('list_change_proposals', { resumeId }));
+  assert(proposalList.proposals.some((proposal) => proposal.id === proposalCreated.proposal.id), 'list_change_proposals should include created proposal');
+  const proposalPreview = expectOk<{ mode: string; proposal: { id: string } }>('apply_change_proposal preview', await call('apply_change_proposal', { proposalId: proposalCreated.proposal.id }));
+  assert(proposalPreview.mode === 'preview', 'apply_change_proposal should default to preview');
+  const proposalApplied = expectOk<any>('apply_change_proposal apply', await call('apply_change_proposal', { proposalId: proposalCreated.proposal.id, apply: true }));
+  assert(proposalApplied.proposal?.status === 'applied', 'apply_change_proposal should apply the proposal');
+
   const suggestionPreview = expectOk<any>(
     'apply_suggestion preview',
-    await call('apply_suggestion', { resumeId, suggestion }),
+    await call('apply_suggestion', { resumeId, suggestion: { ...suggestion, current: `${suggestion.suggested}` } }),
   );
   assert(suggestionPreview.mode === 'preview', 'apply_suggestion should default to preview');
   expectToolError(
     'apply_suggestion without version',
-    await call('apply_suggestion', { resumeId, suggestion, apply: true }),
+    await call('apply_suggestion', { resumeId, suggestion: { ...suggestion, current: `${suggestion.suggested}` }, apply: true }),
     'valid versionId',
   );
   const suggestionVersion = expectOk<{ version: { id: string } }>(
@@ -247,7 +259,7 @@ async function main() {
   );
   const suggestionApplied = expectOk<any>(
     'apply_suggestion apply',
-    await call('apply_suggestion', { resumeId, suggestion, apply: true, versionId: suggestionVersion.version.id }),
+    await call('apply_suggestion', { resumeId, suggestion: { ...suggestion, current: `${suggestion.suggested}` }, apply: true, versionId: suggestionVersion.version.id }),
   );
   assert(suggestionApplied.mode === 'applied', 'apply_suggestion should apply with versionId');
   assert(suggestionApplied.afterVersion?.id, 'apply_suggestion should create an after version');
@@ -297,6 +309,9 @@ async function main() {
       'get_resume_chat',
       'summarize_resume_chats',
       'create_resume_version',
+      'create_change_proposal',
+      'list_change_proposals',
+      'apply_change_proposal',
       'update_resume_section',
       'apply_suggestion',
       'create_role_resume',

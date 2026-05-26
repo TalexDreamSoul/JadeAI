@@ -63,6 +63,7 @@ export async function PATCH(
 
     const body = await request.json().catch(() => ({}));
     const versionId = String(body.versionId || '').trim();
+    const action = String(body.action || 'restore').trim();
     if (!versionId) return NextResponse.json({ error: 'versionId is required' }, { status: 400 });
 
     const versions = await resumeRepository.findVersions(id);
@@ -71,6 +72,25 @@ export async function PATCH(
 
     const snapshot = normalizeSnapshot(version.snapshot);
     if (!snapshot) return NextResponse.json({ error: 'Invalid version snapshot' }, { status: 400 });
+
+    if (action === 'duplicate') {
+      const title = String(body.title || `${result.resume!.title} - ${version.label}`).trim();
+      const copy = await resumeRepository.createFromSnapshot(snapshot, result.user!.id, title, {
+        sourceResumeId: id,
+        baseResumeId: result.resume!.baseResumeId || (result.resume!.isBase ? result.resume!.id : id),
+        versionLabel: String(snapshot.versionLabel || version.label || 'copy'),
+      });
+      if (!copy) return NextResponse.json({ error: 'Duplicate failed' }, { status: 500 });
+      const copyVersion = await resumeRepository.createVersion(copy.id, `copied-from-${version.label}`, copy, 'manual').catch(() => null);
+      await resumeRepository.createEvent({
+        resumeId: copy.id,
+        userId: result.user!.id,
+        type: 'resume.version.duplicated',
+        title: 'Resume version duplicated',
+        metadata: { sourceResumeId: id, versionId, label: version.label, copyVersionId: copyVersion?.id || null },
+      }).catch(() => null);
+      return NextResponse.json({ resume: copy, version, copyVersion }, { status: 201 });
+    }
 
     await resumeRepository.createVersion(id, `restore-before-${new Date().toISOString()}`, result.resume, 'manual');
     const restored = await resumeRepository.restoreFromSnapshot(id, snapshot, {

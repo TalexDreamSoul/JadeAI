@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, GitBranch, Loader2, RefreshCw, RotateCcw, Search } from 'lucide-react';
+import { AlertTriangle, Copy, GitBranch, Loader2, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -93,6 +93,7 @@ export function VersionPreviewPanel({
   const [source, setSource] = useState<'all' | 'manual' | 'autosave' | 'ai' | 'jd' | 'mcp'>('all');
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const diffLabels = useMemo<DiffLabels>(() => ({
     changed: t('diff.changed'),
     added: t('diff.added'),
@@ -156,8 +157,8 @@ export function VersionPreviewPanel({
     changed: t('diff.changed'),
   }), [t]);
 
-  const restoreSelectedVersion = useCallback(async () => {
-    if (!selectedVersion || restoring) return;
+  const restoreSelectedVersion = useCallback(async (version = selectedVersion) => {
+    if (!version || restoring) return;
     const confirmed = window.confirm(t('restoreConfirm'));
     if (!confirmed) return;
     setRestoring(true);
@@ -168,7 +169,7 @@ export function VersionPreviewPanel({
           'Content-Type': 'application/json',
           ...(getHeaders() || {}),
         },
-        body: JSON.stringify({ versionId: selectedVersion.id }),
+        body: JSON.stringify({ versionId: version.id }),
       });
       if (!res.ok) throw new Error(await res.text());
       window.location.reload();
@@ -179,6 +180,34 @@ export function VersionPreviewPanel({
       setRestoring(false);
     }
   }, [restoring, resumeId, selectedVersion, t]);
+
+  const duplicateSelectedVersion = useCallback(async (version = selectedVersion) => {
+    if (!version || duplicating) return;
+    setDuplicating(true);
+    try {
+      const res = await fetch(`/api/resume/${resumeId}/versions`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getHeaders() || {}),
+        },
+        body: JSON.stringify({ versionId: version.id, action: 'duplicate' }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json().catch(() => ({}));
+      if (data.resume?.id) {
+        const localeMatch = window.location.pathname.match(/^\/([^/]+)\//);
+        const prefix = localeMatch?.[1] ? `/${localeMatch[1]}` : '';
+        window.location.href = `${prefix}/editor/${data.resume.id}`;
+      }
+      else await fetchVersions();
+    } catch (error) {
+      console.error(error);
+      window.alert(t('duplicateFailed'));
+    } finally {
+      setDuplicating(false);
+    }
+  }, [duplicating, fetchVersions, resumeId, selectedVersion, t]);
 
   return (
     <div className="flex h-full min-w-0 border-l bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
@@ -260,6 +289,26 @@ export function VersionPreviewPanel({
                   {diffSummaryText(diff, diffLabels)}
                 </div>
               )}
+              <div className="mt-2 flex flex-wrap gap-1.5 border-t pt-2 dark:border-zinc-800">
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(event) => { event.stopPropagation(); void restoreSelectedVersion(version); }}
+                  onKeyDown={(event) => { if (event.key === 'Enter') { event.stopPropagation(); void restoreSelectedVersion(version); } }}
+                  className="rounded-md px-2 py-1 text-[11px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                >
+                  {t('restore')}
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(event) => { event.stopPropagation(); void duplicateSelectedVersion(version); }}
+                  onKeyDown={(event) => { if (event.key === 'Enter') { event.stopPropagation(); void duplicateSelectedVersion(version); } }}
+                  className="rounded-md px-2 py-1 text-[11px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                >
+                  {t('duplicate')}
+                </span>
+              </div>
             </button>
           );})}
 
@@ -282,10 +331,16 @@ export function VersionPreviewPanel({
                 {selectedDiff && <span>{diffSummaryText(selectedDiff, diffLabels)}</span>}
               </div>
             </div>
-            <Button size="sm" variant="outline" disabled={restoring} onClick={restoreSelectedVersion} className="h-8 cursor-pointer gap-1.5 text-xs">
-              {restoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-              {t('restore')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" disabled={duplicating} onClick={() => duplicateSelectedVersion()} className="h-8 cursor-pointer gap-1.5 text-xs">
+                {duplicating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+                {t('duplicate')}
+              </Button>
+              <Button size="sm" variant="outline" disabled={restoring} onClick={() => restoreSelectedVersion()} className="h-8 cursor-pointer gap-1.5 text-xs">
+                {restoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                {t('restore')}
+              </Button>
+            </div>
           </div>
         )}
         {selectedDiff && (selectedDiff.summary.added || selectedDiff.summary.removed || selectedDiff.summary.changed || selectedDiff.summary.metadataCount) ? (

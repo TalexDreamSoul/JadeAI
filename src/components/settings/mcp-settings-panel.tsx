@@ -115,9 +115,10 @@ curl -s ${shellQuote(endpointValue)} \\
 ## Workflow
 
 1. Prefer read tools first: \`list_resumes\`, \`get_resume\`, \`list_jd_analyses\`, \`search_knowledge\`, \`get_resume_context_pack\`.
-2. For edits, never write blindly. First call \`create_resume_version\`.
-3. Run write tools in preview mode first. Apply only when the user approves and pass \`versionId\` with \`apply: true\`.
-4. Do not print, commit, or share this token/API key.
+2. Prefer suggestion-first editing: call \`create_change_proposal\` for user-accepted/rejected changes, especially when the user asks for comments or suggested edits.
+3. For direct writes, never write blindly. First call \`create_resume_version\`.
+4. Run write tools in preview mode first. Apply only when the user approves and pass \`versionId\` with \`apply: true\`.
+5. Do not print, commit, or share this token/API key.
 `;
 }
 

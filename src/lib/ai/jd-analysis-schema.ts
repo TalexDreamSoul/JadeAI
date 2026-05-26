@@ -4,6 +4,9 @@ import { z } from 'zod/v4';
 export const jdAnalysisInputSchema = z.object({
   resumeId: z.string().describe('The ID of the resume to analyze'),
   jobDescription: z.string().min(1).describe('The job description text to match against'),
+  versionId: z.string().optional().describe('Optional saved resume version snapshot to analyze instead of the current resume'),
+  targetCompany: z.string().optional(),
+  targetJobTitle: z.string().optional(),
 });
 
 export type JdAnalysisInput = z.infer<typeof jdAnalysisInputSchema>;

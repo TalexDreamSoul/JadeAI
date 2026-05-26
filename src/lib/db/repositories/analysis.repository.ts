@@ -1,6 +1,6 @@
-import { eq, desc, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../index';
-import { jdAnalyses, grammarChecks } from '../schema';
+import { jdAnalyses, grammarChecks, resumeChangeProposals } from '../schema';
 
 export const analysisRepository = {
   // ── JD Analysis ──────────────────────────────────────────
@@ -11,11 +11,25 @@ export const analysisRepository = {
     result: unknown;
     overallScore: number;
     atsScore: number;
+    resumeVersionId?: string | null;
+    resumeVersionLabel?: string | null;
+    resumeTitleSnapshot?: string | null;
+    targetCompanySnapshot?: string | null;
+    targetJobTitleSnapshot?: string | null;
+    jdHash?: string | null;
+    analysisGroupId?: string | null;
   }) {
     const id = crypto.randomUUID();
     await db.insert(jdAnalyses).values({
       id,
       resumeId: data.resumeId,
+      resumeVersionId: data.resumeVersionId ?? null,
+      resumeVersionLabel: data.resumeVersionLabel ?? null,
+      resumeTitleSnapshot: data.resumeTitleSnapshot ?? null,
+      targetCompanySnapshot: data.targetCompanySnapshot ?? null,
+      targetJobTitleSnapshot: data.targetJobTitleSnapshot ?? null,
+      jdHash: data.jdHash ?? null,
+      analysisGroupId: data.analysisGroupId ?? data.jdHash ?? null,
       jobDescription: data.jobDescription,
       result: data.result,
       overallScore: data.overallScore,
@@ -30,11 +44,25 @@ export const analysisRepository = {
   async createJdAnalysisAttempt(data: {
     resumeId: string;
     jobDescription: string;
+    resumeVersionId?: string | null;
+    resumeVersionLabel?: string | null;
+    resumeTitleSnapshot?: string | null;
+    targetCompanySnapshot?: string | null;
+    targetJobTitleSnapshot?: string | null;
+    jdHash?: string | null;
+    analysisGroupId?: string | null;
   }) {
     const id = crypto.randomUUID();
     await db.insert(jdAnalyses).values({
       id,
       resumeId: data.resumeId,
+      resumeVersionId: data.resumeVersionId ?? null,
+      resumeVersionLabel: data.resumeVersionLabel ?? null,
+      resumeTitleSnapshot: data.resumeTitleSnapshot ?? null,
+      targetCompanySnapshot: data.targetCompanySnapshot ?? null,
+      targetJobTitleSnapshot: data.targetJobTitleSnapshot ?? null,
+      jdHash: data.jdHash ?? null,
+      analysisGroupId: data.analysisGroupId ?? data.jdHash ?? null,
       jobDescription: data.jobDescription,
       result: {},
       overallScore: 0,
@@ -97,6 +125,98 @@ export const analysisRepository = {
 
   async deleteJdAnalysis(id: string) {
     await db.delete(jdAnalyses).where(eq(jdAnalyses.id, id));
+  },
+
+  // ── Change Proposals ─────────────────────────────────────
+
+  async createChangeProposal(data: {
+    resumeId: string;
+    userId?: string | null;
+    source?: string;
+    sourceId?: string | null;
+    shareId?: string | null;
+    commentId?: string | null;
+    sectionId?: string | null;
+    sectionType: string;
+    targetField?: string;
+    current?: string;
+    suggested: string;
+    reason?: string;
+    evidenceRequired?: boolean;
+    metadata?: unknown;
+  }) {
+    const id = crypto.randomUUID();
+    await db.insert(resumeChangeProposals).values({
+      id,
+      resumeId: data.resumeId,
+      userId: data.userId ?? null,
+      source: data.source || 'ai',
+      sourceId: data.sourceId ?? null,
+      shareId: data.shareId ?? null,
+      commentId: data.commentId ?? null,
+      sectionId: data.sectionId ?? null,
+      sectionType: data.sectionType,
+      targetField: data.targetField || 'text',
+      current: data.current || '',
+      suggested: data.suggested,
+      reason: data.reason || '',
+      evidenceRequired: !!data.evidenceRequired,
+      status: 'pending',
+      metadata: data.metadata || {},
+    } as any);
+    const rows = await db.select().from(resumeChangeProposals).where(eq(resumeChangeProposals.id, id)).limit(1);
+    return rows[0] ?? null;
+  },
+
+  async findChangeProposalsByResumeId(resumeId: string, limit = 50) {
+    return db
+      .select()
+      .from(resumeChangeProposals)
+      .where(eq(resumeChangeProposals.resumeId, resumeId))
+      .orderBy(desc(resumeChangeProposals.createdAt))
+      .limit(limit);
+  },
+
+  async findChangeProposalById(id: string) {
+    const rows = await db.select().from(resumeChangeProposals).where(eq(resumeChangeProposals.id, id)).limit(1);
+    return rows[0] ?? null;
+  },
+
+  async findChangeProposalByCommentId(commentId: string) {
+    const rows = await db.select().from(resumeChangeProposals).where(eq(resumeChangeProposals.commentId, commentId)).limit(1);
+    return rows[0] ?? null;
+  },
+
+  async updateChangeProposal(id: string, data: Partial<{
+    status: string;
+    beforeVersionId: string | null;
+    appliedVersionId: string | null;
+    undoContent: unknown;
+    metadata: unknown;
+  }>) {
+    await db.update(resumeChangeProposals).set({ ...data, updatedAt: new Date() } as any).where(eq(resumeChangeProposals.id, id));
+    const rows = await db.select().from(resumeChangeProposals).where(eq(resumeChangeProposals.id, id)).limit(1);
+    return rows[0] ?? null;
+  },
+
+  async deleteChangeProposal(id: string) {
+    await db.delete(resumeChangeProposals).where(eq(resumeChangeProposals.id, id));
+  },
+
+  async deleteChangeProposalsForComment(commentId: string) {
+    await db.delete(resumeChangeProposals).where(eq(resumeChangeProposals.commentId, commentId));
+  },
+
+  async findOpenChangeProposalsForSource(resumeId: string, source: string, sourceId: string) {
+    return db
+      .select()
+      .from(resumeChangeProposals)
+      .where(and(
+        eq(resumeChangeProposals.resumeId, resumeId),
+        eq(resumeChangeProposals.source, source),
+        eq(resumeChangeProposals.sourceId, sourceId),
+        eq(resumeChangeProposals.status, 'pending'),
+      ));
   },
 
   // ── Grammar Check ────────────────────────────────────────

@@ -8,6 +8,9 @@ import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapsho
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { jdAnalysisInputSchema, jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
 import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
+import { hashJdText } from '@/lib/jd-analysis-utils';
+import { normalizeResumeSnapshotForUse } from '@/lib/resume-snapshot';
+import type { Resume } from '@/types/resume';
 
 const JD_ANALYSIS_PROMPT = `You are an expert resume analyst and career coach. Analyze the match between the provided resume and job description.
 
@@ -45,10 +48,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { resumeId, jobDescription } = parsed.data;
+    const { resumeId, jobDescription, versionId, targetCompany, targetJobTitle } = parsed.data;
     const localResume = isLocalResumeId(resumeId) ? normalizeResumeSnapshot((body as Record<string, unknown>).resume, resumeId) : null;
+    const jdHash = hashJdText(jobDescription);
 
-    let resume: AIResumeSnapshot | NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>> | null = localResume;
+    let resume: AIResumeSnapshot | NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>> | Resume | null = localResume;
+    let ownerResume: NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>> | null = null;
+    let selectedVersion: Awaited<ReturnType<typeof resumeRepository.findVersions>>[number] | null = null;
     if (!resume) {
       if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -60,18 +66,43 @@ export async function POST(request: NextRequest) {
       if (cloudResume.userId !== user.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
+      ownerResume = cloudResume;
       resume = cloudResume;
+
+      if (versionId) {
+        const versions = await resumeRepository.findVersions(resumeId);
+        selectedVersion = versions.find((item: Awaited<ReturnType<typeof resumeRepository.findVersions>>[number]) => item.id === versionId) || null;
+        if (!selectedVersion) return NextResponse.json({ error: 'Version not found' }, { status: 404 });
+        const snapshot = normalizeResumeSnapshotForUse(selectedVersion.snapshot, cloudResume);
+        if (!snapshot) return NextResponse.json({ error: 'Invalid version snapshot' }, { status: 400 });
+        resume = snapshot;
+      }
     }
 
     if (!resume) {
       return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
     }
 
+    const resumeTitleSnapshot = (resume as { title?: string }).title || ownerResume?.title || '';
+    const targetCompanySnapshot = targetCompany || (resume as { targetCompany?: string | null }).targetCompany || ownerResume?.targetCompany || '';
+    const targetJobTitleSnapshot = targetJobTitle || (resume as { targetJobTitle?: string | null }).targetJobTitle || ownerResume?.targetJobTitle || '';
+    const resumeVersionLabel = selectedVersion?.label || (resume as { versionLabel?: string | null }).versionLabel || ownerResume?.versionLabel || 'current';
+
     // Persist an attempt immediately for cloud resumes so refresh can still show pending/failed state.
     let historyId: string | undefined;
     if (!localResume) {
       try {
-        const attempt = await analysisRepository.createJdAnalysisAttempt({ resumeId, jobDescription });
+        const attempt = await analysisRepository.createJdAnalysisAttempt({
+          resumeId,
+          jobDescription,
+          resumeVersionId: selectedVersion?.id || null,
+          resumeVersionLabel,
+          resumeTitleSnapshot,
+          targetCompanySnapshot,
+          targetJobTitleSnapshot,
+          jdHash,
+          analysisGroupId: jdHash,
+        });
         historyId = attempt?.id;
       } catch (e) {
         console.error('Failed to create JD analysis attempt:', e);
@@ -81,7 +112,7 @@ export async function POST(request: NextRequest) {
     try {
       const resumeContext = getResumeSectionsContext(resume);
       const aiConfig = await extractAIConfig(request);
-      const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
+      const chargeAICredit = () => aiConfig.mode === 'server' && user ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
       const model = getModel(aiConfig);
 
       const { data: analysisData } = await generateJsonWithRetry({
@@ -102,8 +133,46 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      const changeProposals = !localResume && user && !selectedVersion
+        ? await Promise.all((analysisData.applicableSuggestions || []).map(async (suggestion) => {
+          try {
+            const section = Array.isArray((resume as { sections?: unknown }).sections)
+              ? ((resume as { sections: Array<{ id?: string; type?: string }> }).sections).find((item) => item.type === suggestion.sectionType)
+              : null;
+            const proposal = await analysisRepository.createChangeProposal({
+              resumeId,
+              userId: user.id,
+              source: 'jd',
+              sourceId: historyId || null,
+              sectionId: section?.id || null,
+              sectionType: suggestion.sectionType,
+              targetField: suggestion.targetField,
+              current: suggestion.current,
+              suggested: suggestion.suggested,
+              reason: suggestion.reason,
+              evidenceRequired: suggestion.evidenceRequired,
+              metadata: { jdHash, historyId, resumeVersionId: selectedVersion?.id || null },
+            });
+            return proposal;
+          } catch (error) {
+            console.error('Failed to create JD change proposal:', error);
+            return null;
+          }
+        })).then((items) => items.filter(Boolean))
+        : [];
+
       await chargeAICredit();
-      return NextResponse.json({ ...analysisData, historyId });
+      return NextResponse.json({
+        ...analysisData,
+        changeProposals,
+        historyId,
+        resumeVersionId: selectedVersion?.id || null,
+        resumeVersionLabel,
+        resumeTitleSnapshot,
+        targetCompanySnapshot,
+        targetJobTitleSnapshot,
+        jdHash,
+      });
     } catch (error) {
       const message = getAIJsonErrorMessage(error, 'Failed to analyze job description match');
       if (historyId) {
