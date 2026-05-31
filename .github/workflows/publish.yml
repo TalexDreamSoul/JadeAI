@@ -115,6 +115,7 @@ jobs:
           generate_release_notes: true
 
       - name: Trigger 1Panel webhook
+        id: deploy_webhook
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         env:
           ONEPANEL_WEBHOOK_URL: ${{ secrets.ONEPANEL_WEBHOOK_URL }}
@@ -128,6 +129,7 @@ jobs:
           set -euo pipefail
           if [ -z "${ONEPANEL_WEBHOOK_URL:-}" ]; then
             echo "ONEPANEL_WEBHOOK_URL is not configured; skip deploy webhook."
+            echo "triggered=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -149,4 +151,60 @@ jobs:
             headers+=( -H "Authorization: Bearer $ONEPANEL_WEBHOOK_TOKEN" )
           fi
 
-          curl --fail-with-body -X POST "${headers[@]}" -d "$payload" "$ONEPANEL_WEBHOOK_URL"
+          response="$(curl --fail-with-body -X POST "${headers[@]}" -d "$payload" "$ONEPANEL_WEBHOOK_URL")"
+          echo "$response"
+          echo "triggered=true" >> "$GITHUB_OUTPUT"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Verify live deployment commit
+        if: steps.deploy_webhook.outputs.triggered == 'true'
+        env:
+          # Override with repository variable DEPLOY_VERIFY_URL if the production URL changes.
+          DEPLOY_VERIFY_URL: ${{ vars.DEPLOY_VERIFY_URL || 'https://resume.wc1.tagzxia.com' }}
+          DEPLOY_VERIFY_TIMEOUT: ${{ vars.DEPLOY_VERIFY_TIMEOUT || '300' }}
+          EXPECTED_SHA: ${{ github.sha }}
+          IMAGE_REF: ${{ steps.deploy_webhook.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_VERIFY_URL:-}" ]; then
+            echo "DEPLOY_VERIFY_URL is empty; skip deploy verification."
+            exit 0
+          fi
+
+          base="${DEPLOY_VERIFY_URL%/}"
+          if [[ "$base" == */api/ready || "$base" == */api/health ]]; then
+            url="$base"
+          else
+            url="$base/api/ready"
+          fi
+
+          timeout="${DEPLOY_VERIFY_TIMEOUT:-300}"
+          if ! [[ "$timeout" =~ ^[0-9]+$ ]]; then
+            timeout=300
+          fi
+
+          echo "Verify live deployment: url=$url expected_sha=$EXPECTED_SHA image_ref=$IMAGE_REF timeout=${timeout}s"
+          deadline=$((SECONDS + timeout))
+          last_body=""
+          last_commit=""
+
+          while (( SECONDS < deadline )); do
+            if body="$(curl -fsS --max-time 10 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$url" 2>/dev/null)"; then
+              last_body="$body"
+              last_commit="$(printf '%s' "$body" | jq -r '.commit // empty' 2>/dev/null || true)"
+              echo "Live commit: ${last_commit:-<empty>}"
+              if [ "$last_commit" = "$EXPECTED_SHA" ]; then
+                echo "Deployment verified: $EXPECTED_SHA is live."
+                exit 0
+              fi
+            else
+              echo "Waiting for $url ..."
+            fi
+            sleep 10
+          done
+
+          echo "::error::Deployment verification failed. Expected commit $EXPECTED_SHA, got ${last_commit:-<empty>} from $url."
+          if [ -n "$last_body" ]; then
+            echo "Last response: $last_body"
+          fi
+          exit 1
