@@ -17,6 +17,7 @@ set -Eeuo pipefail
 #   IMAGE_TAG=v1.2.3                         # overrides tag part of IMAGE / JADEAI_IMAGE
 #   APP_PORT=3003
 #   HEALTH_TIMEOUT=90
+#   PULL_TIMEOUT=900                         # max seconds for image pull
 #   DRAIN_SECONDS=10                         # wait before stopping old color
 #   WEBHOOK_SECRET=...                       # validated against $1 if passed by webhook
 
@@ -36,6 +37,7 @@ PROJECT_NAME="${PROJECT_NAME:-$(basename "$APP_DIR") }"
 PROJECT_NAME="${PROJECT_NAME// /}"
 APP_PORT="${APP_PORT:-3003}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-90}"
+PULL_TIMEOUT="${PULL_TIMEOUT:-900}"
 DRAIN_SECONDS="${DRAIN_SECONDS:-10}"
 NGINX_CONF_REL="${NGINX_CONF_REL:-nginx/default.conf}"
 
@@ -86,11 +88,13 @@ if [[ -n "$old_container" ]]; then
   log "active container=$old_container image=$old_image"
 fi
 
-log "pulling image for $inactive_service"
+log "pulling image for $inactive_service (timeout=${PULL_TIMEOUT}s)"
 if [[ "${SKIP_PULL:-0}" == "1" ]]; then
   log "SKIP_PULL=1; skip docker compose pull"
+elif [[ -n "${JADEAI_IMAGE:-}" ]] && docker image inspect "$JADEAI_IMAGE" >/dev/null 2>&1; then
+  log "image already exists locally: $JADEAI_IMAGE; skip docker compose pull"
 else
-  COMPOSE_PROFILES=green ${compose[@]} pull "$inactive_service"
+  COMPOSE_PROFILES=green timeout "$PULL_TIMEOUT" ${compose[@]} pull "$inactive_service"
 fi
 
 log "starting inactive service: $inactive_service"
