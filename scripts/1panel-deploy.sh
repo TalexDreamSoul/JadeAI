@@ -13,6 +13,7 @@ set -Eeuo pipefail
 #   PROJECT_NAME=jadeai
 #   JADEAI_IMAGE=ghcr.io/<owner>/<repo>:latest
 #   IMAGE=ghcr.io/<owner>/<repo>:v1.2.3      # overrides JADEAI_IMAGE
+#   IMAGE_REF=ghcr.io/<owner>/<repo>@sha256:... # immutable digest; overrides IMAGE / JADEAI_IMAGE
 #   IMAGE_TAG=v1.2.3                         # overrides tag part of IMAGE / JADEAI_IMAGE
 #   APP_PORT=3003
 #   HEALTH_TIMEOUT=90
@@ -44,7 +45,9 @@ cd "$APP_DIR"
 
 compose=(docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE")
 
-if [[ -n "${IMAGE:-}" ]]; then
+if [[ -n "${IMAGE_REF:-}" ]]; then
+  export JADEAI_IMAGE="$IMAGE_REF"
+elif [[ -n "${IMAGE:-}" ]]; then
   export JADEAI_IMAGE="$IMAGE"
 fi
 if [[ -n "${IMAGE_TAG:-}" ]]; then
