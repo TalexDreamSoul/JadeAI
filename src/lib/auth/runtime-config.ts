@@ -14,33 +14,21 @@ import { hashPasswordForAuth, normalizeEmail, verifyPasswordForAuth } from './pa
 export interface OAuthProviderMeta {
   id: string;
   name: string; // human-readable, e.g. "Google", "GitHub"
-  envClientId: string;
-  envClientSecret: string;
-  /** legacy env var names supported for backward compatibility */
-  legacyEnvClientId?: string;
-  legacyEnvClientSecret?: string;
 }
 
+/** All supported OAuth providers. Add new entries here to make them available in the admin panel. */
 export const OAUTH_PROVIDER_REGISTRY: Record<string, OAuthProviderMeta> = {
   google: {
     id: 'google',
     name: 'Google',
-    envClientId: 'OAUTH_GOOGLE_CLIENT_ID',
-    envClientSecret: 'OAUTH_GOOGLE_CLIENT_SECRET',
-    legacyEnvClientId: 'GOOGLE_CLIENT_ID',
-    legacyEnvClientSecret: 'GOOGLE_CLIENT_SECRET',
   },
   github: {
     id: 'github',
     name: 'GitHub',
-    envClientId: 'OAUTH_GITHUB_CLIENT_ID',
-    envClientSecret: 'OAUTH_GITHUB_CLIENT_SECRET',
   },
   'microsoft-entra-id': {
     id: 'microsoft-entra-id',
     name: 'Microsoft',
-    envClientId: 'OAUTH_MICROSOFT_ENTRA_ID_CLIENT_ID',
-    envClientSecret: 'OAUTH_MICROSOFT_ENTRA_ID_CLIENT_SECRET',
   },
 } as const;
 
@@ -89,19 +77,6 @@ function stringSetting(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback;
 }
 
-function resolveEnv(meta: OAuthProviderMeta): { clientId: string; clientSecret: string } {
-  // Prefer new env vars, fall back to legacy
-  const clientId =
-    process.env[meta.envClientId] ||
-    (meta.legacyEnvClientId ? process.env[meta.legacyEnvClientId] : undefined) ||
-    '';
-  const clientSecret =
-    process.env[meta.envClientSecret] ||
-    (meta.legacyEnvClientSecret ? process.env[meta.legacyEnvClientSecret] : undefined) ||
-    '';
-  return { clientId, clientSecret };
-}
-
 // ── Provider factory map ──────────────────────────────────────────────────
 
 const oauthProviderFactories: Record<string, (config: OAuthProviderConfig) => Provider> = {
@@ -125,44 +100,20 @@ const oauthProviderFactories: Record<string, (config: OAuthProviderConfig) => Pr
 // ── Settings ──────────────────────────────────────────────────────────────
 
 /**
- * Read auth settings from environment variables.
- * Uses both new OAUTH_<PROVIDER>_* vars and legacy GOOGLE_* vars.
- */
-export function getEnvAuthSettings(): GlobalAuthSettings {
-  const providers: Record<string, OAuthProviderConfig> = {};
-
-  for (const meta of Object.values(OAUTH_PROVIDER_REGISTRY)) {
-    const { clientId, clientSecret } = resolveEnv(meta);
-    providers[meta.id] = {
-      enabled: !!(clientId && clientSecret),
-      clientId,
-      clientSecret,
-    };
-  }
-
-  return {
-    passwordLoginEnabled: process.env.AUTH_PASSWORD_ENABLED !== 'false',
-    passwordRegisterEnabled: process.env.AUTH_PASSWORD_REGISTER_ENABLED !== 'false',
-    providers,
-  };
-}
-
-/**
- * Read persisted DB settings, merged with env overrides.
- * Migrates legacy flat keys (`googleLoginEnabled`, `googleClientId`, …) to the
- * new `providers` structure on first read.
+ * Read persisted DB settings (set via admin panel).
+ * OAuth providers are purely backend-configured — no env var overrides.
+ * Migrates legacy flat keys (`googleLoginEnabled`, `googleClientId`, …) to
+ * the new `providers` structure on first read.
  */
 export async function getGlobalAuthSettings(): Promise<GlobalAuthSettings> {
   await dbReady;
   const rawSettings = await userRepository.getGlobalSettings();
-  const env = getEnvAuthSettings();
 
   // Migrate legacy Google flat keys → providers.google
   let dbProviders: Record<string, unknown> | undefined;
   if (rawSettings.providers && typeof rawSettings.providers === 'object' && !Array.isArray(rawSettings.providers)) {
     dbProviders = rawSettings.providers as Record<string, unknown>;
   } else {
-    // Legacy migration
     dbProviders = {};
     if (rawSettings.googleLoginEnabled !== undefined || rawSettings.googleClientId !== undefined) {
       dbProviders.google = {
@@ -182,15 +133,21 @@ export async function getGlobalAuthSettings(): Promise<GlobalAuthSettings> {
         : {};
 
     providers[meta.id] = {
-      enabled: boolSetting(dbProvider.enabled, env.providers[meta.id]?.enabled ?? false),
-      clientId: stringSetting(dbProvider.clientId, env.providers[meta.id]?.clientId ?? ''),
-      clientSecret: stringSetting(dbProvider.clientSecret, env.providers[meta.id]?.clientSecret ?? ''),
+      enabled: boolSetting(dbProvider.enabled, false),
+      clientId: stringSetting(dbProvider.clientId, ''),
+      clientSecret: stringSetting(dbProvider.clientSecret, ''),
     };
   }
 
   return {
-    passwordLoginEnabled: boolSetting(rawSettings.passwordLoginEnabled, env.passwordLoginEnabled),
-    passwordRegisterEnabled: boolSetting(rawSettings.passwordRegisterEnabled, env.passwordRegisterEnabled),
+    passwordLoginEnabled: boolSetting(
+      rawSettings.passwordLoginEnabled,
+      process.env.AUTH_PASSWORD_ENABLED !== 'false'
+    ),
+    passwordRegisterEnabled: boolSetting(
+      rawSettings.passwordRegisterEnabled,
+      process.env.AUTH_PASSWORD_REGISTER_ENABLED !== 'false'
+    ),
     providers,
   };
 }
