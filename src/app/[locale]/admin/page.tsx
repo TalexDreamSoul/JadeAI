@@ -27,13 +27,17 @@ interface AIChannel {
   enabled: boolean;
 }
 
+interface OAuthProviderForm {
+  enabled: boolean;
+  clientId: string;
+  clientSecret: string;
+  clientSecretSet?: boolean;
+}
+
 interface AuthSettings {
   passwordLoginEnabled: boolean;
   passwordRegisterEnabled: boolean;
-  googleLoginEnabled: boolean;
-  googleClientId: string;
-  googleClientSecret: string;
-  googleClientSecretSet?: boolean;
+  providers: Record<string, OAuthProviderForm>;
 }
 
 interface AdminUser {
@@ -145,10 +149,7 @@ export default function AdminPage() {
   const [authSettings, setAuthSettings] = useState<AuthSettings>({
     passwordLoginEnabled: true,
     passwordRegisterEnabled: true,
-    googleLoginEnabled: false,
-    googleClientId: '',
-    googleClientSecret: '',
-    googleClientSecretSet: false,
+    providers: {},
   });
   const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
   const [jobTemplateForm, setJobTemplateForm] = useState(EMPTY_JOB_TEMPLATE_FORM);
@@ -182,13 +183,21 @@ export default function AdminPage() {
     const loadedJobTemplates = await jobTemplatesRes.json();
     setJobTemplates([...(loadedJobTemplates.builtin || []), ...(loadedJobTemplates.custom || [])]);
     const loadedAuth = await authRes.json();
+    const loadedProviders: Record<string, OAuthProviderForm> = {};
+    if (loadedAuth.providers && typeof loadedAuth.providers === 'object') {
+      for (const [pid, pconf] of Object.entries(loadedAuth.providers as Record<string, Record<string, unknown>>)) {
+        loadedProviders[pid] = {
+          enabled: Boolean(pconf.enabled),
+          clientId: String(pconf.clientId || ''),
+          clientSecret: '',
+          clientSecretSet: Boolean(pconf.clientSecretSet),
+        };
+      }
+    }
     setAuthSettings({
       passwordLoginEnabled: loadedAuth.passwordLoginEnabled,
       passwordRegisterEnabled: loadedAuth.passwordRegisterEnabled,
-      googleLoginEnabled: loadedAuth.googleLoginEnabled,
-      googleClientId: loadedAuth.googleClientId || '',
-      googleClientSecret: '',
-      googleClientSecretSet: loadedAuth.googleClientSecretSet,
+      providers: loadedProviders,
     });
     setError('');
   };
@@ -237,12 +246,22 @@ export default function AdminPage() {
   };
 
   const saveAuthSettings = async () => {
-    const safeAuthSettings = { ...authSettings, googleClientSecret: undefined };
+    // Strip empty secrets from payload (don't clear existing on server)
+    const safeProviders: Record<string, Record<string, unknown>> = {};
+    for (const [pid, pconf] of Object.entries(authSettings.providers)) {
+      safeProviders[pid] = {
+        enabled: pconf.enabled,
+        clientId: pconf.clientId,
+      };
+      if (pconf.clientSecret.trim()) {
+        safeProviders[pid].clientSecret = pconf.clientSecret.trim();
+      }
+    }
+
     const payload = {
-      ...safeAuthSettings,
-      ...(authSettings.googleClientSecret.trim()
-        ? { googleClientSecret: authSettings.googleClientSecret.trim() }
-        : {}),
+      passwordLoginEnabled: authSettings.passwordLoginEnabled,
+      passwordRegisterEnabled: authSettings.passwordRegisterEnabled,
+      providers: safeProviders,
     };
     const res = await fetch('/api/admin/auth-settings', {
       method: 'PUT',
@@ -254,13 +273,21 @@ export default function AdminPage() {
       return;
     }
     const updated = await res.json();
+    const updatedProviders: Record<string, OAuthProviderForm> = {};
+    if (updated.providers && typeof updated.providers === 'object') {
+      for (const [pid, pconf] of Object.entries(updated.providers as Record<string, Record<string, unknown>>)) {
+        updatedProviders[pid] = {
+          enabled: Boolean(pconf.enabled),
+          clientId: String(pconf.clientId || ''),
+          clientSecret: '',
+          clientSecretSet: Boolean(pconf.clientSecretSet),
+        };
+      }
+    }
     setAuthSettings({
       passwordLoginEnabled: updated.passwordLoginEnabled,
       passwordRegisterEnabled: updated.passwordRegisterEnabled,
-      googleLoginEnabled: updated.googleLoginEnabled,
-      googleClientId: updated.googleClientId || '',
-      googleClientSecret: '',
-      googleClientSecretSet: updated.googleClientSecretSet,
+      providers: updatedProviders,
     });
     setError('');
   };
@@ -455,7 +482,8 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-zinc-500">{t('oauthHint')}</p>
-              <div className="grid gap-3 md:grid-cols-3">
+              {/* Password settings */}
+              <div className="grid gap-3 md:grid-cols-2">
                 <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
                   <span>{t('passwordLogin')}</span>
                   <Switch checked={authSettings.passwordLoginEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordLoginEnabled: checked }))} />
@@ -464,15 +492,66 @@ export default function AdminPage() {
                   <span>{t('passwordRegister')}</span>
                   <Switch checked={authSettings.passwordRegisterEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordRegisterEnabled: checked }))} />
                 </label>
-                <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                  <span>{t('googleOAuth')}</span>
-                  <Switch checked={authSettings.googleLoginEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, googleLoginEnabled: checked }))} />
-                </label>
               </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <Input value={authSettings.googleClientId} onChange={(e) => setAuthSettings((s) => ({ ...s, googleClientId: e.target.value }))} placeholder={t('googleClientId')} />
-                <Input value={authSettings.googleClientSecret} onChange={(e) => setAuthSettings((s) => ({ ...s, googleClientSecret: e.target.value }))} placeholder={authSettings.googleClientSecretSet ? t('googleClientSecretSet') : t('googleClientSecret')} type="password" />
-              </div>
+
+              {/* OAuth providers */}
+              {Object.keys(authSettings.providers).length > 0 && (
+                <>
+                  <h3 className="text-sm font-medium text-zinc-700">OAuth Providers</h3>
+                  {Object.entries(authSettings.providers).map(([providerId, providerConfig]) => (
+                    <div key={providerId} className="rounded-lg border p-3 space-y-2">
+                      <label className="flex items-center justify-between text-sm">
+                        <span className="font-medium capitalize">{providerId.replace(/-/g, ' ')}</span>
+                        <Switch
+                          checked={providerConfig.enabled}
+                          onCheckedChange={(checked) =>
+                            setAuthSettings((s) => ({
+                              ...s,
+                              providers: {
+                                ...s.providers,
+                                [providerId]: { ...s.providers[providerId], enabled: checked },
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input
+                          value={providerConfig.clientId}
+                          onChange={(e) =>
+                            setAuthSettings((s) => ({
+                              ...s,
+                              providers: {
+                                ...s.providers,
+                                [providerId]: { ...s.providers[providerId], clientId: e.target.value },
+                              },
+                            }))
+                          }
+                          placeholder={t('oauthClientId', { provider: providerId })}
+                        />
+                        <Input
+                          value={providerConfig.clientSecret}
+                          onChange={(e) =>
+                            setAuthSettings((s) => ({
+                              ...s,
+                              providers: {
+                                ...s.providers,
+                                [providerId]: { ...s.providers[providerId], clientSecret: e.target.value },
+                              },
+                            }))
+                          }
+                          placeholder={
+                            providerConfig.clientSecretSet
+                              ? t('oauthClientSecretSet', { provider: providerId })
+                              : t('oauthClientSecret', { provider: providerId })
+                          }
+                          type="password"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
               <Button onClick={saveAuthSettings} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Save className="h-4 w-4" />{t('save')}</Button>
             </CardContent>
           </Card>

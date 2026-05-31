@@ -9,13 +9,16 @@ type OAuthProfile = {
   picture?: string | null;
 };
 
+/** Provider IDs that are OAuth-based (not credentials/password/fingerprint). */
+const OAUTH_PROVIDER_IDS = new Set(['google', 'github', 'microsoft-entra-id']);
+
 export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
   trustHost: true,
   providers: await createRuntimeProviders(),
   callbacks: {
     async jwt({ token, user, account, profile }) {
-      // First sign-in via Google: create DB user immediately
-      if (user && account?.provider === 'google') {
+      // OAuth sign-in (Google, GitHub, Microsoft, …): create DB user on first login
+      if (user && account?.provider && OAUTH_PROVIDER_IDS.has(account.provider)) {
         const email = (profile?.email || user.email) as string;
         const name = (profile?.name || user.name) as string | undefined;
         const avatar = ((profile as OAuthProfile | undefined)?.picture || user.image) as string | undefined;
@@ -34,7 +37,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
             await createSampleResume(dbUser.id);
           }
         }
-        // Use stable DB user ID in the token
         if (dbUser) {
           token.userId = dbUser.id;
         }

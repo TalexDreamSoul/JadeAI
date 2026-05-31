@@ -1,7 +1,7 @@
 export const config = {
   auth: {
     enabled: process.env.AUTH_ENABLED !== 'false',
-    providers: ['google'] as const,
+    providers: ['google', 'github', 'microsoft-entra-id'] as const,
   },
   db: {
     type: (process.env.DB_TYPE || 'sqlite') as 'postgresql' | 'sqlite',

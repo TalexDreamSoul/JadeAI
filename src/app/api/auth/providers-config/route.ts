@@ -11,7 +11,6 @@ export async function GET() {
       {
         providers: [
           { id: 'password', enabled: true },
-          { id: 'google', enabled: false },
         ],
       },
       { status: 200 }

@@ -1,28 +1,78 @@
 import type { Provider } from 'next-auth/providers';
 import Credentials from 'next-auth/providers/credentials';
-import Google from 'next-auth/providers/google';
+import GoogleProvider from 'next-auth/providers/google';
+import GitHubProvider from 'next-auth/providers/github';
+import MicrosoftEntraId from 'next-auth/providers/microsoft-entra-id';
 import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { createSampleResume } from '@/lib/db/sample-resume';
 import { hashPasswordForAuth, normalizeEmail, verifyPasswordForAuth } from './password';
 
-export type AuthProviderId = 'password' | 'google';
+// ── OAuth provider registry ──────────────────────────────────────────────
 
-export interface PublicAuthProviderConfig {
-  id: AuthProviderId;
+export interface OAuthProviderMeta {
+  id: string;
+  name: string; // human-readable, e.g. "Google", "GitHub"
+  envClientId: string;
+  envClientSecret: string;
+  /** legacy env var names supported for backward compatibility */
+  legacyEnvClientId?: string;
+  legacyEnvClientSecret?: string;
+}
+
+export const OAUTH_PROVIDER_REGISTRY: Record<string, OAuthProviderMeta> = {
+  google: {
+    id: 'google',
+    name: 'Google',
+    envClientId: 'OAUTH_GOOGLE_CLIENT_ID',
+    envClientSecret: 'OAUTH_GOOGLE_CLIENT_SECRET',
+    legacyEnvClientId: 'GOOGLE_CLIENT_ID',
+    legacyEnvClientSecret: 'GOOGLE_CLIENT_SECRET',
+  },
+  github: {
+    id: 'github',
+    name: 'GitHub',
+    envClientId: 'OAUTH_GITHUB_CLIENT_ID',
+    envClientSecret: 'OAUTH_GITHUB_CLIENT_SECRET',
+  },
+  'microsoft-entra-id': {
+    id: 'microsoft-entra-id',
+    name: 'Microsoft',
+    envClientId: 'OAUTH_MICROSOFT_ENTRA_ID_CLIENT_ID',
+    envClientSecret: 'OAUTH_MICROSOFT_ENTRA_ID_CLIENT_SECRET',
+  },
+} as const;
+
+export type OAuthProviderId = keyof typeof OAUTH_PROVIDER_REGISTRY;
+
+export function isOAuthProviderId(value: string): value is OAuthProviderId {
+  return value in OAUTH_PROVIDER_REGISTRY;
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────
+
+export interface OAuthProviderConfig {
   enabled: boolean;
-  loginEnabled?: boolean;
-  registerEnabled?: boolean;
+  clientId: string;
+  clientSecret: string;
 }
 
 export interface GlobalAuthSettings {
   passwordLoginEnabled: boolean;
   passwordRegisterEnabled: boolean;
-  googleLoginEnabled: boolean;
-  googleClientId?: string;
-  googleClientSecret?: string;
+  providers: Record<string, OAuthProviderConfig>;
 }
+
+export interface PublicAuthProviderConfig {
+  id: string;
+  enabled: boolean;
+  loginEnabled?: boolean;
+  registerEnabled?: boolean;
+  name?: string; // human-readable name for UI
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 type AuthDbUser = {
   id: string;
@@ -39,42 +89,140 @@ function stringSetting(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback;
 }
 
+function resolveEnv(meta: OAuthProviderMeta): { clientId: string; clientSecret: string } {
+  // Prefer new env vars, fall back to legacy
+  const clientId =
+    process.env[meta.envClientId] ||
+    (meta.legacyEnvClientId ? process.env[meta.legacyEnvClientId] : undefined) ||
+    '';
+  const clientSecret =
+    process.env[meta.envClientSecret] ||
+    (meta.legacyEnvClientSecret ? process.env[meta.legacyEnvClientSecret] : undefined) ||
+    '';
+  return { clientId, clientSecret };
+}
+
+// ── Provider factory map ──────────────────────────────────────────────────
+
+const oauthProviderFactories: Record<string, (config: OAuthProviderConfig) => Provider> = {
+  google: (c) =>
+    GoogleProvider({
+      clientId: c.clientId,
+      clientSecret: c.clientSecret,
+    }),
+  github: (c) =>
+    GitHubProvider({
+      clientId: c.clientId,
+      clientSecret: c.clientSecret,
+    }),
+  'microsoft-entra-id': (c) =>
+    MicrosoftEntraId({
+      clientId: c.clientId,
+      clientSecret: c.clientSecret,
+    }),
+};
+
+// ── Settings ──────────────────────────────────────────────────────────────
+
+/**
+ * Read auth settings from environment variables.
+ * Uses both new OAUTH_<PROVIDER>_* vars and legacy GOOGLE_* vars.
+ */
 export function getEnvAuthSettings(): GlobalAuthSettings {
+  const providers: Record<string, OAuthProviderConfig> = {};
+
+  for (const meta of Object.values(OAUTH_PROVIDER_REGISTRY)) {
+    const { clientId, clientSecret } = resolveEnv(meta);
+    providers[meta.id] = {
+      enabled: !!(clientId && clientSecret),
+      clientId,
+      clientSecret,
+    };
+  }
+
   return {
     passwordLoginEnabled: process.env.AUTH_PASSWORD_ENABLED !== 'false',
     passwordRegisterEnabled: process.env.AUTH_PASSWORD_REGISTER_ENABLED !== 'false',
-    googleLoginEnabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-    googleClientId: process.env.GOOGLE_CLIENT_ID,
-    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    providers,
   };
 }
 
+/**
+ * Read persisted DB settings, merged with env overrides.
+ * Migrates legacy flat keys (`googleLoginEnabled`, `googleClientId`, …) to the
+ * new `providers` structure on first read.
+ */
 export async function getGlobalAuthSettings(): Promise<GlobalAuthSettings> {
   await dbReady;
-  const settings = await userRepository.getGlobalSettings();
+  const rawSettings = await userRepository.getGlobalSettings();
   const env = getEnvAuthSettings();
 
+  // Migrate legacy Google flat keys → providers.google
+  let dbProviders: Record<string, unknown> | undefined;
+  if (rawSettings.providers && typeof rawSettings.providers === 'object' && !Array.isArray(rawSettings.providers)) {
+    dbProviders = rawSettings.providers as Record<string, unknown>;
+  } else {
+    // Legacy migration
+    dbProviders = {};
+    if (rawSettings.googleLoginEnabled !== undefined || rawSettings.googleClientId !== undefined) {
+      dbProviders.google = {
+        enabled: rawSettings.googleLoginEnabled,
+        clientId: rawSettings.googleClientId || '',
+        clientSecret: rawSettings.googleClientSecret || '',
+      };
+    }
+  }
+
+  const providers: Record<string, OAuthProviderConfig> = {};
+
+  for (const meta of Object.values(OAUTH_PROVIDER_REGISTRY)) {
+    const dbProvider =
+      dbProviders && dbProviders[meta.id] && typeof dbProviders[meta.id] === 'object'
+        ? (dbProviders[meta.id] as Record<string, unknown>)
+        : {};
+
+    providers[meta.id] = {
+      enabled: boolSetting(dbProvider.enabled, env.providers[meta.id]?.enabled ?? false),
+      clientId: stringSetting(dbProvider.clientId, env.providers[meta.id]?.clientId ?? ''),
+      clientSecret: stringSetting(dbProvider.clientSecret, env.providers[meta.id]?.clientSecret ?? ''),
+    };
+  }
+
   return {
-    passwordLoginEnabled: boolSetting(settings.passwordLoginEnabled, env.passwordLoginEnabled),
-    passwordRegisterEnabled: boolSetting(settings.passwordRegisterEnabled, env.passwordRegisterEnabled),
-    googleLoginEnabled: boolSetting(settings.googleLoginEnabled, env.googleLoginEnabled),
-    googleClientId: stringSetting(settings.googleClientId, env.googleClientId),
-    googleClientSecret: stringSetting(settings.googleClientSecret, env.googleClientSecret),
+    passwordLoginEnabled: boolSetting(rawSettings.passwordLoginEnabled, env.passwordLoginEnabled),
+    passwordRegisterEnabled: boolSetting(rawSettings.passwordRegisterEnabled, env.passwordRegisterEnabled),
+    providers,
   };
 }
 
+/** Returns only the public-safe subset for the login dialog. */
 export async function getPublicAuthProviders(): Promise<PublicAuthProviderConfig[]> {
   const settings = await getGlobalAuthSettings();
-  return [
+
+  const result: PublicAuthProviderConfig[] = [
     {
       id: 'password',
       enabled: settings.passwordLoginEnabled || settings.passwordRegisterEnabled,
       loginEnabled: settings.passwordLoginEnabled,
       registerEnabled: settings.passwordRegisterEnabled,
     },
-    { id: 'google', enabled: settings.googleLoginEnabled && !!settings.googleClientId && !!settings.googleClientSecret },
   ];
+
+  for (const [providerId, providerConfig] of Object.entries(settings.providers)) {
+    if (providerConfig.enabled && providerConfig.clientId && providerConfig.clientSecret) {
+      const meta = OAUTH_PROVIDER_REGISTRY[providerId];
+      result.push({
+        id: providerId,
+        enabled: true,
+        name: meta?.name || providerId,
+      });
+    }
+  }
+
+  return result;
 }
+
+// ── Providers ─────────────────────────────────────────────────────────────
 
 export async function createPasswordProvider(): Promise<Provider> {
   return Credentials({
@@ -130,23 +278,24 @@ export async function createRuntimeProviders(): Promise<Provider[]> {
   const settings = await getGlobalAuthSettings();
   const providers: Provider[] = [passwordProvider];
 
-  if (settings.googleLoginEnabled && settings.googleClientId && settings.googleClientSecret) {
-    providers.push(
-      Google({
-        clientId: settings.googleClientId,
-        clientSecret: settings.googleClientSecret,
-      })
-    );
+  for (const [providerId, providerConfig] of Object.entries(settings.providers)) {
+    if (!providerConfig.enabled || !providerConfig.clientId || !providerConfig.clientSecret) continue;
+
+    const factory = oauthProviderFactories[providerId];
+    if (factory) {
+      providers.push(factory(providerConfig));
+    }
   }
 
   // Keep fingerprint sign-in available only as a compatibility fallback for old no-auth deployments.
-  // UI no longer treats fingerprint as a cloud-authenticated user.
   if (!config.auth.enabled) {
     providers.push(createFingerprintProvider());
   }
 
   return providers;
 }
+
+// ── Registration ──────────────────────────────────────────────────────────
 
 export async function registerPasswordUser(input: {
   email: string;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { getGlobalAuthSettings } from '@/lib/auth/runtime-config';
+import { getGlobalAuthSettings, OAUTH_PROVIDER_REGISTRY, type OAuthProviderConfig } from '@/lib/auth/runtime-config';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 
 async function requireAdmin(request: NextRequest) {
@@ -10,13 +10,31 @@ async function requireAdmin(request: NextRequest) {
   return { user };
 }
 
-function sanitize(settings: Awaited<ReturnType<typeof getGlobalAuthSettings>>) {
+type SanitizedProvider = {
+  enabled: boolean;
+  clientId: string;
+  clientSecretSet: boolean;
+};
+
+type SanitizedSettings = {
+  passwordLoginEnabled: boolean;
+  passwordRegisterEnabled: boolean;
+  providers: Record<string, SanitizedProvider>;
+};
+
+function sanitize(settings: Awaited<ReturnType<typeof getGlobalAuthSettings>>): SanitizedSettings {
+  const providers: Record<string, SanitizedProvider> = {};
+  for (const [providerId, config] of Object.entries(settings.providers)) {
+    providers[providerId] = {
+      enabled: config.enabled,
+      clientId: config.clientId,
+      clientSecretSet: !!config.clientSecret,
+    };
+  }
   return {
     passwordLoginEnabled: settings.passwordLoginEnabled,
     passwordRegisterEnabled: settings.passwordRegisterEnabled,
-    googleLoginEnabled: settings.googleLoginEnabled,
-    googleClientId: settings.googleClientId || '',
-    googleClientSecretSet: !!settings.googleClientSecret,
+    providers,
   };
 }
 
@@ -40,23 +58,41 @@ export async function PUT(request: NextRequest) {
 
     const current = await getGlobalAuthSettings();
     const body = await request.json().catch(() => ({}));
-    const next = {
-      ...(body.passwordLoginEnabled !== undefined ? { passwordLoginEnabled: Boolean(body.passwordLoginEnabled) } : {}),
-      ...(body.passwordRegisterEnabled !== undefined ? { passwordRegisterEnabled: Boolean(body.passwordRegisterEnabled) } : {}),
-      ...(body.googleLoginEnabled !== undefined ? { googleLoginEnabled: Boolean(body.googleLoginEnabled) } : {}),
-      ...(body.googleClientId !== undefined ? { googleClientId: String(body.googleClientId).trim() } : {}),
-      ...(body.googleClientSecret !== undefined
-        ? { googleClientSecret: String(body.googleClientSecret).trim() || current.googleClientSecret || '' }
-        : {}),
-    };
+    const next: Record<string, unknown> = {};
+
+    // Password settings
+    if (body.passwordLoginEnabled !== undefined) {
+      next.passwordLoginEnabled = Boolean(body.passwordLoginEnabled);
+    }
+    if (body.passwordRegisterEnabled !== undefined) {
+      next.passwordRegisterEnabled = Boolean(body.passwordRegisterEnabled);
+    }
+
+    // Provider settings — accept { providers: { google: { enabled, clientId, clientSecret }, ... } }
+    if (body.providers && typeof body.providers === 'object') {
+      const updatedProviders: Record<string, OAuthProviderConfig> = { ...current.providers };
+
+      for (const [providerId, providerBody] of Object.entries(body.providers as Record<string, Record<string, unknown>>)) {
+        if (!OAUTH_PROVIDER_REGISTRY[providerId]) continue; // ignore unknown providers
+
+        const existing = updatedProviders[providerId] || { enabled: false, clientId: '', clientSecret: '' };
+        updatedProviders[providerId] = {
+          enabled: providerBody.enabled !== undefined ? Boolean(providerBody.enabled) : existing.enabled,
+          clientId: providerBody.clientId !== undefined ? String(providerBody.clientId).trim() : existing.clientId,
+          clientSecret:
+            providerBody.clientSecret !== undefined && String(providerBody.clientSecret).trim()
+              ? String(providerBody.clientSecret).trim()
+              : existing.clientSecret,
+        };
+      }
+
+      // Store providers at top-level for DB (flattened structure)
+      // We store the whole providers object under 'providers' key in the JSON column
+      next.providers = updatedProviders;
+    }
 
     const updated = await userRepository.updateGlobalSettings(next);
-    return NextResponse.json(
-      sanitize({
-        ...current,
-        ...updated,
-      })
-    );
+    return NextResponse.json(sanitize({ ...current, ...updated } as Awaited<ReturnType<typeof getGlobalAuthSettings>>));
   } catch (error) {
     console.error('PUT /api/admin/auth-settings error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
