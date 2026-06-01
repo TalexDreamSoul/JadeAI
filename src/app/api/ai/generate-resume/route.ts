@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { generateResumeInputSchema, type GenerateResumeOutput } from '@/lib/ai/generate-resume-schema';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 const SECTION_TITLES: Record<string, Record<string, string>> = {
   zh: {
@@ -62,6 +67,7 @@ export async function POST(request: NextRequest) {
   try {
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
+    if (user) await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const body = await request.json();
     const parsed = generateResumeInputSchema.safeParse(body);
@@ -76,7 +82,6 @@ export async function POST(request: NextRequest) {
     const lang = language || 'zh';
 
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
 
     const skillsContext = skills && skills.length > 0
@@ -89,11 +94,17 @@ export async function POST(request: NextRequest) {
       ? `\n\nThe candidate provided the following work experience description. Parse this into structured work_experience items, and use it to inform the summary, skills, and projects sections:\n---\n${experience}\n---`
       : '';
 
-    const result = await generateText({
-      model,
-      maxOutputTokens: 8192,
-      system: getSystemPrompt(lang),
-      prompt: `Generate a complete resume for a ${jobTitle} ${yearsOfExperience === 0 ? 'at entry level (fresh graduate / no prior experience)' : `with ${yearsOfExperience} years of experience`}.${skillsContext}${industryContext}${experienceContext}
+    const generated = await withMeteredAIUsage({
+      userId: user?.id,
+      aiConfig,
+      feature: 'resume.generate',
+      metadata: { jobTitle, yearsOfExperience, language: lang },
+      run: async () => {
+        const result = await generateText({
+          model,
+          maxOutputTokens: 8192,
+          system: getSystemPrompt(lang),
+          prompt: `Generate a complete resume for a ${jobTitle} ${yearsOfExperience === 0 ? 'at entry level (fresh graduate / no prior experience)' : `with ${yearsOfExperience} years of experience`}.${skillsContext}${industryContext}${experienceContext}
 
 Return a JSON object with these exact top-level keys: personal_info, summary, work_experience, education, skills, projects.
 
@@ -106,11 +117,15 @@ The structure must be:
 - projects: { items: [{ name, url?, startDate?, endDate?, description, technologies: string[], highlights: string[] }] }
 
 Respond with JSON only.`,
-      providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
+          providerOptions: getProviderOptions(aiConfig),
+          output: Output.json(),
+        });
+        const data = extractJson(result.text, generateResumeOutputSchema) as GenerateResumeOutput;
+        return { value: { data, usage: result.usage }, usage: result.usage };
+      },
     });
 
-    const generatedData: GenerateResumeOutput = extractJson(result.text, generateResumeOutputSchema) as GenerateResumeOutput;
+    const generatedData = generated.data;
 
     const resumeTitle = lang === 'zh'
       ? `${jobTitle} - AI生成简历`
@@ -119,7 +134,6 @@ Respond with JSON only.`,
     const sectionTypes = ['personal_info', 'summary', 'work_experience', 'education', 'skills', 'projects'] as const;
 
     if (!user) {
-      await chargeAICredit();
       return NextResponse.json({
         resumeId: null,
         title: resumeTitle,
@@ -161,7 +175,6 @@ Respond with JSON only.`,
 
     const completeResume = await resumeRepository.findById(newResume.id);
 
-    await chargeAICredit();
     return NextResponse.json({
       resumeId: newResume.id,
       title: resumeTitle,
@@ -170,6 +183,12 @@ Respond with JSON only.`,
   } catch (error) {
     if (error instanceof AIConfigError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
+    }
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
     }
     console.error('POST /api/ai/generate-resume error:', error);
     return NextResponse.json({ error: 'Failed to generate resume' }, { status: 500 });

@@ -3,6 +3,8 @@ import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { hasServerImageAIConfig, selectServerAIConfig } from '@/lib/ai/server-config';
 import { sanitizeMcpSettings } from '@/lib/mcp/user-mcp-access';
+import { walletRepository } from '@/lib/db/repositories/commercial.repository';
+import { WALLET_CURRENCY_AI_CREDIT } from '@/lib/commercial/catalog';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,10 +15,14 @@ export async function GET(request: NextRequest) {
     }
     const settings = await userRepository.getSettings(user.id);
     const serverAI = await selectServerAIConfig();
+    const aiCreditAccount = await walletRepository
+      .findAccount(user.id, WALLET_CURRENCY_AI_CREDIT)
+      .catch(() => null);
+    const aiCredits = Number(aiCreditAccount?.balance ?? user.aiCredits ?? 0);
     return NextResponse.json({
       ...sanitizeMcpSettings(settings),
-      aiCredits: user.aiCredits,
-      serverAIConfigured: !!serverAI.apiKey && !!user.email && user.aiCredits > 0,
+      aiCredits,
+      serverAIConfigured: !!serverAI.apiKey && !!user.email && aiCredits > 0,
       serverAIProvider: serverAI.provider,
       serverAIModel: serverAI.model,
       serverOpenAIEndpoint: serverAI.openAIEndpoint,

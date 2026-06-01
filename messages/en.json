@@ -1295,7 +1295,30 @@
     "role": "Role",
     "authType": "Auth type",
     "aiCredits": "AI credits",
-    "createdAt": "Created at"
+    "aiCreditBalance": "AI wallet balance",
+    "createdAt": "Created at",
+    "commerce": "Commerce",
+    "products": "Products",
+    "orders": "Orders",
+    "redeemCodes": "Redeem codes",
+    "growth": "Growth",
+    "noProducts": "No products",
+    "noOrders": "No orders",
+    "orderItems": "Items",
+    "payments": "Payments",
+    "paidAt": "Paid at",
+    "fulfilledAt": "Fulfilled at",
+    "redeemCode": "Redeem code",
+    "maxClaims": "Max claims",
+    "benefitJson": "Benefit JSON",
+    "createRedeemCode": "Create redeem code",
+    "redeemJsonInvalid": "Invalid benefit JSON",
+    "referrals": "Referrals",
+    "lotteryCampaigns": "Lottery campaigns",
+    "lotteryDraws": "Lottery draws"
+  },
+  "account": {
+    "nav": "Account"
   },
   "aiReview": {
     "title": "AI Review",
@@ -1475,6 +1498,7 @@
     "markAllRead": "Mark all read",
     "browserNotifications": "Browser notifications",
     "empty": "No notifications",
-    "defaultBody": "You have a new TouchResume notification"
+    "defaultBody": "You have a new TouchResume notification",
+    "view": "View"
   }
 }

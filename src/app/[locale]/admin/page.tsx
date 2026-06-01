@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Bot, Briefcase, FileSliders, KeyRound, Plus, RefreshCw, Save, Users } from 'lucide-react';
+import { Bot, Briefcase, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -47,6 +47,7 @@ interface AdminUser {
   authType: string;
   role: string;
   aiCredits: number;
+  aiCreditBalance?: number;
   createdAt?: string | number | Date;
 }
 
@@ -76,6 +77,68 @@ interface AdminJobTemplate {
   enabled: boolean;
   builtin: boolean;
   sortOrder: number;
+}
+
+interface AdminProduct {
+  id: string;
+  sku: string;
+  type: string;
+  name: string;
+  description: string;
+  priceCents: number;
+  currency: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  active: boolean;
+}
+
+interface AdminOrder {
+  id: string;
+  orderNo: string;
+  userId: string;
+  status: string;
+  payableCents: number;
+  currency: string;
+  source: string;
+  createdAt?: string | number | Date;
+  paidAt?: string | number | Date | null;
+  fulfilledAt?: string | number | Date | null;
+  items?: Array<{
+    id: string;
+    name: string;
+    productType: string;
+    resourceType?: string | null;
+    resourceId?: string | null;
+    quantity: number;
+    totalCents: number;
+  }>;
+  payments?: Array<{
+    id: string;
+    provider: string;
+    status: string;
+    amountCents: number;
+    currency: string;
+    paidAt?: string | number | Date | null;
+  }>;
+}
+
+interface AdminRedeemCode {
+  id: string;
+  code: string;
+  type: string;
+  status: string;
+  maxClaims: number;
+  claimedCount: number;
+  benefit: unknown;
+  expiresAt?: string | number | Date | null;
+}
+
+interface AdminGrowthState {
+  referrals: Array<{ id: string; status: string; rewardStatus: string; createdAt?: string | number | Date }>;
+  lottery: {
+    campaigns: Array<{ id: string; title: string; status: string }>;
+    draws: Array<{ id: string; prizeType: string; status: string; createdAt?: string | number | Date }>;
+  };
 }
 
 const EMPTY_TEMPLATE_FORM = {
@@ -114,6 +177,14 @@ const EMPTY_JOB_TEMPLATE_FORM: {
   sortOrder: 1000,
 };
 
+const EMPTY_REDEEM_FORM = {
+  code: '',
+  maxClaims: 1,
+  benefitJson: '{\n  "items": [\n    { "type": "wallet", "currency": "AI_CREDIT", "amount": 20, "description": "运营兑换码" }\n  ]\n}',
+};
+
+const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
+
 function getHeaders() {
   const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
   return {
@@ -128,6 +199,14 @@ function formatDate(value?: string | number | Date) {
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString() : '-';
 }
 
+function money(cents: number, currency = 'CNY') {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  }).format(Number(cents || 0) / 100);
+}
+
 export default function AdminPage() {
   const t = useTranslations('admin');
   const tDashboard = useTranslations('dashboard');
@@ -137,6 +216,11 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [jobTemplates, setJobTemplates] = useState<AdminJobTemplate[]>([]);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
+  const [growth, setGrowth] = useState<AdminGrowthState | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     name: '',
@@ -153,6 +237,7 @@ export default function AdminPage() {
   });
   const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
   const [jobTemplateForm, setJobTemplateForm] = useState(EMPTY_JOB_TEMPLATE_FORM);
+  const [redeemForm, setRedeemForm] = useState(EMPTY_REDEEM_FORM);
 
   const isLoggedIn = status === 'authenticated' && !!session?.user?.email;
   const currentUser = users.find((user) => user.email && user.email === session?.user?.email);
@@ -164,16 +249,21 @@ export default function AdminPage() {
   })), [tDashboard]);
 
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
       fetch('/api/templates', { headers: getHeaders() }),
       fetch('/api/admin/job-templates', { headers: getHeaders() }),
+      fetch('/api/admin/products?activeOnly=0', { headers: getHeaders() }),
+      fetch(`/api/admin/orders?limit=50&status=${orderStatusFilter}`, { headers: getHeaders() }),
+      fetch('/api/admin/redeem-codes?limit=50', { headers: getHeaders() }),
+      fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok) {
-      setError(channelsRes.status === 403 || authRes.status === 403 || usersRes.status === 403 || jobTemplatesRes.status === 403 ? t('forbidden') : t('loadFailed'));
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, redeemRes, growthRes].some((res) => res.status === 403);
+      setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
 
@@ -182,6 +272,14 @@ export default function AdminPage() {
     setTemplates(await templatesRes.json());
     const loadedJobTemplates = await jobTemplatesRes.json();
     setJobTemplates([...(loadedJobTemplates.builtin || []), ...(loadedJobTemplates.custom || [])]);
+    const loadedProducts = await productsRes.json();
+    const loadedOrders = await ordersRes.json();
+    const loadedRedeemCodes = await redeemRes.json();
+    const loadedGrowth = await growthRes.json();
+    setProducts(Array.isArray(loadedProducts.products) ? loadedProducts.products : []);
+    setOrders(Array.isArray(loadedOrders.orders) ? loadedOrders.orders : []);
+    setRedeemCodes(Array.isArray(loadedRedeemCodes.redeemCodes) ? loadedRedeemCodes.redeemCodes : []);
+    setGrowth(loadedGrowth && typeof loadedGrowth === 'object' ? loadedGrowth : null);
     const loadedAuth = await authRes.json();
     const loadedProviders: Record<string, OAuthProviderForm> = {};
     if (loadedAuth.providers && typeof loadedAuth.providers === 'object') {
@@ -207,7 +305,7 @@ export default function AdminPage() {
     if (!isLoggedIn) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, status, isLoggedIn]);
+  }, [isLoading, status, isLoggedIn, orderStatusFilter]);
 
   const create = async () => {
     const res = await fetch('/api/admin/ai-channels', {
@@ -230,7 +328,7 @@ export default function AdminPage() {
     load();
   };
 
-  const updateUser = async (userId: string, patch: Partial<{ role: string; aiCredits: number }>) => {
+  const updateUser = async (userId: string, patch: Partial<{ role: string; aiCreditBalance: number }>) => {
     const res = await fetch(`/api/admin/users/${userId}`, {
       method: 'PATCH',
       headers: getHeaders(),
@@ -397,6 +495,47 @@ export default function AdminPage() {
     await load();
   };
 
+  const updateProduct = async (product: AdminProduct, patch: Partial<Pick<AdminProduct, 'priceCents' | 'active' | 'name' | 'description'>>) => {
+    const res = await fetch(`/api/admin/products/${product.id}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      setError(t('loadFailed'));
+      return;
+    }
+    const updated = await res.json();
+    setProducts((prev) => prev.map((item) => item.id === product.id ? { ...item, ...updated } : item));
+    setError('');
+  };
+
+  const createRedeemCode = async () => {
+    let benefit: Record<string, unknown>;
+    try {
+      benefit = JSON.parse(redeemForm.benefitJson);
+    } catch {
+      setError(t('redeemJsonInvalid'));
+      return;
+    }
+
+    const res = await fetch('/api/admin/redeem-codes', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        code: redeemForm.code,
+        maxClaims: Number(redeemForm.maxClaims) || 1,
+        benefit,
+      }),
+    });
+    if (!res.ok) {
+      setError(t('loadFailed'));
+      return;
+    }
+    setRedeemForm(EMPTY_REDEEM_FORM);
+    await load();
+  };
+
   if (status === 'loading' || isLoading) {
     return <div className="rounded-xl border bg-white p-6 text-sm text-zinc-500">{t('loadFailed')}...</div>;
   }
@@ -430,10 +569,11 @@ export default function AdminPage() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="users" className="gap-2"><Users className="h-4 w-4" />{t('users')}</TabsTrigger>
           <TabsTrigger value="auth" className="gap-2"><KeyRound className="h-4 w-4" />{t('authSettings')}</TabsTrigger>
-          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
-          <TabsTrigger value="templates" className="gap-2"><FileSliders className="h-4 w-4" />{t('templates')}</TabsTrigger>
-          <TabsTrigger value="jobTemplates" className="gap-2"><Briefcase className="h-4 w-4" />{t('jobTemplates')}</TabsTrigger>
-        </TabsList>
+	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
+	          <TabsTrigger value="templates" className="gap-2"><FileSliders className="h-4 w-4" />{t('templates')}</TabsTrigger>
+	          <TabsTrigger value="jobTemplates" className="gap-2"><Briefcase className="h-4 w-4" />{t('jobTemplates')}</TabsTrigger>
+	          <TabsTrigger value="commerce" className="gap-2"><ReceiptText className="h-4 w-4" />{t('commerce')}</TabsTrigger>
+	        </TabsList>
 
         <TabsContent value="users">
           <Card>
@@ -455,16 +595,20 @@ export default function AdminPage() {
                     <option value="admin">admin</option>
                   </select>
                   <div className="flex items-center gap-2">
-                    <span className="shrink-0 text-xs text-zinc-500">{t('aiCredits')}</span>
+                    <span className="shrink-0 text-xs text-zinc-500">{t('aiCreditBalance')}</span>
                     <Input
                       type="number"
                       min={0}
-                      value={user.aiCredits ?? 0}
+                      value={user.aiCreditBalance ?? user.aiCredits ?? 0}
                       onChange={(event) => {
-                        const aiCredits = Math.max(0, Math.floor(Number(event.target.value) || 0));
-                        setUsers((prev) => prev.map((item) => item.id === user.id ? { ...item, aiCredits } : item));
+                        const aiCreditBalance = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                        setUsers((prev) => prev.map((item) => item.id === user.id ? {
+                          ...item,
+                          aiCreditBalance,
+                          aiCredits: aiCreditBalance,
+                        } : item));
                       }}
-                      onBlur={(event) => updateUser(user.id, { aiCredits: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
+                      onBlur={(event) => updateUser(user.id, { aiCreditBalance: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
                       className="h-8 w-20"
                     />
                   </div>
@@ -621,7 +765,7 @@ export default function AdminPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="jobTemplates">
+	        <TabsContent value="jobTemplates">
           <div className="grid gap-4 lg:grid-cols-[1fr_460px]">
             <Card>
               <CardHeader><CardTitle className="text-base">{t('jobTemplates')}</CardTitle></CardHeader>
@@ -685,8 +829,132 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
-      </Tabs>
+	        </TabsContent>
+
+	        <TabsContent value="commerce">
+	          <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+	            <div className="space-y-4">
+	              <Card>
+	                <CardHeader><CardTitle className="text-base">{t('products')}</CardTitle></CardHeader>
+	                <CardContent className="space-y-2">
+	                  {products.length === 0 ? <p className="text-sm text-zinc-400">{t('noProducts')}</p> : products.map((product) => (
+	                    <div key={product.id} className="grid gap-3 rounded-lg border px-3 py-2 text-sm md:grid-cols-[1fr_140px_110px_90px] md:items-center">
+	                      <div className="min-w-0">
+	                        <div className="flex flex-wrap items-center gap-2">
+	                          <span className="font-medium">{product.name}</span>
+	                          <Badge variant="outline">{product.type}</Badge>
+	                          {!product.active && <Badge variant="secondary">{t('disabled')}</Badge>}
+	                        </div>
+	                        <p className="truncate text-xs text-zinc-500">{product.sku} · {product.resourceType || '-'} · {product.description}</p>
+	                      </div>
+	                      <Input
+	                        type="number"
+	                        min={0}
+	                        value={Math.round(Number(product.priceCents || 0) / 100)}
+	                        onChange={(event) => {
+	                          const priceCents = Math.max(0, Math.round(Number(event.target.value || 0) * 100));
+	                          setProducts((prev) => prev.map((item) => item.id === product.id ? { ...item, priceCents } : item));
+	                        }}
+	                        onBlur={(event) => updateProduct(product, { priceCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })}
+	                        className="h-8"
+	                      />
+	                      <span className="text-xs text-zinc-500">{money(product.priceCents, product.currency)}</span>
+	                      <Switch checked={product.active} onCheckedChange={(checked) => updateProduct(product, { active: checked })} />
+	                    </div>
+	                  ))}
+	                </CardContent>
+	              </Card>
+
+	              <Card>
+	                <CardHeader>
+	                  <div className="flex items-center justify-between gap-3">
+	                    <CardTitle className="text-base">{t('orders')}</CardTitle>
+	                    <select
+	                      value={orderStatusFilter}
+	                      onChange={(event) => setOrderStatusFilter(event.target.value)}
+	                      className="h-8 rounded-md border bg-background px-2 text-xs"
+	                    >
+	                      {ORDER_STATUS_OPTIONS.map((statusOption) => (
+	                        <option key={statusOption} value={statusOption}>{statusOption}</option>
+	                      ))}
+	                    </select>
+	                  </div>
+	                </CardHeader>
+	                <CardContent className="space-y-2">
+	                  {orders.length === 0 ? <p className="text-sm text-zinc-400">{t('noOrders')}</p> : orders.slice(0, 12).map((order) => (
+	                    <div key={order.id} className="rounded-lg border px-3 py-2 text-sm">
+	                      <div className="grid gap-3 md:grid-cols-[1fr_110px_110px_100px] md:items-center">
+	                        <div className="min-w-0">
+	                          <p className="truncate font-medium">{order.orderNo}</p>
+	                          <p className="truncate text-xs text-zinc-500">{order.userId} · {formatDate(order.createdAt)}</p>
+	                        </div>
+	                        <Badge variant="outline">{order.status}</Badge>
+	                        <span>{money(order.payableCents, order.currency)}</span>
+	                        <span className="text-xs text-zinc-500">{order.source}</span>
+	                      </div>
+	                      <div className="mt-2 space-y-1 border-t pt-2 text-xs text-zinc-500">
+	                        <p className="line-clamp-2">
+	                          {t('orderItems')}: {order.items?.length
+	                            ? order.items.map((item) => `${item.name} x${item.quantity}`).join(' / ')
+	                            : '-'}
+	                        </p>
+	                        <p>
+	                          {t('payments')}: {order.payments?.length ?? 0}
+	                          {' · '}
+	                          {t('paidAt')}: {formatDate(order.paidAt || undefined)}
+	                          {' · '}
+	                          {t('fulfilledAt')}: {formatDate(order.fulfilledAt || undefined)}
+	                        </p>
+	                      </div>
+	                    </div>
+	                  ))}
+	                </CardContent>
+	              </Card>
+	            </div>
+
+	            <div className="space-y-4">
+	              <Card>
+	                <CardHeader><CardTitle className="text-base">{t('redeemCodes')}</CardTitle></CardHeader>
+	                <CardContent className="space-y-3">
+	                  <Input value={redeemForm.code} onChange={(e) => setRedeemForm({ ...redeemForm, code: e.target.value })} placeholder={t('redeemCode')} />
+	                  <Input type="number" min={1} value={redeemForm.maxClaims} onChange={(e) => setRedeemForm({ ...redeemForm, maxClaims: Math.max(1, Number(e.target.value) || 1) })} placeholder={t('maxClaims')} />
+	                  <Textarea value={redeemForm.benefitJson} onChange={(e) => setRedeemForm({ ...redeemForm, benefitJson: e.target.value })} placeholder={t('benefitJson')} className="min-h-40 font-mono text-xs" />
+	                  <Button onClick={createRedeemCode} disabled={!redeemForm.code.trim()} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Plus className="h-4 w-4" />{t('createRedeemCode')}</Button>
+	                  <div className="space-y-2 pt-2">
+	                    {redeemCodes.slice(0, 8).map((code) => (
+	                      <div key={code.id} className="rounded-lg border px-3 py-2 text-sm">
+	                        <div className="flex items-center justify-between gap-3">
+	                          <span className="font-medium">{code.code}</span>
+	                          <Badge variant="outline">{code.status}</Badge>
+	                        </div>
+	                        <p className="mt-1 text-xs text-zinc-500">{code.claimedCount}/{code.maxClaims} · {code.type} · {formatDate(code.expiresAt || undefined)}</p>
+	                      </div>
+	                    ))}
+	                  </div>
+	                </CardContent>
+	              </Card>
+
+	              <Card>
+	                <CardHeader><CardTitle className="text-base">{t('growth')}</CardTitle></CardHeader>
+	                <CardContent className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+	                  <div className="rounded-lg border px-3 py-2">
+	                    <div className="text-xs text-zinc-500">{t('referrals')}</div>
+	                    <div className="mt-1 text-xl font-semibold">{growth?.referrals.length ?? 0}</div>
+	                  </div>
+	                  <div className="rounded-lg border px-3 py-2">
+	                    <div className="text-xs text-zinc-500">{t('lotteryCampaigns')}</div>
+	                    <div className="mt-1 text-xl font-semibold">{growth?.lottery.campaigns.length ?? 0}</div>
+	                  </div>
+	                  <div className="rounded-lg border px-3 py-2">
+	                    <div className="text-xs text-zinc-500">{t('lotteryDraws')}</div>
+	                    <div className="mt-1 text-xl font-semibold">{growth?.lottery.draws.length ?? 0}</div>
+	                  </div>
+	                </CardContent>
+	              </Card>
+	            </div>
+	          </div>
+	        </TabsContent>
+	      </Tabs>
     </div>
   );
 }

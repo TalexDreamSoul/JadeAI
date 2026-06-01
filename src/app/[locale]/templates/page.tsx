@@ -21,6 +21,7 @@ import { ResumePreview } from '@/components/preview/resume-preview';
 import { TourOverlay, type TourStepConfig } from '@/components/tour/tour-overlay';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { getTemplateLabel } from '@/lib/template-labels';
+import { purchaseProductWithMockPayment } from '@/lib/commercial/client-payments';
 import type { Resume } from '@/types/resume';
 
 interface MarketTemplate {
@@ -32,6 +33,19 @@ interface MarketTemplate {
   customCss: string;
   isPublic: boolean;
   installCount: number;
+  purchased?: boolean;
+  locked?: boolean;
+  canUseMonthlyFreeDownload?: boolean;
+  freeDownloads?: {
+    limit: number;
+    used: number;
+    remaining: number;
+  } | null;
+  product?: {
+    id: string;
+    priceCents: number;
+    currency: string;
+  } | null;
 }
 
 const TEMPLATES_TOUR_STEPS: TourStepConfig[] = [
@@ -41,6 +55,15 @@ const TEMPLATES_TOUR_STEPS: TourStepConfig[] = [
 
 // Stable date to avoid SSR/client hydration mismatch
 const MOCK_DATE = new Date('2025-01-01T00:00:00Z');
+
+function money(cents: number, currency = 'CNY') {
+  const amount = Number(cents || 0) / 100;
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  }).format(amount);
+}
 
 function buildMockResume(template: string): Resume {
   return ({
@@ -284,6 +307,30 @@ export default function TemplatesPage() {
   const handleUseMarketTemplate = async (item: MarketTemplate) => {
     setCreatingTemplate(item.id);
     try {
+      const headers: Record<string, string> = {};
+      if (fingerprint) headers['x-fingerprint'] = fingerprint;
+      const installRes = await fetch(`/api/templates/${item.id}/install`, {
+        method: 'POST',
+        headers,
+      });
+      if (installRes.status === 402) {
+        const payload = await installRes.json().catch(() => ({}));
+        const product = payload.product || item.product;
+        if (!product?.id) throw new Error('模板需要先解锁');
+        await purchaseProductWithMockPayment({
+          productId: product.id,
+          headers,
+          clientContext: { source: 'resume_template', templateId: item.id },
+        });
+        const retry = await fetch(`/api/templates/${item.id}/install`, {
+          method: 'POST',
+          headers,
+        });
+        if (!retry.ok) throw new Error('模板授权确认失败');
+      } else if (!installRes.ok) {
+        throw new Error('模板安装失败');
+      }
+
       const resume = await createResume({
         title: item.name,
         template: item.baseTemplate,
@@ -296,7 +343,16 @@ export default function TemplatesPage() {
         },
       });
       if (resume) {
-        fetch(`/api/templates/${item.id}/install`, { method: 'POST' }).catch(() => {});
+        setMarketTemplates((prev) => prev.map((template) => (
+          template.id === item.id
+            ? {
+                ...template,
+                purchased: true,
+                locked: false,
+                installCount: Number(template.installCount || 0) + 1,
+              }
+            : template
+        )));
         router.push(`/editor/${resume.id}`);
       }
     } finally {
@@ -395,6 +451,15 @@ export default function TemplatesPage() {
                   <span className="text-xs text-zinc-400">{item.installCount}</span>
                 </div>
                 <p className="mb-3 line-clamp-2 text-xs text-zinc-500">{item.description || item.baseTemplate}</p>
+                <div className="mb-3 text-xs text-zinc-500">
+                  {item.purchased
+                    ? '已解锁'
+                    : item.canUseMonthlyFreeDownload
+                      ? `会员免费提现剩余 ${item.freeDownloads?.remaining ?? 0} 次`
+                      : item.product
+                        ? `解锁 ${money(item.product.priceCents, item.product.currency)}`
+                        : '需要解锁'}
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
@@ -403,7 +468,7 @@ export default function TemplatesPage() {
                   className="w-full cursor-pointer"
                 >
                   {creatingTemplate === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {t('templates.useTemplate')}
+                  {item.purchased ? t('templates.useTemplate') : item.canUseMonthlyFreeDownload ? '免费提现并使用' : '解锁并使用'}
                 </Button>
               </div>
             ))}

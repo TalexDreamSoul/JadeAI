@@ -1,4 +1,4 @@
-import { generateText, Output, type LanguageModel } from 'ai';
+import { generateText, Output, type LanguageModel, type LanguageModelUsage } from 'ai';
 import type { ZodType } from 'zod/v4';
 import { AIJsonExtractionError, tryExtractJson } from '@/lib/ai/extract-json';
 
@@ -19,6 +19,35 @@ interface GenerateJsonWithRetryOptions<T> {
 export interface GenerateJsonResult<T> {
   data: T;
   attempts: number;
+  usage?: LanguageModelUsage;
+}
+
+function addTokenCounts(left: number | undefined, right: number | undefined) {
+  return left == null && right == null ? undefined : (left ?? 0) + (right ?? 0);
+}
+
+export function addLanguageModelUsages(
+  left: Partial<LanguageModelUsage> | undefined | null,
+  right: Partial<LanguageModelUsage> | undefined | null,
+): LanguageModelUsage | undefined {
+  if (!left && !right) return undefined;
+  return {
+    inputTokens: addTokenCounts(left?.inputTokens, right?.inputTokens),
+    inputTokenDetails: {
+      noCacheTokens: addTokenCounts(left?.inputTokenDetails?.noCacheTokens, right?.inputTokenDetails?.noCacheTokens),
+      cacheReadTokens: addTokenCounts(left?.inputTokenDetails?.cacheReadTokens, right?.inputTokenDetails?.cacheReadTokens),
+      cacheWriteTokens: addTokenCounts(left?.inputTokenDetails?.cacheWriteTokens, right?.inputTokenDetails?.cacheWriteTokens),
+    },
+    outputTokens: addTokenCounts(left?.outputTokens, right?.outputTokens),
+    outputTokenDetails: {
+      textTokens: addTokenCounts(left?.outputTokenDetails?.textTokens, right?.outputTokenDetails?.textTokens),
+      reasoningTokens: addTokenCounts(left?.outputTokenDetails?.reasoningTokens, right?.outputTokenDetails?.reasoningTokens),
+    },
+    totalTokens: addTokenCounts(left?.totalTokens, right?.totalTokens),
+    reasoningTokens: addTokenCounts(left?.reasoningTokens, right?.reasoningTokens),
+    cachedInputTokens: addTokenCounts(left?.cachedInputTokens, right?.cachedInputTokens),
+    raw: undefined,
+  };
 }
 
 function rawPreview(text: string, max = 3000) {
@@ -58,6 +87,7 @@ export async function generateJsonWithRetry<T>({
 }: GenerateJsonWithRetryOptions<T>): Promise<GenerateJsonResult<T>> {
   let lastText = '';
   let lastError: AIJsonExtractionError | null = null;
+  let totalUsage: LanguageModelUsage | undefined;
   const totalAttempts = Math.max(1, retries + 1);
 
   for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
@@ -69,10 +99,11 @@ export async function generateJsonWithRetry<T>({
       providerOptions,
       output: Output.json(),
     });
+    totalUsage = addLanguageModelUsages(totalUsage, result.usage);
 
     lastText = result.text;
     const parsed: ReturnType<typeof tryExtractJson<T>> = tryExtractJson(result.text, schema);
-    if (parsed.ok) return { data: parsed.data, attempts: attempt };
+    if (parsed.ok) return { data: parsed.data, attempts: attempt, usage: totalUsage };
 
     const parseError = parsed.error;
     lastError = parseError;

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { DEFAULT_SECTIONS, DEFAULT_TEMPLATE } from '@/lib/constants';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +15,7 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const resumes = await resumeRepository.findAllByUserId(user.id);
     return NextResponse.json(resumes);
@@ -106,6 +112,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Failed to create resume' }, { status: 500 });
   } catch (error) {
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
+    }
     console.error('POST /api/resume error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

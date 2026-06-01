@@ -1,11 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { ensureCommercialCatalog } from '@/lib/commercial/bootstrap';
 import { templateMarketRepository } from '@/lib/db/repositories/template-market.repository';
+import { ensureResumeTemplateAccessPayload } from '@/lib/commercial/content-entitlement-service';
+import { templateMarketItems } from '@/lib/db/schema';
+
+type TemplateMarketItem = typeof templateMarketItems.$inferSelect;
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureCommercialCatalog();
     const user = await resolveUser(getUserIdFromRequest(request)).catch(() => null);
-    return NextResponse.json(await templateMarketRepository.listVisible(user?.id));
+    const templates = await templateMarketRepository.listVisible(user?.id);
+    const enriched = await Promise.all((templates as TemplateMarketItem[]).map(async (template) => {
+      if (!user) {
+        return { ...template, product: null, purchased: false, locked: true, freeDownloads: null };
+      }
+      const { product, access } = await ensureResumeTemplateAccessPayload({
+        userId: user.id,
+        templateId: template.id,
+        name: template.name,
+        description: template.description,
+        owner: template.ownerUserId === user.id,
+        admin: user.role === 'admin',
+        legacyAiCredits: Number(user.aiCredits || 0),
+      });
+      return {
+        ...template,
+        product,
+        purchased: access.entitled,
+        locked: !access.entitled && !access.canUseMonthlyFreeDownload,
+        freeDownloads: access.freeDownloads,
+        canUseMonthlyFreeDownload: access.canUseMonthlyFreeDownload,
+      };
+    }));
+    return NextResponse.json(enriched);
   } catch (error) {
     console.error('GET /api/templates error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

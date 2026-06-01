@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { extractAIConfig, getModel, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { sanitizeResumeForShare } from '@/lib/share/review';
 import { hashPassword } from '@/lib/utils/share';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 async function resolveShare(token: string, password: string | null) {
   const share = await shareRepository.findByToken(token);
@@ -47,26 +47,39 @@ export async function POST(
     if (!rawResume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const resume = sanitizeResumeForShare(rawResume, !!result.share!.hideSensitiveInfo);
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
 
-    const aiResult = await generateText({
-      model: getModel(aiConfig),
-      system: SYSTEM,
-      prompt: JSON.stringify({
-        resume: resume.sections,
-        history,
-        message,
-      }),
-      maxOutputTokens: 1200,
-      providerOptions: getProviderOptions(aiConfig),
+    const aiResult = await withMeteredAIUsage({
+      userId: user?.id,
+      aiConfig,
+      feature: 'share.ai_chat',
+      metadata: { token, resumeId: result.share!.resumeId, historyCount: history.length },
+      run: async () => {
+        const output = await generateText({
+          model: getModel(aiConfig),
+          system: SYSTEM,
+          prompt: JSON.stringify({
+            resume: resume.sections,
+            history,
+            message,
+          }),
+          maxOutputTokens: 1200,
+          providerOptions: getProviderOptions(aiConfig),
+        });
+        return {
+          value: output,
+          usage: output.usage,
+          metadata: { token, resumeId: result.share!.resumeId, historyCount: history.length },
+        };
+      },
     });
-
-    await chargeAICredit();
     return NextResponse.json({ message: aiResult.text });
   } catch (error) {
     if (error instanceof AIConfigError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
     }
     console.error('POST /api/share/[token]/ai-chat error:', error);
     return NextResponse.json({ error: 'Failed to chat with AI' }, { status: 500 });

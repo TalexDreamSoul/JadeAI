@@ -72,6 +72,44 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       await this.db.execute(sql`ALTER TABLE resume_ai_reviews ADD COLUMN IF NOT EXISTS error text`);
       await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
       await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS error text`);
+      await this.db.execute(sql`CREATE TABLE IF NOT EXISTS interview_question_favorites (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id text NOT NULL REFERENCES interview_question_banks(id) ON DELETE CASCADE,
+        question_id text NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+        source text NOT NULL DEFAULT 'manual',
+        metadata text DEFAULT '{}',
+        created_at integer NOT NULL DEFAULT extract(epoch from now())::integer
+      )`);
+      await this.db.execute(sql`CREATE TABLE IF NOT EXISTS interview_question_practice_attempts (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id text NOT NULL REFERENCES interview_question_banks(id) ON DELETE CASCADE,
+        question_id text NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+        answer text NOT NULL DEFAULT '',
+        score integer NOT NULL DEFAULT 0,
+        max_score integer NOT NULL DEFAULT 100,
+        is_correct integer NOT NULL DEFAULT 0,
+        feedback text NOT NULL DEFAULT '',
+        rubric_result text DEFAULT '{}',
+        metadata text DEFAULT '{}',
+        created_at integer NOT NULL DEFAULT extract(epoch from now())::integer
+      )`);
+      await this.db.execute(sql`CREATE TABLE IF NOT EXISTS interview_question_stats (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id text NOT NULL REFERENCES interview_question_banks(id) ON DELETE CASCADE,
+        question_id text NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+        attempt_count integer NOT NULL DEFAULT 0,
+        correct_count integer NOT NULL DEFAULT 0,
+        wrong_count integer NOT NULL DEFAULT 0,
+        best_score integer NOT NULL DEFAULT 0,
+        last_score integer NOT NULL DEFAULT 0,
+        mastered integer NOT NULL DEFAULT 0,
+        last_attempt_at integer,
+        created_at integer NOT NULL DEFAULT extract(epoch from now())::integer,
+        updated_at integer NOT NULL DEFAULT extract(epoch from now())::integer
+      )`);
 
       console.log('[DB] PostgreSQL migrations applied');
     } catch (e) {

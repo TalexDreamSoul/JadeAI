@@ -1,4 +1,4 @@
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, gte } from 'drizzle-orm';
 import { db } from '../index';
 import { interviewSessions, interviewRounds, interviewMessages, interviewReports } from '../schema';
 import type {
@@ -30,8 +30,8 @@ export const interviewRepository = {
       resumeId: data.resumeId ?? null,
       jobDescription: data.jobDescription,
       jobTitle: data.jobTitle,
-      selectedInterviewers: data.selectedInterviewers as any,
-    } as any);
+      selectedInterviewers: data.selectedInterviewers,
+    });
     return this.findSession(id);
   },
 
@@ -42,6 +42,14 @@ export const interviewRepository = {
 
   async findSessionsByUserId(userId: string) {
     return db.select().from(interviewSessions).where(eq(interviewSessions.userId, userId)).orderBy(desc(interviewSessions.createdAt));
+  },
+
+  async countSessionsForUserSince(userId: string, since: Date) {
+    const rows = await db
+      .select({ id: interviewSessions.id })
+      .from(interviewSessions)
+      .where(and(eq(interviewSessions.userId, userId), gte(interviewSessions.createdAt, since)));
+    return rows.length;
   },
 
   async updateSessionStatus(sessionId: string, status: InterviewSessionStatus) {
@@ -70,10 +78,10 @@ export const interviewRepository = {
       id,
       sessionId: data.sessionId,
       interviewerType: data.interviewerType,
-      interviewerConfig: data.interviewerConfig as any,
+      interviewerConfig: data.interviewerConfig,
       sortOrder: data.sortOrder,
       maxQuestions: data.maxQuestions ?? 10,
-    } as any);
+    });
     return this.findRound(id);
   },
 
@@ -97,7 +105,7 @@ export const interviewRepository = {
   },
 
   async setRoundSummary(roundId: string, summary: RoundSummary) {
-    await db.update(interviewRounds).set({ summary: summary as any, updatedAt: new Date() }).where(eq(interviewRounds.id, roundId));
+    await db.update(interviewRounds).set({ summary, updatedAt: new Date() }).where(eq(interviewRounds.id, roundId));
   },
 
   // ── Messages ─────────────────────────────────────────────────────────────────
@@ -114,8 +122,8 @@ export const interviewRepository = {
       roundId: data.roundId,
       role: data.role,
       content: data.content,
-      metadata: (data.metadata ?? {}) as any,
-    } as any);
+      metadata: data.metadata ?? {},
+    });
     const rows = await db.select().from(interviewMessages).where(eq(interviewMessages.id, id)).limit(1);
     return rows[0] ?? null;
   },
@@ -137,7 +145,7 @@ export const interviewRepository = {
   },
 
   async updateMessageMetadata(messageId: string, metadata: InterviewMessageMetadata) {
-    await db.update(interviewMessages).set({ metadata: metadata as any }).where(eq(interviewMessages.id, messageId));
+    await db.update(interviewMessages).set({ metadata }).where(eq(interviewMessages.id, messageId));
   },
 
   // ── Reports ──────────────────────────────────────────────────────────────────
@@ -155,11 +163,11 @@ export const interviewRepository = {
       id,
       sessionId: data.sessionId,
       overallScore: data.overallScore,
-      dimensionScores: data.dimensionScores as any,
-      roundEvaluations: data.roundEvaluations as any,
+      dimensionScores: data.dimensionScores,
+      roundEvaluations: data.roundEvaluations,
       overallFeedback: data.overallFeedback,
-      improvementPlan: data.improvementPlan as any,
-    } as any);
+      improvementPlan: data.improvementPlan,
+    });
     return this.findReportBySessionId(data.sessionId);
   },
 

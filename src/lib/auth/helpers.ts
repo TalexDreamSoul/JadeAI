@@ -16,17 +16,19 @@ export async function resolveUser(fingerprint?: string | null) {
   // Ensure DB tables exist before any query
   await dbReady;
 
-  const session = await auth();
-  if (session?.user?.id && session.user.email) {
-    // User was created during sign-in (jwt callback), just look up
-    let user = await userRepository.findById(session.user.id);
+  if (config.auth.enabled) {
+    const session = await auth();
+    if (session?.user?.id && session.user.email) {
+      // User was created during sign-in (jwt callback), just look up
+      let user = await userRepository.findById(session.user.id);
 
-    // Fallback: ID may differ if token was issued before DB creation
-    if (!user) {
-      user = await userRepository.findByEmail(session.user.email);
+      // Fallback: ID may differ if token was issued before DB creation
+      if (!user) {
+        user = await userRepository.findByEmail(session.user.email);
+      }
+
+      return user;
     }
-
-    return user;
   }
 
   if (!config.auth.enabled && fingerprint) {

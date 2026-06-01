@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
+import { walletRepository } from '@/lib/db/repositories/commercial.repository';
+import { WALLET_CURRENCY_AI_CREDIT } from '@/lib/commercial/catalog';
 
 async function requireAdmin(request: NextRequest) {
   const user = await resolveUser(getUserIdFromRequest(request));
@@ -24,12 +26,14 @@ export async function PATCH(
     if (body.role === 'user' || body.role === 'admin') {
       patch.role = body.role;
     }
-    if (body.aiCredits !== undefined) {
-      patch.aiCredits = Math.max(0, Math.floor(Number(body.aiCredits) || 0));
+    const aiCreditBalance = body.aiCreditBalance ?? body.aiCredits;
+    if (aiCreditBalance !== undefined) {
+      patch.aiCredits = Math.max(0, Math.floor(Number(aiCreditBalance) || 0));
     }
 
     const updated = await userRepository.update(id, patch);
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const aiCreditAccount = await walletRepository.findAccount(updated.id, WALLET_CURRENCY_AI_CREDIT);
 
     return NextResponse.json({
       id: updated.id,
@@ -39,6 +43,7 @@ export async function PATCH(
       authType: updated.authType,
       role: updated.role,
       aiCredits: updated.aiCredits,
+      aiCreditBalance: Number(aiCreditAccount?.balance ?? updated.aiCredits ?? 0),
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     });

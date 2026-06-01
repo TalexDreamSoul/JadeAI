@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { isLocalResumeId } from '@/lib/local-resumes';
 import { normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { grammarCheckInputSchema, grammarCheckOutputSchema } from '@/lib/ai/grammar-check-schema';
 import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 const GRAMMAR_CHECK_PROMPT = `You are an expert resume reviewer and writing coach. Analyze the provided resume sections for writing quality issues.
 
@@ -107,17 +107,29 @@ export async function POST(request: NextRequest) {
 
     try {
       const aiConfig = await extractAIConfig(request);
-      const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
       const model = getModel(aiConfig);
 
-      const { data: checkResult } = await generateJsonWithRetry({
-        label: 'grammar-check',
-        model,
-        schema: grammarCheckOutputSchema,
-        maxOutputTokens: 8192,
-        system: GRAMMAR_CHECK_PROMPT,
-        prompt: `Analyze the following resume sections. Respond with JSON only.\n\n${JSON.stringify(sectionsData, null, 2)}`,
-        providerOptions: getProviderOptions(aiConfig),
+      const checkResult = await withMeteredAIUsage({
+        userId: user?.id,
+        aiConfig,
+        feature: 'resume.grammar_check',
+        metadata: { resumeId, sectionCount: sectionsToCheck.length, historyId },
+        run: async () => {
+          const { data, usage } = await generateJsonWithRetry({
+            label: 'grammar-check',
+            model,
+            schema: grammarCheckOutputSchema,
+            maxOutputTokens: 8192,
+            system: GRAMMAR_CHECK_PROMPT,
+            prompt: `Analyze the following resume sections. Respond with JSON only.\n\n${JSON.stringify(sectionsData, null, 2)}`,
+            providerOptions: getProviderOptions(aiConfig),
+          });
+          return {
+            value: data,
+            usage,
+            metadata: { resumeId, sectionCount: sectionsToCheck.length, historyId },
+          };
+        },
       });
 
       if (historyId) {
@@ -128,13 +140,15 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      await chargeAICredit();
       return NextResponse.json({ ...checkResult, historyId });
     } catch (error) {
       const message = getAIJsonErrorMessage(error, 'Failed to check grammar');
       if (historyId) await analysisRepository.markGrammarCheckFailed(historyId, message).catch(() => null);
       if (error instanceof AIConfigError) {
         return NextResponse.json({ error: error.message, historyId }, { status: 401 });
+      }
+      if (error instanceof AIUsageInsufficientCreditsError) {
+        return NextResponse.json({ error: error.message, historyId }, { status: 402 });
       }
       console.error('POST /api/ai/grammar-check error:', error);
       return NextResponse.json({ error: message, historyId }, { status: 500 });

@@ -354,3 +354,301 @@ export const interviewReports = pgTable('interview_reports', {
   improvementPlan: text('improvement_plan').notNull(),
   createdAt: integer('created_at').notNull().default(epochNow),
 });
+
+export const membershipPlans = pgTable('membership_plans', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text('key').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  tier: integer('tier').notNull().default(0),
+  priceCents: integer('price_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  billingCycle: text('billing_cycle').notNull().default('month'),
+  active: integer('active').notNull().default(1),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const planEntitlements = pgTable('plan_entitlements', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  planId: text('plan_id').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull().default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const userMemberships = pgTable('user_memberships', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  planId: text('plan_id').notNull(),
+  status: text('status').notNull().default('active'),
+  source: text('source').notNull().default('system'),
+  sourceId: text('source_id'),
+  currentPeriodStart: integer('current_period_start').notNull().default(epochNow),
+  currentPeriodEnd: integer('current_period_end'),
+  cancelAtPeriodEnd: integer('cancel_at_period_end').notNull().default(0),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const products = pgTable('products', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  type: text('type').notNull(),
+  sku: text('sku').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  priceCents: integer('price_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  resourceType: text('resource_type'),
+  resourceId: text('resource_id'),
+  active: integer('active').notNull().default(1),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const orders = pgTable('orders', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  orderNo: text('order_no').notNull().unique(),
+  status: text('status').notNull().default('pending_payment'),
+  totalCents: integer('total_cents').notNull().default(0),
+  payableCents: integer('payable_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  source: text('source').notNull().default('web'),
+  metadata: text('metadata').default('{}'),
+  paidAt: integer('paid_at'),
+  fulfilledAt: integer('fulfilled_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const orderItems = pgTable('order_items', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text('order_id').notNull(),
+  productId: text('product_id').notNull(),
+  productType: text('product_type').notNull(),
+  resourceType: text('resource_type'),
+  resourceId: text('resource_id'),
+  name: text('name').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  unitPriceCents: integer('unit_price_cents').notNull().default(0),
+  totalCents: integer('total_cents').notNull().default(0),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const payments = pgTable('payments', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text('order_id').notNull(),
+  provider: text('provider').notNull().default('mock'),
+  providerTradeNo: text('provider_trade_no'),
+  status: text('status').notNull().default('succeeded'),
+  amountCents: integer('amount_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  rawPayload: text('raw_payload').default('{}'),
+  paidAt: integer('paid_at').notNull().default(epochNow),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const userEntitlements = pgTable('user_entitlements', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull().default('{}'),
+  resourceType: text('resource_type'),
+  resourceId: text('resource_id'),
+  source: text('source').notNull().default('system'),
+  sourceId: text('source_id'),
+  startsAt: integer('starts_at').notNull().default(epochNow),
+  expiresAt: integer('expires_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const walletAccounts = pgTable('wallet_accounts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  currency: text('currency').notNull(),
+  balance: integer('balance').notNull().default(0),
+  lockedBalance: integer('locked_balance').notNull().default(0),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const walletTransactions = pgTable('wallet_transactions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  accountId: text('account_id').notNull(),
+  userId: text('user_id').notNull(),
+  currency: text('currency').notNull(),
+  direction: text('direction').notNull(),
+  amount: integer('amount').notNull(),
+  balanceAfter: integer('balance_after').notNull(),
+  source: text('source').notNull(),
+  sourceId: text('source_id'),
+  description: text('description').notNull().default(''),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const aiUsageLogs = pgTable('ai_usage_logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  feature: text('feature').notNull(),
+  provider: text('provider'),
+  model: text('model'),
+  promptTokens: integer('prompt_tokens').notNull().default(0),
+  completionTokens: integer('completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
+  creditsCharged: integer('credits_charged').notNull().default(0),
+  walletTransactionId: text('wallet_transaction_id'),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const notifications = pgTable('notifications', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  status: text('status').notNull().default('unread'),
+  actionUrl: text('action_url'),
+  metadata: text('metadata').default('{}'),
+  readAt: integer('read_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const interviewQuestionBanks = pgTable('interview_question_banks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text('key').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  industry: text('industry').notNull().default(''),
+  role: text('role').notNull().default(''),
+  level: text('level').notNull().default('mid'),
+  companyType: text('company_type').notNull().default(''),
+  accessLevel: text('access_level').notNull().default('free'),
+  active: integer('active').notNull().default(1),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const interviewQuestions = pgTable('interview_questions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  bankId: text('bank_id').notNull(),
+  dimension: text('dimension').notNull().default('general'),
+  difficulty: text('difficulty').notNull().default('medium'),
+  questionType: text('question_type').notNull().default('open'),
+  prompt: text('prompt').notNull(),
+  referenceAnswer: text('reference_answer').notNull().default(''),
+  rubric: text('rubric').notNull().default('{}'),
+  keywords: text('keywords').notNull().default('[]'),
+  followUpStrategy: text('follow_up_strategy').notNull().default('{}'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const interviewQuestionFavorites = pgTable('interview_question_favorites', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  bankId: text('bank_id').notNull(),
+  questionId: text('question_id').notNull(),
+  source: text('source').notNull().default('manual'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const interviewQuestionPracticeAttempts = pgTable('interview_question_practice_attempts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  bankId: text('bank_id').notNull(),
+  questionId: text('question_id').notNull(),
+  answer: text('answer').notNull().default(''),
+  score: integer('score').notNull().default(0),
+  maxScore: integer('max_score').notNull().default(100),
+  isCorrect: integer('is_correct').notNull().default(0),
+  feedback: text('feedback').notNull().default(''),
+  rubricResult: text('rubric_result').default('{}'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const interviewQuestionStats = pgTable('interview_question_stats', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  bankId: text('bank_id').notNull(),
+  questionId: text('question_id').notNull(),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  correctCount: integer('correct_count').notNull().default(0),
+  wrongCount: integer('wrong_count').notNull().default(0),
+  bestScore: integer('best_score').notNull().default(0),
+  lastScore: integer('last_score').notNull().default(0),
+  mastered: integer('mastered').notNull().default(0),
+  lastAttemptAt: integer('last_attempt_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const redeemCodes = pgTable('redeem_codes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  code: text('code').notNull().unique(),
+  type: text('type').notNull().default('benefit'),
+  status: text('status').notNull().default('active'),
+  maxClaims: integer('max_claims').notNull().default(1),
+  claimedCount: integer('claimed_count').notNull().default(0),
+  benefit: text('benefit').notNull().default('{}'),
+  startsAt: integer('starts_at'),
+  expiresAt: integer('expires_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const redeemCodeClaims = pgTable('redeem_code_claims', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  redeemCodeId: text('redeem_code_id').notNull(),
+  userId: text('user_id').notNull(),
+  status: text('status').notNull().default('success'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
+export const referralRelations = pgTable('referral_relations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  inviterUserId: text('inviter_user_id').notNull(),
+  inviteeUserId: text('invitee_user_id').notNull(),
+  campaignKey: text('campaign_key').notNull().default('default'),
+  status: text('status').notNull().default('pending'),
+  rewardStatus: text('reward_status').notNull().default('pending'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const lotteryCampaigns = pgTable('lottery_campaigns', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text('key').notNull().unique(),
+  title: text('title').notNull(),
+  status: text('status').notNull().default('draft'),
+  rules: text('rules').notNull().default('{}'),
+  startsAt: integer('starts_at'),
+  endsAt: integer('ends_at'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+});
+
+export const lotteryDraws = pgTable('lottery_draws', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  campaignId: text('campaign_id').notNull(),
+  userId: text('user_id').notNull(),
+  prizeType: text('prize_type').notNull().default('none'),
+  prizePayload: text('prize_payload').default('{}'),
+  status: text('status').notNull().default('completed'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});

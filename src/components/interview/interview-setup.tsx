@@ -19,12 +19,14 @@ export function InterviewSetup() {
   const [resumeId, setResumeId] = useState<string | undefined>();
   const [selectedInterviewers, setSelectedInterviewers] = useState<InterviewerConfig[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState('');
 
   const canStart = jd.trim().length > 0 && selectedInterviewers.length > 0;
 
   const handleStart = async () => {
     if (!canStart) return;
     setIsCreating(true);
+    setError('');
 
     try {
       const fp = localStorage.getItem('touchresume_fingerprint');
@@ -43,11 +45,13 @@ export function InterviewSetup() {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to create interview');
-      const { session } = await res.json();
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(payload.error || 'Failed to create interview'));
+      const { session } = payload;
       router.push(`/interview/${session.id}`);
     } catch (err) {
       console.error('Failed to create interview:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create interview');
     } finally {
       setIsCreating(false);
     }
@@ -77,6 +81,11 @@ export function InterviewSetup() {
         <InterviewerPicker selected={selectedInterviewers} onChange={setSelectedInterviewers} />
       </div>
       <div className="mt-8 px-1">
+        {error && (
+          <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+            {error}
+          </div>
+        )}
         <Button
           onClick={handleStart}
           disabled={!canStart || isCreating}

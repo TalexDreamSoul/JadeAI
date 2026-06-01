@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { z } from 'zod';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { extractJson } from '@/lib/ai/extract-json';
-import { extractAIConfig, getModel, getProviderOptions } from '@/lib/ai/provider';
+import { AIConfigError, extractAIConfig, getModel, getProviderOptions } from '@/lib/ai/provider';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 const tailoringSchema = z.object({
   summary: z.object({ text: z.string() }).optional(),
@@ -28,11 +33,12 @@ const tailoringSchema = z.object({
   }).optional(),
 });
 
-async function tailorDerivedResume(request: NextRequest, resume: Awaited<ReturnType<typeof resumeRepository.findById>>, jobDescription: string) {
-  if (!resume || !jobDescription) return false;
-  const aiConfig = await extractAIConfig(request);
-  if (!aiConfig.apiKey) return false;
-
+async function tailorDerivedResume(
+  aiConfig: Awaited<ReturnType<typeof extractAIConfig>>,
+  resume: Awaited<ReturnType<typeof resumeRepository.findById>>,
+  jobDescription: string
+) {
+  if (!resume || !jobDescription) return null;
   const result = await generateText({
     model: getModel(aiConfig),
     system: 'You tailor resume content for a target JD. Return JSON only with optional summary, skills, projects. Preserve the resume language.',
@@ -57,7 +63,9 @@ async function tailorDerivedResume(request: NextRequest, resume: Awaited<ReturnT
       await resumeRepository.updateSection(section.id, { content: tailored.projects });
     }
   }
-  return aiConfig.mode === 'server';
+  return {
+    usage: result.usage,
+  };
 }
 
 export async function POST(
@@ -73,6 +81,7 @@ export async function POST(
     const resume = await resumeRepository.findById(id);
     if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (resume.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const body = await request.json().catch(() => ({}));
     const targetCompany = String(body.targetCompany || '').trim();
@@ -81,41 +90,71 @@ export async function POST(
     const title = String(body.title || '').trim()
       || `${resume.title} - ${targetCompany || targetJobTitle || 'JD'}`;
 
-    const derived = await resumeRepository.duplicate(id, user.id, title, {
-      baseResumeId: resume.isBase ? resume.id : resume.baseResumeId || resume.id,
-      targetCompany: targetCompany || null,
-      targetJobTitle: targetJobTitle || null,
-      jobDescription: jobDescription || null,
-      versionLabel: 'jd-v1',
-    });
-
-    if (!derived) return NextResponse.json({ error: 'Failed to derive resume' }, { status: 500 });
-
-    let shouldChargeAICredit = false;
-    if (jobDescription) {
-      shouldChargeAICredit = await tailorDerivedResume(request, derived, jobDescription).catch((error) => {
-        console.error('Failed to tailor derived resume:', error);
-        return false;
+    const createDerivedResume = async (aiConfig?: Awaited<ReturnType<typeof extractAIConfig>>) => {
+      const derived = await resumeRepository.duplicate(id, user.id, title, {
+        baseResumeId: resume.isBase ? resume.id : resume.baseResumeId || resume.id,
+        targetCompany: targetCompany || null,
+        targetJobTitle: targetJobTitle || null,
+        jobDescription: jobDescription || null,
+        versionLabel: 'jd-v1',
       });
+
+      if (!derived) throw new Error('Failed to derive resume');
+
+      const tailored = jobDescription && aiConfig
+        ? await tailorDerivedResume(aiConfig, derived, jobDescription)
+        : null;
+      const tailoredDerived = await resumeRepository.findById(derived.id);
+
+      await resumeRepository.createEvent({
+        resumeId: tailoredDerived?.id || derived.id,
+        userId: user.id,
+        type: 'resume.derived',
+        title: 'Derived resume created',
+        description: targetCompany || targetJobTitle || '',
+        metadata: { sourceResumeId: resume.id, targetCompany, targetJobTitle, tailored: !!jobDescription },
+      });
+      await resumeRepository.createVersion(derived.id, 'jd-v1', tailoredDerived || derived, 'jd');
+
+      return {
+        resume: tailoredDerived || derived,
+        usage: tailored?.usage,
+        metadata: { sourceResumeId: resume.id, derivedResumeId: derived.id, targetCompany, targetJobTitle },
+      };
+    };
+
+    if (!jobDescription) {
+      const result = await createDerivedResume();
+      return NextResponse.json(result.resume, { status: 201 });
     }
 
-    const tailoredDerived = await resumeRepository.findById(derived.id);
-
-    await resumeRepository.createEvent({
-      resumeId: tailoredDerived?.id || derived.id,
+    const aiConfig = await extractAIConfig(request);
+    const result = await withMeteredAIUsage({
       userId: user.id,
-      type: 'resume.derived',
-      title: 'Derived resume created',
-      description: targetCompany || targetJobTitle || '',
-      metadata: { sourceResumeId: resume.id, targetCompany, targetJobTitle, tailored: !!jobDescription },
+      aiConfig,
+      feature: 'resume.derive',
+      metadata: { sourceResumeId: resume.id, targetCompany, targetJobTitle },
+      run: async () => {
+        const result = await createDerivedResume(aiConfig);
+        return {
+          value: result,
+          usage: result.usage,
+          metadata: result.metadata,
+        };
+      },
     });
-    await resumeRepository.createVersion(derived.id, 'jd-v1', tailoredDerived || derived, 'jd');
 
-    if (shouldChargeAICredit) {
-      await userRepository.consumeAICredit(user.id);
-    }
-    return NextResponse.json(tailoredDerived || derived, { status: 201 });
+    return NextResponse.json(result.resume, { status: 201 });
   } catch (error) {
+    if (error instanceof AIConfigError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
+    }
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
+    }
     console.error('POST /api/resume/[id]/derive error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

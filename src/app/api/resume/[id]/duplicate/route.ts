@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 export async function POST(
   request: NextRequest,
@@ -21,10 +26,14 @@ export async function POST(
     if (resume.userId !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const duplicated = await resumeRepository.duplicate(id, user.id);
     return NextResponse.json(duplicated, { status: 201 });
   } catch (error) {
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
+    }
     console.error('POST /api/resume/[id]/duplicate error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

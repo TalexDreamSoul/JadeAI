@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 async function requireOwnedResume(request: NextRequest, id: string) {
   const user = await resolveUser(getUserIdFromRequest(request));
@@ -74,6 +79,7 @@ export async function PATCH(
     if (!snapshot) return NextResponse.json({ error: 'Invalid version snapshot' }, { status: 400 });
 
     if (action === 'duplicate') {
+      await assertCanCreateResume(result.user!.id, Number(result.user!.aiCredits || 0));
       const title = String(body.title || `${result.resume!.title} - ${version.label}`).trim();
       const copy = await resumeRepository.createFromSnapshot(snapshot, result.user!.id, title, {
         sourceResumeId: id,
@@ -110,6 +116,9 @@ export async function PATCH(
 
     return NextResponse.json({ resume: restored, version, afterVersion });
   } catch (error) {
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
+    }
     console.error('PATCH /api/resume/[id]/versions error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

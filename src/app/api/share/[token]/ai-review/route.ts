@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod/v4';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
 import { aiReviewSchema } from '@/lib/ai/ai-review-schema';
 import { extractAIConfig, getModel, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
@@ -11,6 +10,7 @@ import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { getReviewerDisplay, sanitizeResumeForShare } from '@/lib/share/review';
 import { hashPassword } from '@/lib/utils/share';
 import { safeParseJson } from '@/lib/safe-json';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 const SYSTEM = `You are a senior resume reviewer. Review the resume for recruiter readability, ATS quality, impact, clarity, and role alignment.
 If selected text is provided, focus on that selected passage and produce precise, actionable comments for it.
@@ -105,29 +105,53 @@ export async function POST(
 
     try {
       const aiConfig = await extractAIConfig(request);
-      const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-      const { data: review } = await generateJsonWithRetry({
-        label: 'shared-ai-review',
-        model: getModel(aiConfig),
-        schema: aiReviewSchema,
-        system: SYSTEM,
-        prompt: JSON.stringify({
-          resume: resume.sections,
+      const metered = await withMeteredAIUsage({
+        userId: user.id,
+        aiConfig,
+        feature: 'share.ai_review',
+        metadata: {
+          token,
+          resumeId: result.share!.resumeId,
+          historyId,
           focus: body.focus || (selectedText ? 'selection' : 'overall'),
-          selectedText: selectedText || undefined,
-          sectionId: body.sectionId ? String(body.sectionId) : undefined,
-        }),
-        maxOutputTokens: 4096,
-        providerOptions: getProviderOptions(aiConfig),
-      });
-      const saved = historyId
-        ? await aiReviewRepository.markSuccess(historyId, { result: review, score: review.score })
-        : await aiReviewRepository.create({
-            resumeId: result.share!.resumeId,
-            userId: user.id,
-            result: review,
-            score: review.score,
+        },
+        run: async () => {
+          const { data: review, usage } = await generateJsonWithRetry({
+            label: 'shared-ai-review',
+            model: getModel(aiConfig),
+            schema: aiReviewSchema,
+            system: SYSTEM,
+            prompt: JSON.stringify({
+              resume: resume.sections,
+              focus: body.focus || (selectedText ? 'selection' : 'overall'),
+              selectedText: selectedText || undefined,
+              sectionId: body.sectionId ? String(body.sectionId) : undefined,
+            }),
+            maxOutputTokens: 4096,
+            providerOptions: getProviderOptions(aiConfig),
           });
+          const saved = historyId
+            ? await aiReviewRepository.markSuccess(historyId, { result: review, score: review.score })
+            : await aiReviewRepository.create({
+                resumeId: result.share!.resumeId,
+                userId: user.id,
+                result: review,
+                score: review.score,
+              });
+
+          return {
+            value: { review, saved },
+            usage,
+            metadata: {
+              token,
+              resumeId: result.share!.resumeId,
+              historyId: saved?.id || historyId,
+              focus: body.focus || (selectedText ? 'selection' : 'overall'),
+            },
+          };
+        },
+      });
+      const { review, saved } = metered;
 
       let comments: unknown[] = [];
       if (body.createComments !== false) {
@@ -149,13 +173,15 @@ export async function POST(
         })));
       }
 
-      await chargeAICredit();
       return NextResponse.json({ ...review, historyId: saved?.id || historyId, comments });
     } catch (error) {
       const message = getAIJsonErrorMessage(error, 'Failed to review resume');
       if (historyId) await aiReviewRepository.markFailed(historyId, message).catch(() => null);
       if (error instanceof AIConfigError) {
         return NextResponse.json({ error: message, historyId }, { status: 401 });
+      }
+      if (error instanceof AIUsageInsufficientCreditsError) {
+        return NextResponse.json({ error: error.message, historyId }, { status: 402 });
       }
       console.error('POST /api/share/[token]/ai-review error:', error);
       return NextResponse.json({ error: message, historyId }, { status: 500 });

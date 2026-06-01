@@ -18,6 +18,14 @@
 
 ---
 
+## 商业化平台进展
+
+当前已进入「求职商业化成长平台」改造阶段，新增会员、权益、钱包、订单、通知、模板商品化、职位模板下载、面试题库商品化、积分兑换、兑换码、推广返利和抽奖等能力。
+
+详细状态、烟测脚本和下一步计划见 [docs/commercialization-progress.md](docs/commercialization-progress.md)。
+
+---
+
 ## P0 - 高价值 / 用户强需求
 
 ### 1. 产品落地页 (Landing Page)

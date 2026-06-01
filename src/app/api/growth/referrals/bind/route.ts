@@ -1,0 +1,21 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { bindReferral } from '@/lib/commercial/growth-service';
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await resolveUser(getUserIdFromRequest(request));
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const body = await request.json().catch(() => ({}));
+    const result = await bindReferral({
+      inviteeUserId: user.id,
+      code: String(body.code || ''),
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('POST /api/growth/referrals/bind error:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ error: message }, { status: message === 'Internal server error' ? 500 : 400 });
+  }
+}

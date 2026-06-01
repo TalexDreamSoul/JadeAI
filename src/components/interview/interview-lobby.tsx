@@ -32,7 +32,7 @@ export function InterviewLobby({ embedded = false }: { embedded?: boolean } = {}
       headers: fp ? { 'x-fingerprint': fp } : {},
     })
       .then((r) => r.json())
-      .then((data) => setSessions(data))
+      .then((data) => setSessions(Array.isArray(data) ? data : data.sessions || []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

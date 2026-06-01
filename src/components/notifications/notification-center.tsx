@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BellOff, CheckCheck } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { Bell, BellOff, CheckCheck, ExternalLink } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -13,22 +13,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useFingerprint } from '@/hooks/use-fingerprint';
 
 type NotificationItem = {
   id: string;
   type: string;
   title: string;
   description: string;
+  status?: string;
+  actionUrl?: string | null;
   createdAt: string | number | Date;
 };
 
 const BROWSER_NOTIFICATION_KEY = 'touchresume_browser_notifications_enabled';
 const SEEN_NOTIFICATIONS_KEY = 'touchresume_seen_notifications';
 
-function getHeaders(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  const fp = localStorage.getItem('touchresume_fingerprint');
-  return fp ? { 'x-fingerprint': fp } : {};
+function headers(fingerprint: string | null): HeadersInit {
+  return fingerprint ? { 'x-fingerprint': fingerprint } : {};
 }
 
 function loadSeenIds() {
@@ -57,23 +58,37 @@ function formatDate(value: string | number | Date) {
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function localizedActionUrl(actionUrl: string | null | undefined, locale: string) {
+  if (!actionUrl?.startsWith('/')) return null;
+  return actionUrl.replace(/^\/(zh|en)(?=\/|$)/, `/${locale}`);
+}
+
 export function NotificationCenter() {
   const t = useTranslations('notifications');
+  const locale = useLocale();
+  const { fingerprint, isLoading: fpLoading } = useFingerprint();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(() => loadSeenIds());
   const [browserEnabled, setBrowserEnabled] = useState(() => loadBrowserNotificationEnabled());
   const [lastNotifiedId, setLastNotifiedId] = useState<string | null>(null);
+  const requestHeaders = useMemo(() => headers(fingerprint), [fingerprint]);
 
   const unreadCount = useMemo(
-    () => items.filter((item) => !seenIds.has(item.id)).length,
+    () => items.filter((item) => item.status !== 'read' && !seenIds.has(item.id)).length,
     [items, seenIds],
   );
 
-  const markAllRead = useCallback(() => {
+  const markAllRead = useCallback(async () => {
     const next = new Set(items.map((item) => item.id));
     setSeenIds(next);
     saveSeenIds(next);
-  }, [items]);
+    setItems((current) => current.map((item) => ({ ...item, status: 'read' })));
+    await fetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { ...requestHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: items.map((item) => item.id) }),
+    }).catch(() => null);
+  }, [items, requestHeaders]);
 
   const requestBrowserPermission = useCallback(async (enabled: boolean) => {
     if (!enabled) {
@@ -91,14 +106,15 @@ export function NotificationCenter() {
   }, []);
 
   const fetchNotifications = useCallback(async () => {
+    if (fpLoading) return;
     try {
-      const res = await fetch('/api/notifications', { headers: getHeaders() });
+      const res = await fetch('/api/notifications', { headers: requestHeaders });
       if (!res.ok) return;
       const data = await res.json();
       const nextItems = Array.isArray(data.notifications) ? data.notifications : [];
       setItems(nextItems);
 
-      const latest = nextItems.find((item: NotificationItem) => !seenIds.has(item.id));
+      const latest = nextItems.find((item: NotificationItem) => item.status !== 'read' && !seenIds.has(item.id));
       if (
         latest
         && latest.id !== lastNotifiedId
@@ -113,7 +129,7 @@ export function NotificationCenter() {
     } catch {
       // best effort
     }
-  }, [browserEnabled, lastNotifiedId, seenIds, t]);
+  }, [browserEnabled, fpLoading, lastNotifiedId, requestHeaders, seenIds, t]);
 
   useEffect(() => {
     const firstTick = window.setTimeout(fetchNotifications, 0);
@@ -158,7 +174,8 @@ export function NotificationCenter() {
             <div className="px-3 py-8 text-center text-sm text-zinc-400">{t('empty')}</div>
           ) : (
             items.map((item) => {
-              const unread = !seenIds.has(item.id);
+              const unread = item.status !== 'read' && !seenIds.has(item.id);
+              const actionUrl = localizedActionUrl(item.actionUrl, locale);
               return (
                 <DropdownMenuItem key={item.id} className="block cursor-default whitespace-normal px-3 py-2">
                   <div className="flex items-start gap-2">
@@ -166,7 +183,18 @@ export function NotificationCenter() {
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.title}</div>
                       {item.description && <div className="mt-0.5 text-xs leading-relaxed text-zinc-500">{item.description}</div>}
-                      <div className="mt-1 text-[11px] text-zinc-400">{formatDate(item.createdAt)}</div>
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-400">
+                        <span>{formatDate(item.createdAt)}</span>
+                        {actionUrl && (
+                          <a
+                            href={actionUrl}
+                            className="inline-flex items-center gap-1 text-brand hover:text-brand/80"
+                          >
+                            {t('view')}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </DropdownMenuItem>

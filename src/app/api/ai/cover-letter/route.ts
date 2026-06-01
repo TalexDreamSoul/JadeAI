@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
 import { getModel, extractAIConfig, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { isLocalResumeId } from '@/lib/local-resumes';
 import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { coverLetterInputSchema } from '@/lib/ai/cover-letter-schema';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 interface CoverLetterOutput {
   title: string;
@@ -105,29 +105,40 @@ export async function POST(request: NextRequest) {
 
     const resumeContext = getResumeSectionsContext(resume);
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
 
-    const result = await generateText({
-      model,
-      maxOutputTokens: 4096,
-      system: getSystemPrompt(tone, lang),
-      prompt: `## Resume Data
+    const coverLetterData = await withMeteredAIUsage({
+      userId: user?.id,
+      aiConfig,
+      feature: 'resume.cover_letter',
+      metadata: { resumeId, tone, language: lang },
+      run: async () => {
+        const result = await generateText({
+          model,
+          maxOutputTokens: 4096,
+          system: getSystemPrompt(tone, lang),
+          prompt: `## Resume Data
 ${resumeContext}
 
 ## Job Description
 ${jobDescription}
 
 Based on this resume and job description, write a tailored cover letter. Use the TITLE:/---CONTENT--- format specified in the system prompt.`,
+        });
+        return {
+          value: parseCoverLetter(result.text),
+          usage: result.usage,
+          metadata: { resumeId, tone, language: lang },
+        };
+      },
     });
-
-    const coverLetterData: CoverLetterOutput = parseCoverLetter(result.text);
-
-    await chargeAICredit();
     return NextResponse.json(coverLetterData);
   } catch (error) {
     if (error instanceof AIConfigError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
     }
     console.error('POST /api/ai/cover-letter error:', error);
     return NextResponse.json({ error: 'Failed to generate cover letter' }, { status: 500 });

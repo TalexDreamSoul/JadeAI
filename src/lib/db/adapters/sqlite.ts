@@ -88,6 +88,45 @@ export class SQLiteAdapter implements DatabaseAdapter {
         this.sqlite.prepare('ALTER TABLE grammar_checks ADD COLUMN error text').run();
       }
 
+      this.sqlite.prepare(`CREATE TABLE IF NOT EXISTS interview_question_favorites (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id text NOT NULL REFERENCES interview_question_banks(id) ON DELETE CASCADE,
+        question_id text NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+        source text NOT NULL DEFAULT 'manual',
+        metadata text DEFAULT '{}',
+        created_at integer NOT NULL DEFAULT (unixepoch())
+      )`).run();
+      this.sqlite.prepare(`CREATE TABLE IF NOT EXISTS interview_question_practice_attempts (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id text NOT NULL REFERENCES interview_question_banks(id) ON DELETE CASCADE,
+        question_id text NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+        answer text NOT NULL DEFAULT '',
+        score integer NOT NULL DEFAULT 0,
+        max_score integer NOT NULL DEFAULT 100,
+        is_correct integer NOT NULL DEFAULT 0,
+        feedback text NOT NULL DEFAULT '',
+        rubric_result text DEFAULT '{}',
+        metadata text DEFAULT '{}',
+        created_at integer NOT NULL DEFAULT (unixepoch())
+      )`).run();
+      this.sqlite.prepare(`CREATE TABLE IF NOT EXISTS interview_question_stats (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id text NOT NULL REFERENCES interview_question_banks(id) ON DELETE CASCADE,
+        question_id text NOT NULL REFERENCES interview_questions(id) ON DELETE CASCADE,
+        attempt_count integer NOT NULL DEFAULT 0,
+        correct_count integer NOT NULL DEFAULT 0,
+        wrong_count integer NOT NULL DEFAULT 0,
+        best_score integer NOT NULL DEFAULT 0,
+        last_score integer NOT NULL DEFAULT 0,
+        mastered integer NOT NULL DEFAULT 0,
+        last_attempt_at integer,
+        created_at integer NOT NULL DEFAULT (unixepoch()),
+        updated_at integer NOT NULL DEFAULT (unixepoch())
+      )`).run();
+
       const row = this.sqlite.prepare('SELECT count(*) as count FROM users').get() as { count?: number } | undefined;
       if (row?.count === 0) {
         const { seedDemoUser } = await import('../seed-demo');

@@ -4,8 +4,29 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { getModel, getProviderOptions, type AIConfig } from '@/lib/ai/provider';
 import { jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
 import { extractJson } from '@/lib/ai/extract-json';
+import { withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
+import type { ResumeSection } from '@/types/resume';
 
-export function createExecutableTools(resumeId: string, aiConfig: AIConfig) {
+type LooseRecord = Record<string, unknown>;
+type LooseItem = LooseRecord & { id?: string };
+
+function isRecord(value: unknown): value is LooseRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function recordItems(value: unknown) {
+  return isRecord(value) && Array.isArray(value.items) ? value.items : null;
+}
+
+function withIds(value: unknown[]) {
+  return value.map((item) => (
+    isRecord(item) && !item.id
+      ? { ...item, id: crypto.randomUUID() }
+      : item
+  ));
+}
+
+export function createExecutableTools(resumeId: string, aiConfig: AIConfig, userId?: string | null) {
   return {
     updateSection: tool({
       description: `Update the content of a specific resume section. Section content structures:
@@ -29,7 +50,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         const resume = await resumeRepository.findById(resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
-        const section = resume.sections.find((s: any) => s.id === sectionId);
+        const section = (resume.sections as ResumeSection[]).find((s) => s.id === sectionId);
         if (!section) return { success: false, error: 'Section not found' };
 
         let parsedValue: unknown = value;
@@ -49,8 +70,9 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
             parsedValue = [{ id: crypto.randomUUID(), title: '', description: parsedValue }];
           } else if (!Array.isArray(parsedValue)) {
             // If it's an object with items inside, extract them
-            if (Array.isArray((parsedValue as any)?.items)) {
-              parsedValue = (parsedValue as any).items;
+            const items = recordItems(parsedValue);
+            if (items) {
+              parsedValue = items;
             }
           }
           actualField = section.type === 'skills' ? 'categories' : 'items';
@@ -66,26 +88,27 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
 
         // Ensure items/categories always have id fields
         if (Array.isArray(parsedValue)) {
-          parsedValue = (parsedValue as any[]).map((item) =>
-            typeof item === 'object' && item !== null && !item.id
-              ? { ...item, id: crypto.randomUUID() }
-              : item
-          );
+          parsedValue = withIds(parsedValue);
         }
 
         // GitHub sections: protect read-only fields for existing items, auto-fetch for new items
         if (section.type === 'github' && actualField === 'items' && Array.isArray(parsedValue)) {
-          const existingItems = ((section.content as any)?.items || []) as any[];
-          const readonlyMap = new Map(existingItems.map((it: any) => [it.id, { stars: it.stars, name: it.name, repoUrl: it.repoUrl, language: it.language }]));
-          parsedValue = await Promise.all((parsedValue as any[]).map(async (item: any) => {
+          const existingItems = recordItems(section.content) || [];
+          const readonlyMap = new Map(existingItems.filter(isRecord).map((it) => [
+            String(it.id || ''),
+            { stars: it.stars, name: it.name, repoUrl: it.repoUrl, language: it.language },
+          ]));
+          parsedValue = await Promise.all((parsedValue as unknown[]).map(async (rawItem) => {
+            const item = isRecord(rawItem) ? rawItem as LooseItem : { id: crypto.randomUUID(), description: String(rawItem) };
             // Existing item: restore read-only fields
             if (item.id && readonlyMap.has(item.id)) {
               return { ...item, ...readonlyMap.get(item.id) };
             }
             // New item with repoUrl: fetch real data from GitHub API
-            if (item.repoUrl && /github\.com\/[^/]+\/[^/]+/.test(item.repoUrl)) {
+            const repoUrl = typeof item.repoUrl === 'string' ? item.repoUrl : '';
+            if (repoUrl && /github\.com\/[^/]+\/[^/]+/.test(repoUrl)) {
               try {
-                const match = item.repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+                const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
                 if (match) {
                   const repoName = match[2].replace(/\.git$/, '');
                   const ghRes = await fetch(`https://api.github.com/repos/${match[1]}/${repoName}`, {
@@ -102,7 +125,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
           }));
         }
 
-        const updatedContent = { ...(section.content as Record<string, unknown>), [actualField]: parsedValue };
+        const updatedContent = { ...(section.content as unknown as Record<string, unknown>), [actualField]: parsedValue };
         await resumeRepository.updateSection(sectionId, { content: updatedContent });
 
         return { success: true, sectionType: section.type, field: actualField, updatedContent };
@@ -120,7 +143,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         const resume = await resumeRepository.findById(resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
-        const maxOrder = resume.sections.reduce((max: number, s: any) => Math.max(max, s.sortOrder), -1);
+        const maxOrder = (resume.sections as ResumeSection[]).reduce((max, s) => Math.max(max, s.sortOrder), -1);
 
         let parsedContent: unknown = {};
         if (content) {
@@ -156,10 +179,10 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         const resume = await resumeRepository.findById(resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
-        const section = resume.sections.find((s: any) => s.id === sectionId);
+        const section = (resume.sections as ResumeSection[]).find((s) => s.id === sectionId);
         if (!section) return { success: false, error: 'Section not found' };
 
-        const updatedContent = { ...(section.content as Record<string, unknown>), [field]: improvedText };
+        const updatedContent = { ...(section.content as unknown as Record<string, unknown>), [field]: improvedText };
         await resumeRepository.updateSection(sectionId, { content: updatedContent });
 
         return { success: true, sectionType: section.type, field, improvedText };
@@ -176,7 +199,7 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         const resume = await resumeRepository.findById(resumeId);
         if (!resume) return { success: false, error: 'Resume not found' };
 
-        const skillsSection = resume.sections.find((s: any) => s.type === 'skills');
+        const skillsSection = (resume.sections as ResumeSection[]).find((s) => s.type === 'skills');
         if (!skillsSection) return { success: false, error: 'Skills section not found' };
 
         const content = skillsSection.content as { categories?: { id: string; name: string; skills: string[] }[] };
@@ -208,17 +231,29 @@ Use field="items" or field="categories" to update list sections. Each item MUST 
         const model = getModel(aiConfig);
         const resumeContext = JSON.stringify(resume.sections);
 
-        const result = await generateText({
-          model,
-          maxOutputTokens: 8192,
-          system: `You are an expert resume analyst. Analyze the match between the resume and job description. Be specific and actionable.
+        const analysis = await withMeteredAIUsage({
+          userId,
+          aiConfig,
+          feature: 'resume.chat_tool.jd_analysis',
+          credits: 2,
+          metadata: { resumeId, jdLength: jobDescription.length },
+          run: async () => {
+            const result = await generateText({
+              model,
+              maxOutputTokens: 8192,
+              system: `You are an expert resume analyst. Analyze the match between the resume and job description. Be specific and actionable.
 CRITICAL: You are a JSON API. Your entire response must be a single valid JSON object starting with { and ending with }. Do NOT use markdown syntax. Do NOT wrap in code fences.`,
-          prompt: `## Resume Data\n${resumeContext}\n\n## Job Description\n${jobDescription}\n\nReturn a JSON object with: overallScore (0-100), keywordMatches (string[]), missingKeywords (string[]), suggestions ([{section, current, suggested}]), applicableSuggestions ([{sectionType, targetField, current, suggested, reason, evidenceRequired}]), atsScore (0-100), summary (string).`,
-          providerOptions: getProviderOptions(aiConfig),
-          output: Output.json(),
+              prompt: `## Resume Data\n${resumeContext}\n\n## Job Description\n${jobDescription}\n\nReturn a JSON object with: overallScore (0-100), keywordMatches (string[]), missingKeywords (string[]), suggestions ([{section, current, suggested}]), applicableSuggestions ([{sectionType, targetField, current, suggested, reason, evidenceRequired}]), atsScore (0-100), summary (string).`,
+              providerOptions: getProviderOptions(aiConfig),
+              output: Output.json(),
+            });
+            return {
+              value: extractJson(result.text, jdAnalysisOutputSchema),
+              usage: result.usage,
+              metadata: { resumeId, jdLength: jobDescription.length },
+            };
+          },
         });
-
-        const analysis = extractJson(result.text, jdAnalysisOutputSchema);
         return { success: true, analysis };
       },
     }),
@@ -238,11 +273,11 @@ CRITICAL: You are a JSON API. Your entire response must be a single valid JSON o
         const singleSectionSchema = z.object({
           sectionId: z.string(),
           title: z.string(),
-          content: z.any(),
+          content: z.unknown(),
         });
 
         // Translate each section concurrently (max 4 at a time)
-        const sections = resume.sections.map((s: any) => ({
+        const sections = (resume.sections as ResumeSection[]).map((s) => ({
           sectionId: s.id,
           type: s.type,
           title: s.title,
@@ -253,24 +288,35 @@ CRITICAL: You are a JSON API. Your entire response must be a single valid JSON o
         let succeeded = 0;
         let failed = 0;
 
-        const translateOne = async (section: typeof sections[number]) => {
-          const result = await generateText({
-            model,
-            maxOutputTokens: 4096,
-            system: `You are a professional resume translator. Translate the given resume section into ${langName}.
+        const translateOne = async (section: typeof sections[number]) => withMeteredAIUsage({
+          userId,
+          aiConfig,
+          feature: 'resume.chat_tool.translate_section',
+          credits: 1,
+          metadata: { resumeId, targetLanguage, sectionId: section.sectionId, sectionType: section.type },
+          run: async () => {
+            const result = await generateText({
+              model,
+              maxOutputTokens: 4096,
+              system: `You are a professional resume translator. Translate the given resume section into ${langName}.
 Rules:
 - Use professional, formal ${langName} appropriate for resumes
 - Technical terms and programming languages stay in English
 - Preserve the exact JSON structure and all field names — only translate string values
 - Keep all IDs, URLs, emails, phone numbers unchanged
 - CRITICAL: Return a single valid JSON object with keys: sectionId, title, content. No markdown, no code fences.`,
-            prompt: `Translate this resume section. Return JSON with keys: sectionId, title, content.\n\n${JSON.stringify(section)}`,
-            providerOptions: getProviderOptions(aiConfig),
-            output: Output.json(),
-          });
+              prompt: `Translate this resume section. Return JSON with keys: sectionId, title, content.\n\n${JSON.stringify(section)}`,
+              providerOptions: getProviderOptions(aiConfig),
+              output: Output.json(),
+            });
 
-          return extractJson(result.text, singleSectionSchema);
-        };
+            return {
+              value: extractJson(result.text, singleSectionSchema),
+              usage: result.usage,
+              metadata: { resumeId, targetLanguage, sectionId: section.sectionId, sectionType: section.type },
+            };
+          },
+        });
 
         // Run with concurrency limit
         const results: ({ ok: true; data: z.infer<typeof singleSectionSchema> } | { ok: false; error: unknown })[] = new Array(sections.length);

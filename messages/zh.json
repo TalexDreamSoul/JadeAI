@@ -1295,7 +1295,30 @@
     "role": "角色",
     "authType": "登录方式",
     "aiCredits": "AI 额度",
-    "createdAt": "创建时间"
+    "aiCreditBalance": "AI 钱包余额",
+    "createdAt": "创建时间",
+    "commerce": "商业化",
+    "products": "商品管理",
+    "orders": "订单",
+    "redeemCodes": "兑换码",
+    "growth": "增长",
+    "noProducts": "暂无商品",
+    "noOrders": "暂无订单",
+    "orderItems": "商品明细",
+    "payments": "支付记录",
+    "paidAt": "支付时间",
+    "fulfilledAt": "履约时间",
+    "redeemCode": "兑换码",
+    "maxClaims": "最大领取次数",
+    "benefitJson": "福利配置 JSON",
+    "createRedeemCode": "创建兑换码",
+    "redeemJsonInvalid": "福利配置 JSON 格式不正确",
+    "referrals": "推广关系",
+    "lotteryCampaigns": "抽奖活动",
+    "lotteryDraws": "抽奖记录"
+  },
+  "account": {
+    "nav": "商业中心"
   },
   "aiReview": {
     "title": "AI Review",
@@ -1475,6 +1498,7 @@
     "markAllRead": "全部已读",
     "browserNotifications": "浏览器通知",
     "empty": "暂无通知",
-    "defaultBody": "你有一条新的 TouchResume 通知"
+    "defaultBody": "你有一条新的 TouchResume 通知",
+    "view": "查看"
   }
 }

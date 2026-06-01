@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
 import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
 import { sanitizeResumeForShare } from '@/lib/share/review';
 import { hashPassword } from '@/lib/utils/share';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 const JD_ANALYSIS_PROMPT = `You are an expert resume analyst and career coach. Analyze the match between the provided resume and job description.
 
@@ -59,22 +59,35 @@ export async function POST(
     const resume = sanitizeResumeForShare(rawResume, !!result.share!.hideSensitiveInfo);
 
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
-    const { data: analysis } = await generateJsonWithRetry({
-      label: 'shared-jd-analysis',
-      model: getModel(aiConfig),
-      schema: jdAnalysisOutputSchema,
-      maxOutputTokens: 8192,
-      system: JD_ANALYSIS_PROMPT,
-      prompt: `Resume:\n${JSON.stringify(resume.sections)}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
-      providerOptions: getProviderOptions(aiConfig),
+    const analysis = await withMeteredAIUsage({
+      userId: user?.id,
+      aiConfig,
+      feature: 'share.jd_analysis',
+      metadata: { token, resumeId: result.share!.resumeId, jdLength: jobDescription.length },
+      run: async () => {
+        const { data, usage } = await generateJsonWithRetry({
+          label: 'shared-jd-analysis',
+          model: getModel(aiConfig),
+          schema: jdAnalysisOutputSchema,
+          maxOutputTokens: 8192,
+          system: JD_ANALYSIS_PROMPT,
+          prompt: `Resume:\n${JSON.stringify(resume.sections)}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
+          providerOptions: getProviderOptions(aiConfig),
+        });
+        return {
+          value: data,
+          usage,
+          metadata: { token, resumeId: result.share!.resumeId, jdLength: jobDescription.length },
+        };
+      },
     });
-
-    await chargeAICredit();
     return NextResponse.json(analysis);
   } catch (error) {
     if (error instanceof AIConfigError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
     }
     console.error('POST /api/share/[token]/jd-analysis error:', error);
     return NextResponse.json({ error: getAIJsonErrorMessage(error, 'Failed to analyze job description match') }, { status: 500 });

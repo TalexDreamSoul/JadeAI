@@ -71,6 +71,20 @@
       "when": 1780000002000,
       "tag": "0009_jd_version_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780217803434,
+      "tag": "0010_exotic_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780232000000,
+      "tag": "0011_interview_question_practice",
+      "breakpoints": true
     }
   ]
 }

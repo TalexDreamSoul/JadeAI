@@ -1,8 +1,14 @@
-import { and, desc, eq, gt, sql } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '../index';
 import { users, resumes } from '../schema';
 import { resumeRepository } from './resume.repository';
 import { createSampleResume } from '../sample-resume';
+import { ensureUserCommercialDefaults } from '@/lib/commercial/bootstrap';
+import type { AIConfig } from '@/lib/ai/provider';
+import { WALLET_CURRENCY_AI_CREDIT } from '@/lib/commercial/catalog';
+import { chargeLegacyCompatibleAIUsage, reserveAIUsage } from '@/lib/commercial/ai-metering-service';
+import { syncLegacyAICredits, walletRepository } from './commercial.repository';
+import type { AIUsageReservation } from '@/lib/commercial/ai-metering-service';
 
 function normalizeSettings(settings: unknown): Record<string, unknown> {
   if (!settings) return {};
@@ -79,6 +85,7 @@ export const userRepository = {
       await createSampleResume(id);
     }
 
+    await ensureUserCommercialDefaults(id, 0).catch(() => null);
     return this.findById(id);
   },
 
@@ -94,25 +101,104 @@ export const userRepository = {
   }) {
     const id = data.id || crypto.randomUUID();
     await db.insert(users).values({ ...data, id });
+    await ensureUserCommercialDefaults(id, 0).catch(() => null);
     return this.findById(id);
   },
 
   async update(id: string, data: Partial<{ name: string; avatarUrl: string; role: 'user' | 'admin'; aiCredits: number }>) {
-    await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
+    const existing = await this.findById(id);
+    if (!existing) return null;
+
+    const { aiCredits, ...profilePatch } = data;
+    await db.update(users).set({ ...profilePatch, updatedAt: new Date() }).where(eq(users.id, id));
+    if (aiCredits !== undefined) {
+      await this.setAICredits(id, aiCredits, 'admin_adjust');
+    }
     return this.findById(id);
   },
 
-  async consumeAICredit(id: string): Promise<boolean> {
+  async setAICredits(id: string, aiCredits: number, source = 'manual_adjust') {
+    const nextBalance = Math.max(0, Math.floor(Number(aiCredits) || 0));
+    await ensureUserCommercialDefaults(id, 0);
+    const account = await walletRepository.ensureAccount(id, WALLET_CURRENCY_AI_CREDIT);
+    const currentBalance = Number(account?.balance || 0);
+    const delta = nextBalance - currentBalance;
+    if (delta > 0) {
+      await walletRepository.credit({
+        userId: id,
+        currency: WALLET_CURRENCY_AI_CREDIT,
+        amount: delta,
+        source,
+        sourceId: crypto.randomUUID(),
+        description: '管理员调整 AI 点数',
+        metadata: { previousBalance: currentBalance, nextBalance },
+      });
+    } else if (delta < 0) {
+      await walletRepository.debit({
+        userId: id,
+        currency: WALLET_CURRENCY_AI_CREDIT,
+        amount: Math.abs(delta),
+        source,
+        sourceId: crypto.randomUUID(),
+        description: '管理员调整 AI 点数',
+        metadata: { previousBalance: currentBalance, nextBalance },
+      });
+    }
+    await syncLegacyAICredits(id, nextBalance);
+    return walletRepository.findAccount(id, WALLET_CURRENCY_AI_CREDIT);
+  },
+
+  async consumeAICredit(id: string, usage?: {
+    feature?: string;
+    aiConfig?: Pick<AIConfig, 'provider' | 'model' | 'mode'>;
+    credits?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    metadata?: Record<string, unknown>;
+  }): Promise<boolean> {
     const user = await this.findById(id);
     if (!user || user.role === 'admin') return !!user;
 
-    const result = await db.update(users)
-      .set({ aiCredits: sql`${users.aiCredits} - 1`, updatedAt: new Date() })
-      .where(and(eq(users.id, id), gt(users.aiCredits, 0)));
+    return chargeLegacyCompatibleAIUsage({
+      userId: id,
+      feature: usage?.feature || 'legacy_ai_call',
+      aiConfig: usage?.aiConfig,
+      credits: usage?.credits,
+      promptTokens: usage?.promptTokens,
+      completionTokens: usage?.completionTokens,
+      totalTokens: usage?.totalTokens,
+      metadata: usage?.metadata,
+      legacyAiCredits: Number(user.aiCredits || 0),
+    });
+  },
 
-    const outcome = result as { changes?: number; rowCount?: number; count?: number | string | bigint };
-    const changes = Number(outcome.changes ?? outcome.rowCount ?? outcome.count ?? 0);
-    return changes > 0;
+  async reserveAICredit(id: string, usage?: {
+    feature?: string;
+    aiConfig?: Pick<AIConfig, 'provider' | 'model' | 'mode'>;
+    credits?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ ok: true; reservation: AIUsageReservation | null } | { ok: false; error: string }> {
+    const user = await this.findById(id);
+    if (!user) return { ok: false, error: 'User not found' };
+    if (user.role === 'admin') return { ok: true, reservation: null };
+
+    const reservation = await reserveAIUsage({
+      userId: id,
+      feature: usage?.feature || 'legacy_ai_call',
+      aiConfig: usage?.aiConfig,
+      credits: usage?.credits,
+      promptTokens: usage?.promptTokens,
+      completionTokens: usage?.completionTokens,
+      totalTokens: usage?.totalTokens,
+      metadata: usage?.metadata,
+      legacyAiCredits: Number(user.aiCredits || 0),
+    });
+    if (!reservation) return { ok: false, error: 'AI credits exhausted' };
+    return { ok: true, reservation };
   },
 
   async getSettings(id: string) {

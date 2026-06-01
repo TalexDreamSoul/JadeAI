@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { generateText, Output, type LanguageModel } from 'ai';
+import { generateText, Output, type LanguageModel, type LanguageModelUsage } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError, type AIConfig } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
@@ -8,6 +8,12 @@ import { isLocalResumeId } from '@/lib/local-resumes';
 import { normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
 import { translateInputSchema } from '@/lib/ai/translate-schema';
 import { extractJson } from '@/lib/ai/extract-json';
+import { completeAIUsage, refundAIUsage } from '@/lib/commercial/ai-metering-service';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 import { z } from 'zod/v4';
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -35,6 +41,10 @@ const singleSectionSchema = z.object({
   title: z.string(),
   content: z.unknown(),
 });
+
+type TranslatedSectionResult = z.infer<typeof singleSectionSchema> & {
+  usage?: LanguageModelUsage;
+};
 
 type ResumeSectionRecord = {
   id: string;
@@ -75,7 +85,7 @@ async function translateSection(
     output: Output.json(),
   });
 
-  return extractJson(result.text, singleSectionSchema);
+  return { ...extractJson(result.text, singleSectionSchema), usage: result.usage };
 }
 
 /** Run async tasks with a concurrency limit */
@@ -148,6 +158,7 @@ export async function POST(request: NextRequest) {
     let newResumeId: string | undefined;
 
     if (mode === 'copy' && !localResume) {
+      await assertCanCreateResume(user!.id, Number(user!.aiCredits || 0));
       const newTitle = `${resume.title}-${LANGUAGE_NAMES[targetLanguage] || targetLanguage}`;
       const duplicated = await resumeRepository.duplicate(resumeId, user!.id, newTitle);
       if (!duplicated) {
@@ -198,9 +209,19 @@ export async function POST(request: NextRequest) {
     });
 
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
     const encoder = new TextEncoder();
+    const aiUsage = aiConfig.mode === 'server' && user
+      ? await userRepository.reserveAICredit(user.id, {
+        feature: 'resume.translate',
+        aiConfig,
+        metadata: { resumeId: targetResumeId, targetLanguage, sectionCount: sectionsData.length },
+      })
+      : { ok: true as const, reservation: null };
+
+    if (!aiUsage.ok) {
+      return new Response(JSON.stringify({ error: aiUsage.error }), { status: 402 });
+    }
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -215,10 +236,10 @@ export async function POST(request: NextRequest) {
         let completed = 0;
         const total = sectionsData.length;
         let failedCount = 0;
-        let results: PromiseSettledResult<z.infer<typeof singleSectionSchema>>[] = [];
+        let results: PromiseSettledResult<TranslatedSectionResult>[] = [];
 
         try {
-          results = await runWithConcurrency<typeof sectionsData[number], z.infer<typeof singleSectionSchema>>(
+          results = await runWithConcurrency<typeof sectionsData[number], TranslatedSectionResult>(
             sectionsData,
             MAX_CONCURRENCY,
             async (section) => {
@@ -263,13 +284,35 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // Update resume language for cloud resumes. Local resumes are updated client-side.
-          if (!localResume) {
-            await resumeRepository.update(targetResumeId, { language: targetLanguage });
+          if (failedCount === total) {
+            const error = new Error('All sections failed to translate');
+            await refundAIUsage(aiUsage.reservation, error, {
+              resumeId: targetResumeId,
+              targetLanguage,
+              sectionCount: sectionsData.length,
+              failedCount,
+            }).catch((refundError) => console.error('[ai-metering] translate refund failed:', refundError));
+            send({ type: 'error', error: error.message, failedCount, total });
+          } else {
+            // Update resume language for cloud resumes. Local resumes are updated client-side.
+            if (!localResume) {
+              await resumeRepository.update(targetResumeId, { language: targetLanguage });
+            }
+            if (aiUsage.reservation) {
+              const usage = results
+                .filter((result): result is PromiseFulfilledResult<TranslatedSectionResult> => result.status === 'fulfilled')
+                .reduce((sum, result) => ({
+                  inputTokens: (sum.inputTokens || 0) + (result.value.usage?.inputTokens || 0),
+                  outputTokens: (sum.outputTokens || 0) + (result.value.usage?.outputTokens || 0),
+                  totalTokens: (sum.totalTokens || 0) + (result.value.usage?.totalTokens || 0),
+                }), { inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+              await completeAIUsage(aiUsage.reservation, usage, { resumeId: targetResumeId, targetLanguage, sectionCount: sectionsData.length, failedCount });
+            }
           }
-          await chargeAICredit();
         } catch (err) {
           console.error('Unexpected error during translation:', err);
+          await refundAIUsage(aiUsage.reservation, err, { resumeId: targetResumeId, targetLanguage, sectionCount: sectionsData.length })
+            .catch((refundError) => console.error('[ai-metering] translate refund failed:', refundError));
         }
 
         // Always send done and close — even if something above threw
@@ -277,7 +320,7 @@ export async function POST(request: NextRequest) {
           if (localResume) {
             const translatedById = new Map(
               results
-                .filter((result): result is PromiseFulfilledResult<z.infer<typeof singleSectionSchema>> => result.status === 'fulfilled')
+                .filter((result): result is PromiseFulfilledResult<TranslatedSectionResult> => result.status === 'fulfilled')
                 .map((result) => [result.value.sectionId, result.value])
             );
             const localSections = (resume.sections as ResumeSectionRecord[]).map((section) => {
@@ -332,6 +375,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof AIConfigError) {
       return new Response(JSON.stringify({ error: error.message }), { status: 401 });
+    }
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
     }
     console.error('POST /api/ai/translate error:', error);
     return new Response(JSON.stringify({ error: 'Failed to translate resume' }), { status: 500 });

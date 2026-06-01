@@ -5,6 +5,11 @@ import { generatePdf } from '@/lib/pdf/generate-pdf';
 import { generateHtml } from './builders';
 import { generatePlainText } from './plain-text';
 import { generateDocxBuffer } from './docx';
+import {
+  assertCanExportResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 // Chromium download + PDF render needs more time on Vercel serverless
 export const maxDuration = 60;
@@ -30,6 +35,7 @@ export async function GET(
     }
 
     const format = request.nextUrl.searchParams.get('format') || 'json';
+    await assertCanExportResume(user.id, format, Number(user.aiCredits || 0));
     const title = resume.title || 'resume';
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -89,6 +95,9 @@ export async function GET(
       }
     }
   } catch (error) {
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
+    }
     console.error('GET /api/resume/[id]/export error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

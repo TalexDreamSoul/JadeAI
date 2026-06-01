@@ -8,6 +8,7 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { buildInterviewSystemPrompt } from '@/lib/ai/interview-prompts';
 import { dbReady } from '@/lib/db';
 import type { InterviewerConfig } from '@/types/interview';
+import { completeAIUsage, refundAIUsage } from '@/lib/commercial/ai-metering-service';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -63,7 +64,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig, modelId);
     const modelMessages = await convertToModelMessages(messages);
 
@@ -81,41 +81,77 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       locale,
     });
 
-    const result = streamText({
-      model,
-      system: systemPrompt,
-      messages: modelMessages,
-      providerOptions: getProviderOptions(aiConfig),
-      onFinish: async ({ text }) => {
-        if (!text) return;
-        await chargeAICredit();
+    const aiUsage = aiConfig.mode === 'server'
+      ? await userRepository.reserveAICredit(user.id, {
+        feature: 'interview.chat',
+        aiConfig: { ...aiConfig, model: modelId || aiConfig.model },
+        metadata: { sessionId, roundId, interviewerType: round.interviewerType },
+      })
+      : { ok: true as const, reservation: null };
 
-        await interviewRepository.addMessage({
-          roundId,
-          role: 'interviewer',
-          content: text,
-        });
+    if (!aiUsage.ok) {
+      return new Response(JSON.stringify({ error: aiUsage.error }), { status: 402 });
+    }
 
-        await interviewRepository.incrementQuestionCount(roundId);
+    let settledUsage = false;
+    const refundOnce = async (error: unknown) => {
+      if (settledUsage) return;
+      settledUsage = true;
+      await refundAIUsage(aiUsage.reservation, error, { sessionId, roundId, interviewerType: round.interviewerType })
+        .catch((refundError) => console.error('[ai-metering] interview chat refund failed:', refundError));
+    };
 
-        if (text.includes('[ROUND_COMPLETE]')) {
-          await interviewRepository.setRoundSummary(roundId, {
-            score: 0,
-            feedback: text.replace('[ROUND_COMPLETE]', '').trim(),
+    const result = await (async () => {
+      try {
+        return streamText({
+        model,
+        system: systemPrompt,
+        messages: modelMessages,
+        providerOptions: getProviderOptions(aiConfig),
+        onFinish: async ({ text, usage }) => {
+          if (!settledUsage) {
+            settledUsage = true;
+            await completeAIUsage(aiUsage.reservation, usage, { sessionId, roundId, interviewerType: round.interviewerType });
+          }
+          if (!text) return;
+
+          await interviewRepository.addMessage({
+            roundId,
+            role: 'interviewer',
+            content: text,
           });
 
-          const rounds = await interviewRepository.findRoundsBySessionId(sessionId);
-          const currentIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
-          const nextRound = rounds[currentIndex + 1];
+          await interviewRepository.incrementQuestionCount(roundId);
 
-          if (nextRound) {
-            await interviewRepository.updateSessionRound(sessionId, currentIndex + 1);
-          } else {
-            await interviewRepository.updateSessionStatus(sessionId, 'completed');
+          if (text.includes('[ROUND_COMPLETE]')) {
+            await interviewRepository.setRoundSummary(roundId, {
+              score: 0,
+              feedback: text.replace('[ROUND_COMPLETE]', '').trim(),
+            });
+
+            const rounds = await interviewRepository.findRoundsBySessionId(sessionId);
+            const currentIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
+            const nextRound = rounds[currentIndex + 1];
+
+            if (nextRound) {
+              await interviewRepository.updateSessionRound(sessionId, currentIndex + 1);
+            } else {
+              await interviewRepository.updateSessionStatus(sessionId, 'completed');
+            }
           }
-        }
-      },
-    });
+        },
+        onError: async ({ error }) => {
+          await refundOnce(error);
+        },
+        onAbort: async () => {
+          await refundOnce(new Error('AI stream aborted'));
+        },
+        });
+      } catch (error) {
+        await refundOnce(error);
+        throw error;
+      }
+    })();
 
     return result.toUIMessageStreamResponse();
   } catch (error) {

@@ -1,4 +1,4 @@
-import { desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 import { db } from '../index';
 import { templateMarketItems } from '../schema';
 
@@ -18,6 +18,43 @@ export const templateMarketRepository = {
   async findById(id: string) {
     const rows = await db.select().from(templateMarketItems).where(eq(templateMarketItems.id, id)).limit(1);
     return rows[0] ?? null;
+  },
+
+  async findByOwnerAndName(ownerUserId: string, name: string) {
+    const rows = await db
+      .select()
+      .from(templateMarketItems)
+      .where(and(eq(templateMarketItems.ownerUserId, ownerUserId), eq(templateMarketItems.name, name)))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  async upsertSystemTemplate(data: {
+    ownerUserId: string;
+    name: string;
+    description?: string;
+    baseTemplate?: string;
+    themeConfig?: unknown;
+    customCss?: string;
+    isPublic?: boolean;
+  }) {
+    const existing = await this.findByOwnerAndName(data.ownerUserId, data.name);
+    if (existing) {
+      await db
+        .update(templateMarketItems)
+        .set({
+          description: data.description || existing.description,
+          baseTemplate: data.baseTemplate || existing.baseTemplate,
+          themeConfig: data.themeConfig || existing.themeConfig || {},
+          customCss: data.customCss ?? existing.customCss,
+          isPublic: data.isPublic ?? existing.isPublic,
+          updatedAt: new Date(),
+        })
+        .where(eq(templateMarketItems.id, existing.id));
+      return this.findById(existing.id);
+    }
+
+    return this.create(data);
   },
 
   async create(data: {

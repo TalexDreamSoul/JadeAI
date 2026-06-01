@@ -50,6 +50,7 @@ import { useFingerprint } from '@/hooks/use-fingerprint';
 import { Link, useRouter } from '@/i18n/routing';
 import { getAIHeaders } from '@/stores/settings-store';
 import { useEditorStore } from '@/stores/editor-store';
+import { purchaseProductWithMockPayment } from '@/lib/commercial/client-payments';
 import type { Resume } from '@/types/resume';
 import { InterviewLobby } from '@/components/interview/interview-lobby';
 import KnowledgePage from '@/app/[locale]/knowledge/page';
@@ -78,6 +79,21 @@ type JobTemplate = {
   recommendedSections: string[];
   scope?: 'public' | 'personal';
   enabled?: boolean;
+  builtin?: boolean;
+  purchased?: boolean;
+  locked?: boolean;
+  canUseMonthlyFreeDownload?: boolean;
+  freeDownloads?: {
+    limit: number;
+    used: number;
+    remaining: number;
+  } | null;
+  product?: {
+    id: string;
+    name: string;
+    priceCents: number;
+    currency: string;
+  } | null;
 };
 
 type MemoryItem = {
@@ -175,6 +191,14 @@ function scoreTone(score?: number) {
   if (score >= 75) return 'text-emerald-600 dark:text-emerald-400';
   if (score >= 55) return 'text-amber-600 dark:text-amber-400';
   return 'text-red-600 dark:text-red-400';
+}
+
+function money(cents: number, currency = 'CNY') {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  }).format(Number(cents || 0) / 100);
 }
 
 type DiffPart = { value: string; type: 'same' | 'removed' | 'added' };
@@ -469,14 +493,90 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedResumeId]);
 
-  const applyTemplate = (roleKey: string) => {
+  const applyTemplate = async (roleKey: string) => {
     setSelectedTemplateKey(roleKey);
     const template = templates.find((item) => item.roleKey === roleKey);
     if (!template) return;
-    setJobTitle(template.title);
-    setJobDescription(template.jd);
+    let detail = template;
+
+    if (template.locked && template.product?.id && template.id) {
+      setBusy(`job-template-${template.id}`);
+      try {
+        await purchaseProductWithMockPayment({
+          productId: template.product.id,
+          headers: getHeaders(),
+          clientContext: { source: 'job_template', jobTemplateId: template.id },
+        });
+        await load();
+        toast.success('职位模板已解锁');
+      } catch (error) {
+        console.error(error);
+        toast.error('职位模板解锁失败');
+        setBusy(null);
+        return;
+      } finally {
+        setBusy(null);
+      }
+    }
+
+    if (!template.builtin && template.id) {
+      const detailRes = await fetch(`/api/career/job-templates/${template.id}`, { headers: getRequestHeaders() });
+      if (detailRes.status === 402) {
+        toast.error('请先解锁职位模板');
+        return;
+      }
+      if (!detailRes.ok) {
+        toast.error(t('loadFailed'));
+        return;
+      }
+      detail = await detailRes.json();
+    }
+
+    setJobTitle(detail.title);
+    setJobDescription(detail.jd);
+    setTemplates((current) => current.map((item) => item.roleKey === roleKey ? { ...item, ...detail, purchased: true, locked: false } : item));
     setAnalysis(null);
     setAppliedSuggestions({});
+  };
+
+  const downloadSelectedJobTemplate = async () => {
+    if (!selectedTemplate?.id || selectedTemplate.builtin) return;
+    setBusy(`job-template-download-${selectedTemplate.id}`);
+    try {
+      if (selectedTemplate.locked && selectedTemplate.product?.id) {
+        await purchaseProductWithMockPayment({
+          productId: selectedTemplate.product.id,
+          headers: getHeaders(),
+          clientContext: { source: 'job_template_download', jobTemplateId: selectedTemplate.id },
+        });
+        await load();
+      }
+
+      const res = await fetch(`/api/career/job-templates/${selectedTemplate.id}/download?format=md`, {
+        headers: getRequestHeaders(),
+      });
+      if (res.status === 402) {
+        toast.error('请先解锁职位模板');
+        return;
+      }
+      if (!res.ok) throw new Error(await res.text());
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedTemplate.title || 'job-template'}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('职位模板已下载');
+    } catch (error) {
+      console.error(error);
+      toast.error('职位模板下载失败');
+    } finally {
+      setBusy(null);
+    }
   };
 
   const loadHistoryDetail = async (item: JdHistoryItem) => {
@@ -808,13 +908,13 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
           interviewers,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(data.error || t('interviewFailed')));
       toast.success(t('interviewCreated'));
       router.push(`/interview/${data.session.id}`);
     } catch (error) {
       console.error(error);
-      toast.error(t('interviewFailed'));
+      toast.error(error instanceof Error ? error.message : t('interviewFailed'));
     } finally {
       setBusy(null);
     }
@@ -1182,21 +1282,40 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
               <DialogDescription>{t('jdDialogDescription')}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-3">
-              <div className="space-y-2">
-                <Label>{t('templateLibrary')}</Label>
-                <Select value={selectedTemplateKey} onValueChange={applyTemplate}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t('selectTemplate')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates.map((template) => (
-                      <SelectItem key={template.roleKey} value={template.roleKey}>
-                        {template.title} · {template.industry} · {template.scope === 'personal' ? t('personalTemplate') : t('publicTemplate')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+	              <div className="space-y-2">
+	                <div className="flex items-center justify-between gap-3">
+	                  <Label>{t('templateLibrary')}</Label>
+	                  {selectedTemplate && !selectedTemplate.builtin && (
+	                    <Button
+	                      type="button"
+	                      size="sm"
+	                      variant="outline"
+	                      onClick={downloadSelectedJobTemplate}
+	                      disabled={busy === `job-template-download-${selectedTemplate.id}`}
+	                      className="h-8 gap-2"
+	                    >
+	                      <FileText className="h-3.5 w-3.5" />
+	                      {selectedTemplate.locked && selectedTemplate.product
+	                        ? `解锁下载 ${money(selectedTemplate.product.priceCents, selectedTemplate.product.currency)}`
+	                        : '下载模板'}
+	                    </Button>
+	                  )}
+	                </div>
+	                <Select value={selectedTemplateKey} onValueChange={applyTemplate}>
+	                  <SelectTrigger className="w-full">
+	                    <SelectValue placeholder={t('selectTemplate')} />
+	                  </SelectTrigger>
+	                  <SelectContent>
+	                    {templates.map((template) => (
+	                      <SelectItem key={template.roleKey} value={template.roleKey}>
+	                        {template.title} · {template.industry} · {template.scope === 'personal' ? t('personalTemplate') : t('publicTemplate')}
+	                        {template.locked && template.product ? ` · 解锁 ${money(template.product.priceCents, template.product.currency)}` : ''}
+	                        {!template.locked && template.canUseMonthlyFreeDownload ? ` · 免费下载剩余 ${template.freeDownloads?.remaining ?? 0}` : ''}
+	                      </SelectItem>
+	                    ))}
+	                  </SelectContent>
+	                </Select>
+	              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>{t('jobTitle')}</Label>

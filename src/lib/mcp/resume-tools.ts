@@ -16,6 +16,7 @@ import { userRepository } from '../db/repositories/user.repository';
 import { generateJsonWithRetry } from '../ai/generate-json';
 import { getModel, getProviderOptions, type AIConfig } from '../ai/provider';
 import { textAnnotationSchema, type TextAnnotationResult } from '../ai/text-annotation-schema';
+import { withMeteredAIUsage } from '../commercial/ai-route-metering';
 import type { ResumeSection } from '../../types/resume';
 
 export type McpToolResult = {
@@ -540,13 +541,14 @@ function summarizeResumeDiff(before: unknown, after: unknown) {
 
 function getMcpAIConfig(args: Record<string, unknown>): AIConfig | null {
   const raw = optionalObjectArg(args, 'aiConfig');
+  const hasInlineApiKey = typeof raw.apiKey === 'string' && raw.apiKey.trim().length > 0;
   const provider = textOfValue(raw.provider || process.env.JADEAI_MCP_AI_PROVIDER || process.env.AI_PROVIDER || 'openai');
   const apiKey = textOfValue(raw.apiKey || process.env.JADEAI_MCP_AI_API_KEY || process.env.AI_API_KEY || '');
   const baseURL = textOfValue(raw.baseURL || raw.baseUrl || process.env.JADEAI_MCP_AI_BASE_URL || process.env.AI_BASE_URL || (provider === 'openai' ? 'https://api.openai.com/v1' : ''));
   const model = textOfValue(raw.model || process.env.JADEAI_MCP_AI_MODEL || process.env.AI_MODEL || '');
   const openAIEndpoint: AIConfig['openAIEndpoint'] = textOfValue(raw.openAIEndpoint || raw.openaiEndpoint || process.env.JADEAI_MCP_AI_OPENAI_ENDPOINT || process.env.AI_OPENAI_ENDPOINT || 'chat') === 'responses' ? 'responses' : 'chat';
   if (!apiKey || !model) return null;
-  return { provider, apiKey, baseURL, model, mode: 'custom', openAIEndpoint };
+  return { provider, apiKey, baseURL, model, mode: hasInlineApiKey ? 'custom' : 'server', openAIEndpoint };
 }
 
 function actionSuggestionsFromReadiness(readiness: Awaited<ReturnType<typeof analyzeResumeReadiness>>) {
@@ -1101,27 +1103,53 @@ async function analyzeTextSelection(args: Record<string, unknown>, context: Tool
 
   const aiConfig = getMcpAIConfig(args);
   if (aiConfig) {
-    const { data } = await generateJsonWithRetry({
-      label: 'mcp-text-annotation',
-      model: getModel(aiConfig),
-      schema: textAnnotationSchema,
-      system: `You are a senior resume reviewer and writing coach. Analyze the selected text precisely. Return JSON only. Use ${language === 'en' ? 'English' : 'Chinese'} unless the selected text strongly requires another language.`,
-      prompt: JSON.stringify({
-        selectedText: text,
-        focus,
-        criteria,
+    const data = await withMeteredAIUsage({
+      userId: user.id,
+      aiConfig,
+      feature: 'mcp.text_annotation',
+      credits: Math.max(1, Math.ceil(maxAnnotations / 4)),
+      metadata: {
+        resumeId: resume?.id || null,
+        sectionId: sectionId || null,
+        sectionType: sectionType || null,
+        textLength: text.length,
         maxAnnotations,
-        targetRole,
-        jobDescription: truncateText(jobDescription, 6000),
-        context: contextPack,
-        outputRules: [
-          'Each annotation should point to a concrete quote when possible.',
-          'Explain the issue, why it matters, and a specific rewrite or action.',
-          'Do not invent facts or metrics; mark evidence gaps explicitly.',
-        ],
-      }),
-      maxOutputTokens: 4096,
-      providerOptions: getProviderOptions(aiConfig),
+      },
+      run: async () => {
+        const { data, usage } = await generateJsonWithRetry({
+          label: 'mcp-text-annotation',
+          model: getModel(aiConfig),
+          schema: textAnnotationSchema,
+          system: `You are a senior resume reviewer and writing coach. Analyze the selected text precisely. Return JSON only. Use ${language === 'en' ? 'English' : 'Chinese'} unless the selected text strongly requires another language.`,
+          prompt: JSON.stringify({
+            selectedText: text,
+            focus,
+            criteria,
+            maxAnnotations,
+            targetRole,
+            jobDescription: truncateText(jobDescription, 6000),
+            context: contextPack,
+            outputRules: [
+              'Each annotation should point to a concrete quote when possible.',
+              'Explain the issue, why it matters, and a specific rewrite or action.',
+              'Do not invent facts or metrics; mark evidence gaps explicitly.',
+            ],
+          }),
+          maxOutputTokens: 4096,
+          providerOptions: getProviderOptions(aiConfig),
+        });
+        return {
+          value: data,
+          usage,
+          metadata: {
+            resumeId: resume?.id || null,
+            sectionId: sectionId || null,
+            sectionType: sectionType || null,
+            textLength: text.length,
+            annotationCount: data.annotations.length,
+          },
+        };
+      },
     });
     const annotations = normalizeTextAnnotations(data, sections, text, matchedSection).slice(0, maxAnnotations);
     return {

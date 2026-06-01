@@ -8,6 +8,11 @@ import { generatePdf } from '@/lib/pdf/generate-pdf';
 import { hashPassword } from '@/lib/utils/share';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { sanitizeResumeForShare } from '@/lib/share/review';
+import {
+  assertCanExportResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 export const maxDuration = 60;
 
@@ -23,9 +28,10 @@ export async function GET(
     const share = await shareRepository.findByToken(token);
     if (!share || !share.isActive) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!share.downloadEnabled) return NextResponse.json({ error: 'Download is disabled' }, { status: 403 });
+    let viewer = null;
     if (share.viewRequiresLogin) {
-      const user = await resolveUser(getUserIdFromRequest(request));
-      if (!user) return NextResponse.json({ error: 'Login required', loginRequired: true }, { status: 401 });
+      viewer = await resolveUser(getUserIdFromRequest(request));
+      if (!viewer) return NextResponse.json({ error: 'Login required', loginRequired: true }, { status: 401 });
     }
 
     if (share.password) {
@@ -37,6 +43,7 @@ export async function GET(
 
     const rawResume = await resumeRepository.findById(share.resumeId);
     if (!rawResume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    await assertCanExportResume(rawResume.userId, format);
     const resume = sanitizeResumeForShare(rawResume, !!share.hideSensitiveInfo);
 
     const filename = `${resume.title || 'resume'}-${token}`;
@@ -77,6 +84,9 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
+    }
     console.error('GET /api/share/[token]/download error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

@@ -299,6 +299,304 @@ export const grammarChecks = sqliteTable('grammar_checks', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
+export const membershipPlans = sqliteTable('membership_plans', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text('key').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  tier: integer('tier').notNull().default(0),
+  priceCents: integer('price_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  billingCycle: text('billing_cycle').notNull().default('month'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const planEntitlements = sqliteTable('plan_entitlements', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  planId: text('plan_id').notNull().references(() => membershipPlans.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  value: text('value', { mode: 'json' }).notNull().default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const userMemberships = sqliteTable('user_memberships', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  planId: text('plan_id').notNull().references(() => membershipPlans.id),
+  status: text('status').notNull().default('active'),
+  source: text('source').notNull().default('system'),
+  sourceId: text('source_id'),
+  currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }),
+  cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' }).notNull().default(false),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const products = sqliteTable('products', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  type: text('type').notNull(),
+  sku: text('sku').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  priceCents: integer('price_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  resourceType: text('resource_type'),
+  resourceId: text('resource_id'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const orders = sqliteTable('orders', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  orderNo: text('order_no').notNull().unique(),
+  status: text('status').notNull().default('pending_payment'),
+  totalCents: integer('total_cents').notNull().default(0),
+  payableCents: integer('payable_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  source: text('source').notNull().default('web'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  paidAt: integer('paid_at', { mode: 'timestamp' }),
+  fulfilledAt: integer('fulfilled_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const orderItems = sqliteTable('order_items', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  productId: text('product_id').notNull().references(() => products.id),
+  productType: text('product_type').notNull(),
+  resourceType: text('resource_type'),
+  resourceId: text('resource_id'),
+  name: text('name').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  unitPriceCents: integer('unit_price_cents').notNull().default(0),
+  totalCents: integer('total_cents').notNull().default(0),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const payments = sqliteTable('payments', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull().default('mock'),
+  providerTradeNo: text('provider_trade_no'),
+  status: text('status').notNull().default('succeeded'),
+  amountCents: integer('amount_cents').notNull().default(0),
+  currency: text('currency').notNull().default('CNY'),
+  rawPayload: text('raw_payload', { mode: 'json' }).default('{}'),
+  paidAt: integer('paid_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const userEntitlements = sqliteTable('user_entitlements', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  value: text('value', { mode: 'json' }).notNull().default('{}'),
+  resourceType: text('resource_type'),
+  resourceId: text('resource_id'),
+  source: text('source').notNull().default('system'),
+  sourceId: text('source_id'),
+  startsAt: integer('starts_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const walletAccounts = sqliteTable('wallet_accounts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  currency: text('currency').notNull(),
+  balance: integer('balance').notNull().default(0),
+  lockedBalance: integer('locked_balance').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const walletTransactions = sqliteTable('wallet_transactions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  accountId: text('account_id').notNull().references(() => walletAccounts.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  currency: text('currency').notNull(),
+  direction: text('direction').notNull(),
+  amount: integer('amount').notNull(),
+  balanceAfter: integer('balance_after').notNull(),
+  source: text('source').notNull(),
+  sourceId: text('source_id'),
+  description: text('description').notNull().default(''),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const aiUsageLogs = sqliteTable('ai_usage_logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  feature: text('feature').notNull(),
+  provider: text('provider'),
+  model: text('model'),
+  promptTokens: integer('prompt_tokens').notNull().default(0),
+  completionTokens: integer('completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
+  creditsCharged: integer('credits_charged').notNull().default(0),
+  walletTransactionId: text('wallet_transaction_id'),
+  status: text('status').notNull().default('success'),
+  error: text('error'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const notifications = sqliteTable('notifications', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  status: text('status').notNull().default('unread'),
+  actionUrl: text('action_url'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  readAt: integer('read_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const interviewQuestionBanks = sqliteTable('interview_question_banks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text('key').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  industry: text('industry').notNull().default(''),
+  role: text('role').notNull().default(''),
+  level: text('level').notNull().default('mid'),
+  companyType: text('company_type').notNull().default(''),
+  accessLevel: text('access_level').notNull().default('free'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const interviewQuestions = sqliteTable('interview_questions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  bankId: text('bank_id').notNull().references(() => interviewQuestionBanks.id, { onDelete: 'cascade' }),
+  dimension: text('dimension').notNull().default('general'),
+  difficulty: text('difficulty').notNull().default('medium'),
+  questionType: text('question_type').notNull().default('open'),
+  prompt: text('prompt').notNull(),
+  referenceAnswer: text('reference_answer').notNull().default(''),
+  rubric: text('rubric', { mode: 'json' }).notNull().default('{}'),
+  keywords: text('keywords', { mode: 'json' }).notNull().default('[]'),
+  followUpStrategy: text('follow_up_strategy', { mode: 'json' }).notNull().default('{}'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const interviewQuestionFavorites = sqliteTable('interview_question_favorites', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  bankId: text('bank_id').notNull().references(() => interviewQuestionBanks.id, { onDelete: 'cascade' }),
+  questionId: text('question_id').notNull().references(() => interviewQuestions.id, { onDelete: 'cascade' }),
+  source: text('source').notNull().default('manual'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const interviewQuestionPracticeAttempts = sqliteTable('interview_question_practice_attempts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  bankId: text('bank_id').notNull().references(() => interviewQuestionBanks.id, { onDelete: 'cascade' }),
+  questionId: text('question_id').notNull().references(() => interviewQuestions.id, { onDelete: 'cascade' }),
+  answer: text('answer').notNull().default(''),
+  score: integer('score').notNull().default(0),
+  maxScore: integer('max_score').notNull().default(100),
+  isCorrect: integer('is_correct', { mode: 'boolean' }).notNull().default(false),
+  feedback: text('feedback').notNull().default(''),
+  rubricResult: text('rubric_result', { mode: 'json' }).default('{}'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const interviewQuestionStats = sqliteTable('interview_question_stats', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  bankId: text('bank_id').notNull().references(() => interviewQuestionBanks.id, { onDelete: 'cascade' }),
+  questionId: text('question_id').notNull().references(() => interviewQuestions.id, { onDelete: 'cascade' }),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  correctCount: integer('correct_count').notNull().default(0),
+  wrongCount: integer('wrong_count').notNull().default(0),
+  bestScore: integer('best_score').notNull().default(0),
+  lastScore: integer('last_score').notNull().default(0),
+  mastered: integer('mastered', { mode: 'boolean' }).notNull().default(false),
+  lastAttemptAt: integer('last_attempt_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const redeemCodes = sqliteTable('redeem_codes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  code: text('code').notNull().unique(),
+  type: text('type').notNull().default('benefit'),
+  status: text('status').notNull().default('active'),
+  maxClaims: integer('max_claims').notNull().default(1),
+  claimedCount: integer('claimed_count').notNull().default(0),
+  benefit: text('benefit', { mode: 'json' }).notNull().default('{}'),
+  startsAt: integer('starts_at', { mode: 'timestamp' }),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const redeemCodeClaims = sqliteTable('redeem_code_claims', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  redeemCodeId: text('redeem_code_id').notNull().references(() => redeemCodes.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('success'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const referralRelations = sqliteTable('referral_relations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  inviterUserId: text('inviter_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  inviteeUserId: text('invitee_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  campaignKey: text('campaign_key').notNull().default('default'),
+  status: text('status').notNull().default('pending'),
+  rewardStatus: text('reward_status').notNull().default('pending'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const lotteryCampaigns = sqliteTable('lottery_campaigns', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text('key').notNull().unique(),
+  title: text('title').notNull(),
+  status: text('status').notNull().default('draft'),
+  rules: text('rules', { mode: 'json' }).notNull().default('{}'),
+  startsAt: integer('starts_at', { mode: 'timestamp' }),
+  endsAt: integer('ends_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
+export const lotteryDraws = sqliteTable('lottery_draws', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  campaignId: text('campaign_id').notNull().references(() => lotteryCampaigns.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  prizeType: text('prize_type').notNull().default('none'),
+  prizePayload: text('prize_payload', { mode: 'json' }).default('{}'),
+  status: text('status').notNull().default('completed'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
 export {
   interviewSessions,
   interviewRounds,

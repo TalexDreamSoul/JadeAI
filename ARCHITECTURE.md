@@ -1866,3 +1866,21 @@ pnpm db:studio     # 打开 Drizzle Studio（数据库 GUI）
   }
 }
 ```
+
+---
+
+## 12. 商业化成长平台架构
+
+JadeAI 正在从 AI 简历工具扩展为求职商业化成长平台。商业化核心以五个基础域为边界：
+
+| 域 | 职责 |
+| --- | --- |
+| Membership | 管理 free / pro / premium / business 会员档位和周期权益。 |
+| Entitlement | 统一记录会员福利、商品购买、兑换码、推广奖励产生的内容或功能授权。 |
+| Wallet | 统一管理 POINT、AI_CREDIT 等账户和不可绕过的账本流水。 |
+| Billing | 管理 products、orders、payments、mock 支付和订单履约。 |
+| Notification | 记录订单、权益、低点数、兑换、增长任务等触达消息。 |
+
+AI 消耗、模板下载、职位模板、面试题库、模拟面试、积分兑换、兑换码、推广返利和抽奖都应通过这些基础域落账，避免直接修改用户余额或绕过授权判断。
+
+当前实施进展、验证脚本和后续计划记录在 [docs/commercialization-progress.md](docs/commercialization-progress.md)。

@@ -10,6 +10,7 @@ import { getResumeSectionsContext, normalizeResumeSnapshot } from '@/lib/ai/resu
 import { getSystemPrompt } from '@/lib/ai/prompts';
 import { createExecutableTools } from '@/lib/ai/tools';
 import { userProfileMemoryRepository } from '@/lib/db/repositories/user-profile-memory.repository';
+import { completeAIUsage, refundAIUsage } from '@/lib/commercial/ai-metering-service';
 
 const MAX_ROUNDS = 10;
 const MAX_MESSAGES = MAX_ROUNDS * 2; // 10 rounds = 20 messages (user + assistant)
@@ -86,7 +87,9 @@ export async function POST(request: NextRequest) {
     // Truncate to last N rounds for LLM context
     const truncatedMessages = modelMessages.slice(-MAX_MESSAGES);
 
-    const tools = resumeId && !localResume ? createExecutableTools(resumeId, aiConfig) : undefined;
+    const tools = resumeId && !localResume
+      ? createExecutableTools(resumeId, aiConfig, user?.id)
+      : undefined;
 
     let memoryContext = '';
     if (user && !localResume) {
@@ -96,51 +99,89 @@ export async function POST(request: NextRequest) {
         .join('\n');
     }
 
-    const result = streamText({
-      model,
-      system: getSystemPrompt(resumeContext, memoryContext),
-      messages: truncatedMessages,
-      tools,
-      stopWhen: tools ? stepCountIs(25) : undefined,
-      providerOptions: getProviderOptions(aiConfig),
-      onFinish: async ({ text, steps }) => {
-        if (user && aiConfig.mode === 'server') {
-          await userRepository.consumeAICredit(user.id);
-        }
-        if (localResume || !sessionId) return;
+    const aiUsage = user && aiConfig.mode === 'server'
+      ? await userRepository.reserveAICredit(user.id, {
+        feature: 'resume.chat',
+        aiConfig: { ...aiConfig, model: modelId || aiConfig.model },
+        metadata: { resumeId: resumeId || null, sessionId: sessionId || null },
+      })
+      : { ok: true as const, reservation: null };
 
-        // Build ordered parts array preserving the interleaving of text and tool calls
-        const orderedParts: ({ type: 'text'; text: string } | { type: 'tool'; toolName: string; args: unknown; result: unknown })[] = [];
+    if (!aiUsage.ok) {
+      return new Response(JSON.stringify({ error: aiUsage.error }), { status: 402 });
+    }
 
-        for (const step of steps) {
-          if (step.text) {
-            orderedParts.push({ type: 'text', text: step.text });
-          }
-          const tcs = step.toolCalls ?? [];
-          const trs = step.toolResults ?? [];
-          for (let i = 0; i < tcs.length; i++) {
-            const toolCall = tcs[i] as ToolCallLike;
-            const toolResult = trs[i] as ToolResultLike | undefined;
-            orderedParts.push({
-              type: 'tool',
-              toolName: toolCall.toolName || 'tool',
-              args: toolCall.input,
-              result: toolResult?.output,
+    let settledUsage = false;
+    const refundOnce = async (error: unknown) => {
+      if (settledUsage) return;
+      settledUsage = true;
+      await refundAIUsage(aiUsage.reservation, error, { resumeId: resumeId || null, sessionId: sessionId || null })
+        .catch((refundError) => console.error('[ai-metering] chat refund failed:', refundError));
+    };
+
+    const result = await (async () => {
+      try {
+        return streamText({
+        model,
+        system: getSystemPrompt(resumeContext, memoryContext),
+        messages: truncatedMessages,
+        tools,
+        stopWhen: tools ? stepCountIs(25) : undefined,
+        providerOptions: getProviderOptions(aiConfig),
+        onFinish: async ({ text, steps, usage }) => {
+          if (!settledUsage) {
+            settledUsage = true;
+            await completeAIUsage(aiUsage.reservation, usage, {
+              resumeId: resumeId || null,
+              sessionId: sessionId || null,
+              stepCount: steps.length,
             });
           }
-        }
+          if (localResume || !sessionId) return;
 
-        const fullText = text || '';
-        if (fullText || orderedParts.some((p) => p.type === 'tool')) {
-          await chatRepository.addMessage({
-            sessionId,
-            role: 'assistant',
-            content: fullText,
-            metadata: orderedParts.length > 0 ? { orderedParts } : {},
-          });
-        }
-      },
-    });
+          // Build ordered parts array preserving the interleaving of text and tool calls
+          const orderedParts: ({ type: 'text'; text: string } | { type: 'tool'; toolName: string; args: unknown; result: unknown })[] = [];
+
+          for (const step of steps) {
+            if (step.text) {
+              orderedParts.push({ type: 'text', text: step.text });
+            }
+            const tcs = step.toolCalls ?? [];
+            const trs = step.toolResults ?? [];
+            for (let i = 0; i < tcs.length; i++) {
+              const toolCall = tcs[i] as ToolCallLike;
+              const toolResult = trs[i] as ToolResultLike | undefined;
+              orderedParts.push({
+                type: 'tool',
+                toolName: toolCall.toolName || 'tool',
+                args: toolCall.input,
+                result: toolResult?.output,
+              });
+            }
+          }
+
+          const fullText = text || '';
+          if (fullText || orderedParts.some((p) => p.type === 'tool')) {
+            await chatRepository.addMessage({
+              sessionId,
+              role: 'assistant',
+              content: fullText,
+              metadata: orderedParts.length > 0 ? { orderedParts } : {},
+            });
+          }
+        },
+        onError: async ({ error }) => {
+          await refundOnce(error);
+        },
+        onAbort: async () => {
+          await refundOnce(new Error('AI stream aborted'));
+        },
+        });
+      } catch (error) {
+        await refundOnce(error);
+        throw error;
+      }
+    })();
 
     return result.toUIMessageStreamResponse();
   } catch (error) {

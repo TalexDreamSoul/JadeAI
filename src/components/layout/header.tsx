@@ -16,6 +16,7 @@ const NAV_ITEMS: { href: string; i18nKey: string; match: string; tourId?: string
   { href: '/templates', i18nKey: 'templates.nav', match: '/templates', tourId: 'dash-templates' },
   { href: '/knowledge', i18nKey: 'knowledge.nav', match: '/knowledge' },
   { href: '/interview', i18nKey: 'interview.nav', match: '/interview' },
+  { href: '/account', i18nKey: 'account.nav', match: '/account' },
   { href: '/admin', i18nKey: 'admin.nav', match: '/admin' },
 ];
 

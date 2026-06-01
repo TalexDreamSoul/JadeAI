@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
 import { getModel, extractAIConfig, AIConfigError, getProviderOptions } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { interviewReportSchema } from '@/lib/ai/interview-report-schema';
 import { extractJson } from '@/lib/ai/extract-json';
 import { dbReady } from '@/lib/db';
 import type { InterviewerConfig } from '@/types/interview';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await dbReady;
@@ -41,7 +41,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { model: modelId, locale = 'zh' } = await request.json();
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig, modelId);
 
     const roundsWithMessages = await interviewRepository.findAllMessagesBySessionId(sessionId);
@@ -161,10 +160,16 @@ List areas for improvement ranked by priority (high/medium/low), each with: desc
 
 Output the report in English.`;
 
-    const { text } = await generateText({
-      model,
-      maxOutputTokens: 16384,
-      system: `You are a professional interview evaluator. Output your evaluation as a single valid JSON object. Do NOT wrap the JSON in markdown code fences. Do NOT wrap the result in an array.
+    const saved = await withMeteredAIUsage({
+      userId: user.id,
+      aiConfig: { ...aiConfig, model: modelId || aiConfig.model },
+      feature: 'interview.report',
+      metadata: { sessionId, roundCount: conversationLog.length },
+      run: async () => {
+        const result = await generateText({
+          model,
+          maxOutputTokens: 16384,
+          system: `You are a professional interview evaluator. Output your evaluation as a single valid JSON object. Do NOT wrap the JSON in markdown code fences. Do NOT wrap the result in an array.
 
 The JSON MUST use EXACTLY these top-level keys (camelCase, English, no translation, no synonyms):
 - "overallScore" (number 0-100)
@@ -174,27 +179,36 @@ The JSON MUST use EXACTLY these top-level keys (camelCase, English, no translati
 - "improvementPlan" (array of { "priority": "high"|"medium"|"low", "area": string, "description": string, "resources": string[] })
 
 DO NOT use alternative names like "comprehensiveScore", "capabilityScores", "direction", "feedback" instead of "overallFeedback", etc. Field names must match EXACTLY. All fields are REQUIRED.`,
-      prompt: reportPrompt,
-      providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
+          prompt: reportPrompt,
+          providerOptions: getProviderOptions(aiConfig),
+          output: Output.json(),
+        });
+
+        const report = extractJson(result.text, interviewReportSchema);
+
+        const reportRecord = await interviewRepository.createReport({
+          sessionId,
+          overallScore: report.overallScore,
+          dimensionScores: report.dimensionScores,
+          roundEvaluations: report.roundEvaluations,
+          overallFeedback: report.overallFeedback,
+          improvementPlan: report.improvementPlan,
+        });
+
+        return {
+          value: reportRecord,
+          usage: result.usage,
+          metadata: { sessionId, reportId: reportRecord.id, roundCount: conversationLog.length },
+        };
+      },
     });
-
-    const report = extractJson(text, interviewReportSchema);
-
-    const saved = await interviewRepository.createReport({
-      sessionId,
-      overallScore: report.overallScore,
-      dimensionScores: report.dimensionScores,
-      roundEvaluations: report.roundEvaluations,
-      overallFeedback: report.overallFeedback,
-      improvementPlan: report.improvementPlan,
-    });
-
-    await chargeAICredit();
     return NextResponse.json(saved);
   } catch (error) {
     if (error instanceof AIConfigError) {
       return new Response(JSON.stringify({ error: error.message }), { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 402 });
     }
     console.error('POST /api/interview/[id]/report error:', error);
     return new Response('Internal server error', { status: 500 });

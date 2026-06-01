@@ -3,10 +3,15 @@ import { generateText, Output } from 'ai';
 import type { ModelMessage } from 'ai';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import type { ParsedResume } from '@/lib/ai/parse-schema';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 const ACCEPTED_TYPES = [
   'application/pdf',
@@ -39,6 +44,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -66,7 +72,6 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const aiConfig = await extractAIConfig(request);
-    const chargeAICredit = () => aiConfig.mode === 'server' ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
     const model = getModel(aiConfig);
 
     // Build messages based on file type
@@ -109,58 +114,76 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Single call — generateText with explicit schema in prompt
-    const result = await generateText({
-      model,
-      maxOutputTokens: 16384,
-      system: SYSTEM_PROMPT,
-      messages,
-      providerOptions: getProviderOptions(aiConfig),
-      output: Output.json(),
-    });
-
-    console.log('[parse] finishReason=%s, length=%d', result.finishReason, result.text.length);
-
-    // Parse JSON from response
-    const raw = parseJsonFromText(result.text);
-    if (!raw || typeof raw !== 'object') {
-      console.error('[parse] Failed to parse JSON. Raw text:', result.text.slice(0, 500));
-      return NextResponse.json({ error: 'Failed to extract resume data' }, { status: 500 });
-    }
-
-    // Map to our schema (handles models that return different field names)
-    const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
-
-    // Create resume with parsed data
-    const resume = await resumeRepository.create({
+    const fullResume = await withMeteredAIUsage({
       userId: user.id,
-      title: resumeData.personalInfo?.fullName || '未命名简历',
-      template,
-      language,
+      aiConfig,
+      feature: 'resume.parse',
+      metadata: { fileType: file.type, fileSize: file.size, template, language },
+      run: async () => {
+        // Single call — generateText with explicit schema in prompt
+        const result = await generateText({
+          model,
+          maxOutputTokens: 16384,
+          system: SYSTEM_PROMPT,
+          messages,
+          providerOptions: getProviderOptions(aiConfig),
+          output: Output.json(),
+        });
+
+        console.log('[parse] finishReason=%s, length=%d', result.finishReason, result.text.length);
+
+        // Parse JSON from response
+        const raw = parseJsonFromText(result.text);
+        if (!raw || typeof raw !== 'object') {
+          console.error('[parse] Failed to parse JSON. Raw text:', result.text.slice(0, 500));
+          throw new Error('Failed to extract resume data');
+        }
+
+        // Map to our schema (handles models that return different field names)
+        const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
+
+        // Create resume with parsed data
+        const resume = await resumeRepository.create({
+          userId: user.id,
+          title: resumeData.personalInfo?.fullName || '未命名简历',
+          template,
+          language,
+        });
+
+        if (!resume) {
+          throw new Error('Failed to create resume');
+        }
+
+        // Create sections from parsed data
+        const sections = buildSections(resumeData, language);
+        for (let i = 0; i < sections.length; i++) {
+          await resumeRepository.createSection({
+            resumeId: resume.id,
+            type: sections[i].type,
+            title: sections[i].title,
+            sortOrder: i,
+            content: sections[i].content,
+          });
+        }
+
+        const parsedResume = await resumeRepository.findById(resume.id);
+        return {
+          value: parsedResume,
+          usage: result.usage,
+          metadata: { resumeId: resume.id, fileType: file.type, fileSize: file.size, template, language },
+        };
+      },
     });
-
-    if (!resume) {
-      return NextResponse.json({ error: 'Failed to create resume' }, { status: 500 });
-    }
-
-    // Create sections from parsed data
-    const sections = buildSections(resumeData, language);
-    for (let i = 0; i < sections.length; i++) {
-      await resumeRepository.createSection({
-        resumeId: resume.id,
-        type: sections[i].type,
-        title: sections[i].title,
-        sortOrder: i,
-        content: sections[i].content,
-      });
-    }
-
-    const fullResume = await resumeRepository.findById(resume.id);
-    await chargeAICredit();
     return NextResponse.json(fullResume, { status: 201 });
   } catch (error) {
     if (error instanceof AIConfigError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
+    }
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
     }
     console.error('POST /api/resume/parse error:', error);
     return NextResponse.json({ error: 'Failed to parse resume' }, { status: 500 });

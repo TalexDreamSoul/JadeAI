@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import {
+  assertCanCreateInterviewMock,
+  getInterviewMockQuota,
+  InterviewMockQuotaExceededError,
+  interviewMockQuotaExceededResponse,
+} from '@/lib/commercial/interview-mock-quota-service';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { dbReady } from '@/lib/db';
 
@@ -9,8 +15,11 @@ export async function GET(request: NextRequest) {
   const user = await resolveUser(fingerprint);
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const sessions = await interviewRepository.findSessionsByUserId(user.id);
-  return NextResponse.json(sessions);
+  const [sessions, quota] = await Promise.all([
+    interviewRepository.findSessionsByUserId(user.id),
+    getInterviewMockQuota(user.id, Number(user.aiCredits || 0)),
+  ]);
+  return NextResponse.json({ sessions, quota });
 }
 
 export async function POST(request: NextRequest) {
@@ -24,6 +33,15 @@ export async function POST(request: NextRequest) {
 
   if (!jobDescription || !jobTitle || !interviewers?.length) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  try {
+    await assertCanCreateInterviewMock(user.id, Number(user.aiCredits || 0));
+  } catch (error) {
+    if (error instanceof InterviewMockQuotaExceededError) {
+      return interviewMockQuotaExceededResponse(error);
+    }
+    throw error;
   }
 
   const session = await interviewRepository.createSession({

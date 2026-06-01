@@ -4,8 +4,8 @@ import { z } from 'zod/v4';
 import { AIConfigError, extractAIConfig, getModel, getProviderOptions } from '@/lib/ai/provider';
 import { sanitizeCustomCss } from '@/lib/template-customization';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { extractJson } from '@/lib/ai/extract-json';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 const inputSchema = z.object({
   prompt: z.string().min(2).max(1200),
@@ -39,16 +39,22 @@ export async function POST(request: NextRequest) {
     const aiConfig = await extractAIConfig(request);
     const model = getModel(aiConfig);
 
-    const result = await generateText({
-      model,
-      providerOptions: getProviderOptions(aiConfig),
-      system: `You are a resume CSS theme designer.
+    const css = await withMeteredAIUsage({
+      userId: user?.id,
+      aiConfig,
+      feature: 'resume.theme_css',
+      metadata: { template: body.template || '', promptLength: body.prompt.length },
+      run: async () => {
+        const result = await generateText({
+          model,
+          providerOptions: getProviderOptions(aiConfig),
+          system: `You are a resume CSS theme designer.
 Return ONLY JSON in this shape: {"css":"..."}.
 The CSS will be automatically scoped to the current resume preview, so write normal selectors.
 Allowed selectors include: > div, header, h1, h2, h3, p, ul, li, [data-section], [data-section-type="summary"], [data-section-type="work_experience"], [data-section-type="projects"], [data-section-type="education"], [data-section-type="skills"], [data-section-type="certifications"], [data-section-type="languages"], [data-section-type="github"], [data-section-type="qr_codes"], [data-section-type="custom"].
 Prefer compact, print-friendly CSS. You may use borders, accent lines, subtle backgrounds, spacing, text alignment, pseudo-elements on > div, header, or [data-section].
 Do NOT use @import, script, external url(), position: fixed, huge animations, or selectors outside the resume.`, 
-      prompt: `Current template: ${body.template || 'unknown'}
+          prompt: `Current template: ${body.template || 'unknown'}
 Current theme JSON:
 ${JSON.stringify(body.theme || {}, null, 2).slice(0, 6000)}
 
@@ -59,21 +65,27 @@ User request:
 ${body.prompt}
 
 Generate a complete replacement custom CSS block that can be applied directly.`,
+        });
+        const css = sanitizeCustomCss(extractCss(result.text)).trim();
+        if (!css) throw new Error('Empty CSS generated');
+        return {
+          value: css,
+          usage: result.usage,
+          metadata: { template: body.template || '', promptLength: body.prompt.length },
+        };
+      },
     });
-
-    const css = sanitizeCustomCss(extractCss(result.text)).trim();
-    if (!css) {
-      return NextResponse.json({ error: 'Empty CSS generated' }, { status: 422 });
-    }
-
-    if (user && aiConfig.mode === 'server') {
-      await userRepository.consumeAICredit(user.id).catch(() => null);
-    }
 
     return NextResponse.json({ css });
   } catch (error) {
     if (error instanceof AIConfigError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof AIUsageInsufficientCreditsError) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
+    }
+    if (error instanceof Error && error.message === 'Empty CSS generated') {
+      return NextResponse.json({ error: error.message }, { status: 422 });
     }
     console.error('POST /api/ai/theme-css error:', error);
     return NextResponse.json({ error: 'Failed to generate theme CSS' }, { status: 500 });

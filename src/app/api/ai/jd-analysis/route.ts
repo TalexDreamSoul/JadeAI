@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
-import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { isLocalResumeId } from '@/lib/local-resumes';
 import { getResumeSectionsContext, normalizeResumeSnapshot, type AIResumeSnapshot } from '@/lib/ai/resume-snapshot';
@@ -11,6 +10,7 @@ import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-
 import { hashJdText } from '@/lib/jd-analysis-utils';
 import { normalizeResumeSnapshotForUse } from '@/lib/resume-snapshot';
 import type { Resume } from '@/types/resume';
+import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 const JD_ANALYSIS_PROMPT = `You are an expert resume analyst and career coach. Analyze the match between the provided resume and job description.
 
@@ -112,17 +112,29 @@ export async function POST(request: NextRequest) {
     try {
       const resumeContext = getResumeSectionsContext(resume);
       const aiConfig = await extractAIConfig(request);
-      const chargeAICredit = () => aiConfig.mode === 'server' && user ? userRepository.consumeAICredit(user.id) : Promise.resolve(true);
       const model = getModel(aiConfig);
 
-      const { data: analysisData } = await generateJsonWithRetry({
-        label: 'jd-analysis',
-        model,
-        schema: jdAnalysisOutputSchema,
-        maxOutputTokens: 8192,
-        system: JD_ANALYSIS_PROMPT,
-        prompt: `Resume:\n${resumeContext}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
-        providerOptions: getProviderOptions(aiConfig),
+      const analysisData = await withMeteredAIUsage({
+        userId: user?.id,
+        aiConfig,
+        feature: 'job.jd_analysis',
+        metadata: { resumeId, historyId, jdHash, versionId: selectedVersion?.id || null },
+        run: async () => {
+          const { data, usage } = await generateJsonWithRetry({
+            label: 'jd-analysis',
+            model,
+            schema: jdAnalysisOutputSchema,
+            maxOutputTokens: 8192,
+            system: JD_ANALYSIS_PROMPT,
+            prompt: `Resume:\n${resumeContext}\n\nJob Description:\n${jobDescription}\n\nRespond with JSON only.`,
+            providerOptions: getProviderOptions(aiConfig),
+          });
+          return {
+            value: data,
+            usage,
+            metadata: { resumeId, historyId, jdHash, versionId: selectedVersion?.id || null },
+          };
+        },
       });
 
       if (historyId) {
@@ -161,7 +173,6 @@ export async function POST(request: NextRequest) {
         })).then((items) => items.filter(Boolean))
         : [];
 
-      await chargeAICredit();
       return NextResponse.json({
         ...analysisData,
         changeProposals,
@@ -182,6 +193,9 @@ export async function POST(request: NextRequest) {
       }
       if (error instanceof AIConfigError) {
         return NextResponse.json({ error: error.message, historyId }, { status: 401 });
+      }
+      if (error instanceof AIUsageInsufficientCreditsError) {
+        return NextResponse.json({ error: error.message, historyId }, { status: 402 });
       }
       console.error('POST /api/ai/jd-analysis error:', error);
       return NextResponse.json({ error: message, historyId }, { status: 500 });

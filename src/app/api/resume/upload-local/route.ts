@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_SECTIONS, DEFAULT_TEMPLATE } from '@/lib/constants';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import {
+  assertCanCreateResume,
+  commercialFeatureLockedResponse,
+  CommercialFeatureLockedError,
+} from '@/lib/commercial/feature-gate-service';
 
 type SectionInput = {
   id?: string;
@@ -16,6 +21,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await resolveUser(getUserIdFromRequest(request));
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const body = await request.json().catch(() => ({}));
     const sections = Array.isArray(body.sections) ? body.sections as SectionInput[] : [];
@@ -82,6 +88,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(fullResume, { status: 201 });
   } catch (error) {
+    if (error instanceof CommercialFeatureLockedError) {
+      return commercialFeatureLockedResponse(error);
+    }
     console.error('POST /api/resume/upload-local error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

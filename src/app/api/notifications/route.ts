@@ -19,3 +19,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    await dbReady;
+    const user = await resolveUser(getUserIdFromRequest(request));
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const ids = Array.isArray(body.ids)
+      ? body.ids.map((id: unknown) => String(id)).filter(Boolean)
+      : undefined;
+    await notificationRepository.markRead(user.id, ids);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('PATCH /api/notifications error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
