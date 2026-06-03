@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Bot, Briefcase, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, Users } from 'lucide-react';
+import { Bot, Briefcase, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFingerprint } from '@/hooks/use-fingerprint';
 import { TEMPLATES } from '@/lib/constants';
 import { getTemplateLabel } from '@/lib/template-labels';
+import { EmailAuthForm } from '@/components/auth/email-auth-form';
 
 interface AIChannel {
   id: string;
@@ -29,16 +30,24 @@ interface AIChannel {
 
 interface OAuthProviderForm {
   enabled: boolean;
+  configured: boolean;
   clientId: string;
-  clientSecret: string;
   issuer: string;
   name: string;
+  source: string;
+  callbackUrl: string;
   clientSecretSet?: boolean;
 }
 
 interface AuthSettings {
+  authMode: string;
   passwordLoginEnabled: boolean;
   passwordRegisterEnabled: boolean;
+  publicPasswordEnabled: boolean;
+  adminPasswordEnabled: boolean;
+  loginFooterText: string;
+  loginFooterLinkText: string;
+  loginFooterLinkUrl: string;
   providers: Record<string, OAuthProviderForm>;
 }
 
@@ -233,8 +242,14 @@ export default function AdminPage() {
     weight: 1,
   });
   const [authSettings, setAuthSettings] = useState<AuthSettings>({
+    authMode: 'local',
     passwordLoginEnabled: true,
     passwordRegisterEnabled: true,
+    publicPasswordEnabled: true,
+    adminPasswordEnabled: false,
+    loginFooterText: '',
+    loginFooterLinkText: '',
+    loginFooterLinkUrl: '',
     providers: {},
   });
   const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
@@ -288,17 +303,25 @@ export default function AdminPage() {
       for (const [pid, pconf] of Object.entries(loadedAuth.providers as Record<string, Record<string, unknown>>)) {
         loadedProviders[pid] = {
           enabled: Boolean(pconf.enabled),
+          configured: Boolean(pconf.configured),
           clientId: String(pconf.clientId || ''),
-          clientSecret: '',
           issuer: String(pconf.issuer || ''),
           name: String(pconf.name || 'OIDC'),
+          source: String(pconf.source || 'env'),
+          callbackUrl: String(pconf.callbackUrl || ''),
           clientSecretSet: Boolean(pconf.clientSecretSet),
         };
       }
     }
     setAuthSettings({
-      passwordLoginEnabled: loadedAuth.passwordLoginEnabled,
-      passwordRegisterEnabled: loadedAuth.passwordRegisterEnabled,
+      authMode: String(loadedAuth.authMode || 'local'),
+      passwordLoginEnabled: Boolean(loadedAuth.passwordLoginEnabled),
+      passwordRegisterEnabled: Boolean(loadedAuth.passwordRegisterEnabled),
+      publicPasswordEnabled: Boolean(loadedAuth.publicPasswordEnabled),
+      adminPasswordEnabled: Boolean(loadedAuth.adminPasswordEnabled),
+      loginFooterText: String(loadedAuth.loginFooterText || ''),
+      loginFooterLinkText: String(loadedAuth.loginFooterLinkText || ''),
+      loginFooterLinkUrl: String(loadedAuth.loginFooterLinkUrl || ''),
       providers: loadedProviders,
     });
     setError('');
@@ -348,24 +371,12 @@ export default function AdminPage() {
   };
 
   const saveAuthSettings = async () => {
-    // Strip empty secrets from payload (don't clear existing on server)
-    const safeProviders: Record<string, Record<string, unknown>> = {};
-    for (const [pid, pconf] of Object.entries(authSettings.providers)) {
-      safeProviders[pid] = {
-        enabled: pconf.enabled,
-        clientId: pconf.clientId,
-        issuer: pconf.issuer,
-        name: pconf.name,
-      };
-      if (pconf.clientSecret.trim()) {
-        safeProviders[pid].clientSecret = pconf.clientSecret.trim();
-      }
-    }
-
     const payload = {
       passwordLoginEnabled: authSettings.passwordLoginEnabled,
       passwordRegisterEnabled: authSettings.passwordRegisterEnabled,
-      providers: safeProviders,
+      loginFooterText: authSettings.loginFooterText,
+      loginFooterLinkText: authSettings.loginFooterLinkText,
+      loginFooterLinkUrl: authSettings.loginFooterLinkUrl,
     };
     const res = await fetch('/api/admin/auth-settings', {
       method: 'PUT',
@@ -382,17 +393,25 @@ export default function AdminPage() {
       for (const [pid, pconf] of Object.entries(updated.providers as Record<string, Record<string, unknown>>)) {
         updatedProviders[pid] = {
           enabled: Boolean(pconf.enabled),
+          configured: Boolean(pconf.configured),
           clientId: String(pconf.clientId || ''),
-          clientSecret: '',
           issuer: String(pconf.issuer || ''),
           name: String(pconf.name || 'OIDC'),
+          source: String(pconf.source || 'env'),
+          callbackUrl: String(pconf.callbackUrl || ''),
           clientSecretSet: Boolean(pconf.clientSecretSet),
         };
       }
     }
     setAuthSettings({
-      passwordLoginEnabled: updated.passwordLoginEnabled,
-      passwordRegisterEnabled: updated.passwordRegisterEnabled,
+      authMode: String(updated.authMode || authSettings.authMode),
+      passwordLoginEnabled: Boolean(updated.passwordLoginEnabled),
+      passwordRegisterEnabled: Boolean(updated.passwordRegisterEnabled),
+      publicPasswordEnabled: Boolean(updated.publicPasswordEnabled),
+      adminPasswordEnabled: Boolean(updated.adminPasswordEnabled),
+      loginFooterText: String(updated.loginFooterText || ''),
+      loginFooterLinkText: String(updated.loginFooterLinkText || ''),
+      loginFooterLinkUrl: String(updated.loginFooterLinkUrl || ''),
       providers: updatedProviders,
     });
     setError('');
@@ -548,18 +567,22 @@ export default function AdminPage() {
     return <div className="rounded-xl border bg-white p-6 text-sm text-zinc-500">{t('loadFailed')}...</div>;
   }
 
-  if (!isLoggedIn) {
+  if (!isLoggedIn || error === t('forbidden') || (users.length > 0 && !isAdmin)) {
     return (
-      <div className="rounded-xl border bg-white p-6 text-sm text-zinc-500 dark:bg-zinc-900">
-        {t('forbidden')}
-      </div>
-    );
-  }
-
-  if (users.length > 0 && !isAdmin) {
-    return (
-      <div className="rounded-xl border bg-white p-6 text-sm text-zinc-500 dark:bg-zinc-900">
-        {t('forbidden')}
+      <div className="mx-auto max-w-md rounded-xl border bg-white p-6 text-sm text-zinc-500 shadow-sm dark:bg-zinc-900">
+        <div className="mb-4 flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
+          <ShieldCheck className="h-5 w-5 text-brand" />
+          {t('adminLoginTitle')}
+        </div>
+        <p className="mb-4 text-sm text-zinc-500">{t('adminLoginDescription')}</p>
+        <Suspense fallback={null}>
+          <EmailAuthForm
+            allowLogin
+            allowRegister={false}
+            callbackUrl={typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : '/admin'}
+          />
+        </Suspense>
+        {isLoggedIn && <p className="mt-3 text-xs text-red-500">{t('forbidden')}</p>}
       </div>
     );
   }
@@ -634,103 +657,66 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-zinc-500">{t('oauthHint')}</p>
-              {/* Password settings */}
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                  <span>{t('passwordLogin')}</span>
-                  <Switch checked={authSettings.passwordLoginEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordLoginEnabled: checked }))} />
-                </label>
-                <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                  <span>{t('passwordRegister')}</span>
-                  <Switch checked={authSettings.passwordRegisterEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordRegisterEnabled: checked }))} />
-                </label>
+              <div className="rounded-lg border bg-zinc-50 p-3 text-sm dark:bg-zinc-900/60">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <p><span className="text-zinc-500">{t('authMode')}:</span> <Badge variant="secondary">{authSettings.authMode}</Badge></p>
+                  <p><span className="text-zinc-500">{t('adminPasswordLogin')}:</span> <Badge variant={authSettings.adminPasswordEnabled ? 'secondary' : 'outline'}>{authSettings.adminPasswordEnabled ? t('enabled') : t('disabled')}</Badge></p>
+                  <p><span className="text-zinc-500">{t('publicPasswordLogin')}:</span> <Badge variant={authSettings.publicPasswordEnabled ? 'secondary' : 'outline'}>{authSettings.publicPasswordEnabled ? t('enabled') : t('disabled')}</Badge></p>
+                  <p><span className="text-zinc-500">{t('passwordRegister')}:</span> <Badge variant={authSettings.passwordRegisterEnabled ? 'secondary' : 'outline'}>{authSettings.passwordRegisterEnabled ? t('enabled') : t('disabled')}</Badge></p>
+                </div>
               </div>
 
-              {/* OIDC provider */}
+              {authSettings.authMode === 'local' && (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                    <span>{t('passwordLogin')}</span>
+                    <Switch checked={authSettings.passwordLoginEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordLoginEnabled: checked }))} />
+                  </label>
+                  <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                    <span>{t('passwordRegister')}</span>
+                    <Switch checked={authSettings.passwordRegisterEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordRegisterEnabled: checked }))} />
+                  </label>
+                </div>
+              )}
+
               {Object.keys(authSettings.providers).length > 0 && (
                 <>
                   <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('oidcProvider')}</h3>
                   {Object.entries(authSettings.providers).map(([providerId, providerConfig]) => (
-                    <div key={providerId} className="space-y-3 rounded-lg border p-3">
-                      <label className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{providerConfig.name || 'OIDC'}</span>
-                        <Switch
-                          checked={providerConfig.enabled}
-                          onCheckedChange={(checked) =>
-                            setAuthSettings((s) => ({
-                              ...s,
-                              providers: {
-                                ...s.providers,
-                                [providerId]: { ...s.providers[providerId], enabled: checked },
-                              },
-                            }))
-                          }
-                        />
-                      </label>
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <Input
-                          value={providerConfig.name}
-                          onChange={(e) =>
-                            setAuthSettings((s) => ({
-                              ...s,
-                              providers: {
-                                ...s.providers,
-                                [providerId]: { ...s.providers[providerId], name: e.target.value },
-                              },
-                            }))
-                          }
-                          placeholder={t('oidcDisplayName')}
-                        />
-                        <Input
-                          value={providerConfig.issuer}
-                          onChange={(e) =>
-                            setAuthSettings((s) => ({
-                              ...s,
-                              providers: {
-                                ...s.providers,
-                                [providerId]: { ...s.providers[providerId], issuer: e.target.value },
-                              },
-                            }))
-                          }
-                          placeholder={t('oidcIssuer')}
-                        />
-                        <Input
-                          value={providerConfig.clientId}
-                          onChange={(e) =>
-                            setAuthSettings((s) => ({
-                              ...s,
-                              providers: {
-                                ...s.providers,
-                                [providerId]: { ...s.providers[providerId], clientId: e.target.value },
-                              },
-                            }))
-                          }
-                          placeholder={t('oauthClientId', { provider: providerConfig.name || 'OIDC' })}
-                        />
-                        <Input
-                          value={providerConfig.clientSecret}
-                          onChange={(e) =>
-                            setAuthSettings((s) => ({
-                              ...s,
-                              providers: {
-                                ...s.providers,
-                                [providerId]: { ...s.providers[providerId], clientSecret: e.target.value },
-                              },
-                            }))
-                          }
-                          placeholder={
-                            providerConfig.clientSecretSet
-                              ? t('oauthClientSecretSet', { provider: providerConfig.name || 'OIDC' })
-                              : t('oauthClientSecret', { provider: providerConfig.name || 'OIDC' })
-                          }
-                          type="password"
-                        />
+                    <div key={providerId} className="space-y-3 rounded-lg border p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{providerConfig.name || 'OIDC'}</p>
+                          <p className="text-xs text-zinc-500">{t('oidcEnvOnly')}</p>
+                        </div>
+                        <Badge variant={providerConfig.configured ? 'secondary' : 'outline'}>
+                          {providerConfig.configured ? t('configured') : t('notConfigured')}
+                        </Badge>
                       </div>
-                      <p className="text-xs text-zinc-500">{t('oidcCallbackHint')}</p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input value={providerConfig.issuer || '-'} readOnly className="bg-zinc-50" aria-label={t('oidcIssuer')} />
+                        <Input value={providerConfig.clientId || '-'} readOnly className="bg-zinc-50" aria-label={t('oauthClientId', { provider: providerConfig.name || 'OIDC' })} />
+                        <Input value={providerConfig.clientSecretSet ? '••••••••' : '-'} readOnly className="bg-zinc-50" aria-label={t('oauthClientSecret', { provider: providerConfig.name || 'OIDC' })} />
+                        <Input value={providerConfig.source || 'env'} readOnly className="bg-zinc-50" aria-label="source" />
+                      </div>
+                      <div className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                        <p className="font-medium">{t('oidcCallbackUrl')}</p>
+                        <code className="break-all">{providerConfig.callbackUrl || '/api/auth/callback/oidc'}</code>
+                      </div>
                     </div>
                   ))}
                 </>
               )}
+
+              <div className="space-y-2 rounded-lg border p-3">
+                <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('loginFooter')}</h3>
+                <Input value={authSettings.loginFooterText} onChange={(e) => setAuthSettings((s) => ({ ...s, loginFooterText: e.target.value }))} placeholder={t('loginFooterText')} />
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Input value={authSettings.loginFooterLinkText} onChange={(e) => setAuthSettings((s) => ({ ...s, loginFooterLinkText: e.target.value }))} placeholder={t('loginFooterLinkText')} />
+                  <Input value={authSettings.loginFooterLinkUrl} onChange={(e) => setAuthSettings((s) => ({ ...s, loginFooterLinkUrl: e.target.value }))} placeholder={t('loginFooterLinkUrl')} />
+                </div>
+              </div>
+
               <Button onClick={saveAuthSettings} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Save className="h-4 w-4" />{t('save')}</Button>
             </CardContent>
           </Card>

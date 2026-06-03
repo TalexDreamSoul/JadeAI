@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { LoginButton } from '@/components/auth/login-button';
+import { LoginFooter } from '@/components/auth/login-footer';
 import { Separator } from '@/components/ui/separator';
 
 export default function LoginPage() {
@@ -37,9 +38,7 @@ export default function LoginPage() {
       </Suspense>
 
       {/* Terms */}
-      <p className="mt-6 text-center text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-        {t('agreeTerms')}
-      </p>
+      <LoginFooter />
     </div>
   );
 }

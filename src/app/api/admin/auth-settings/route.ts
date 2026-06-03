@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { getGlobalAuthSettings, OAUTH_PROVIDER_REGISTRY, type OAuthProviderConfig } from '@/lib/auth/runtime-config';
+import { getGlobalAuthSettings, getOidcCallbackUrl } from '@/lib/auth/runtime-config';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 
 async function requireAdmin(request: NextRequest) {
@@ -12,32 +12,50 @@ async function requireAdmin(request: NextRequest) {
 
 type SanitizedProvider = {
   enabled: boolean;
+  configured: boolean;
   clientId: string;
   issuer: string;
   name: string;
+  source: string;
+  callbackUrl: string;
   clientSecretSet: boolean;
 };
 
 type SanitizedSettings = {
+  authMode: string;
   passwordLoginEnabled: boolean;
   passwordRegisterEnabled: boolean;
+  publicPasswordEnabled: boolean;
+  adminPasswordEnabled: boolean;
+  loginFooterText: string;
+  loginFooterLinkText: string;
+  loginFooterLinkUrl: string;
   providers: Record<string, SanitizedProvider>;
 };
 
-function sanitize(settings: Awaited<ReturnType<typeof getGlobalAuthSettings>>): SanitizedSettings {
+function sanitize(settings: Awaited<ReturnType<typeof getGlobalAuthSettings>>, request?: NextRequest): SanitizedSettings {
   const providers: Record<string, SanitizedProvider> = {};
   for (const [providerId, config] of Object.entries(settings.providers)) {
     providers[providerId] = {
       enabled: config.enabled,
+      configured: !!(config.enabled && config.clientId && config.clientSecret && config.issuer),
       clientId: config.clientId,
       issuer: config.issuer,
-      name: config.name || OAUTH_PROVIDER_REGISTRY[providerId]?.name || providerId,
+      name: config.name || providerId,
+      source: config.source || 'env',
+      callbackUrl: providerId === 'oidc' ? getOidcCallbackUrl(request) : '',
       clientSecretSet: !!config.clientSecret,
     };
   }
   return {
+    authMode: settings.authMode,
     passwordLoginEnabled: settings.passwordLoginEnabled,
     passwordRegisterEnabled: settings.passwordRegisterEnabled,
+    publicPasswordEnabled: settings.publicPasswordEnabled,
+    adminPasswordEnabled: settings.adminPasswordEnabled,
+    loginFooterText: settings.loginFooterText,
+    loginFooterLinkText: settings.loginFooterLinkText,
+    loginFooterLinkUrl: settings.loginFooterLinkUrl,
     providers,
   };
 }
@@ -48,7 +66,7 @@ export async function GET(request: NextRequest) {
     if (admin.error) return admin.error;
 
     const settings = await getGlobalAuthSettings();
-    return NextResponse.json(sanitize(settings));
+    return NextResponse.json(sanitize(settings, request));
   } catch (error) {
     console.error('GET /api/admin/auth-settings error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -64,7 +82,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const next: Record<string, unknown> = {};
 
-    // Password settings
+    // Local-mode password settings. In OIDC production modes, env auth mode controls visibility.
     if (body.passwordLoginEnabled !== undefined) {
       next.passwordLoginEnabled = Boolean(body.passwordLoginEnabled);
     }
@@ -72,33 +90,18 @@ export async function PUT(request: NextRequest) {
       next.passwordRegisterEnabled = Boolean(body.passwordRegisterEnabled);
     }
 
-    // Provider settings — accept { providers: { google: { enabled, clientId, clientSecret }, ... } }
-    if (body.providers && typeof body.providers === 'object') {
-      const updatedProviders: Record<string, OAuthProviderConfig> = { ...current.providers };
-
-      for (const [providerId, providerBody] of Object.entries(body.providers as Record<string, Record<string, unknown>>)) {
-        if (!OAUTH_PROVIDER_REGISTRY[providerId]) continue; // ignore unknown providers
-
-        const existing = updatedProviders[providerId] || { enabled: false, clientId: '', clientSecret: '', issuer: '', name: '' };
-        updatedProviders[providerId] = {
-          enabled: providerBody.enabled !== undefined ? Boolean(providerBody.enabled) : existing.enabled,
-          clientId: providerBody.clientId !== undefined ? String(providerBody.clientId).trim() : existing.clientId,
-          clientSecret:
-            providerBody.clientSecret !== undefined && String(providerBody.clientSecret).trim()
-              ? String(providerBody.clientSecret).trim()
-              : existing.clientSecret,
-          issuer: providerBody.issuer !== undefined ? String(providerBody.issuer).trim().replace(/\/+$/, '') : existing.issuer,
-          name: providerBody.name !== undefined ? String(providerBody.name).trim() || existing.name : existing.name,
-        };
-      }
-
-      // Store providers at top-level for DB (flattened structure)
-      // We store the whole providers object under 'providers' key in the JSON column
-      next.providers = updatedProviders;
+    if (body.loginFooterText !== undefined) {
+      next.loginFooterText = String(body.loginFooterText || '').trim();
+    }
+    if (body.loginFooterLinkText !== undefined) {
+      next.loginFooterLinkText = String(body.loginFooterLinkText || '').trim();
+    }
+    if (body.loginFooterLinkUrl !== undefined) {
+      next.loginFooterLinkUrl = String(body.loginFooterLinkUrl || '').trim();
     }
 
     const updated = await userRepository.updateGlobalSettings(next);
-    return NextResponse.json(sanitize({ ...current, ...updated } as Awaited<ReturnType<typeof getGlobalAuthSettings>>));
+    return NextResponse.json(sanitize({ ...current, ...updated } as Awaited<ReturnType<typeof getGlobalAuthSettings>>, request));
   } catch (error) {
     console.error('PUT /api/admin/auth-settings error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { createSampleResume } from '@/lib/db/sample-resume';
-import { createRuntimeProviders } from './runtime-config';
+import { createRuntimeProviders, getAdminEmails, getAuthMode } from './runtime-config';
 
 type OAuthProfile = {
   email?: string | null;
@@ -25,13 +25,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
 
         let dbUser = email ? await userRepository.findByEmail(email) : null;
         if (!dbUser) {
+          const normalizedEmail = email?.toLowerCase().trim() || '';
+          const authMode = getAuthMode();
+          const adminEmails = getAdminEmails();
           const hasAdmin = await userRepository.findFirstAdmin();
+          const shouldPromote =
+            normalizedEmail && adminEmails.includes(normalizedEmail)
+              ? true
+              : authMode === 'local'
+                ? !hasAdmin
+                : authMode === 'oidc-only' && process.env.AUTH_FIRST_OIDC_USER_ADMIN === 'true' && !hasAdmin;
+
           dbUser = await userRepository.create({
             email: email || undefined,
             name,
             avatarUrl: avatar,
             authType: 'oauth',
-            role: hasAdmin ? 'user' : 'admin',
+            role: shouldPromote ? 'admin' : 'user',
           });
           if (dbUser) {
             await createSampleResume(dbUser.id);

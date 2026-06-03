@@ -42,28 +42,43 @@ function providerIcon(providerId: string): ReactNode {
   );
 }
 
-export function LoginDialog({ open, onOpenChange, callbackUrl = '/dashboard' }: LoginDialogProps) {
+function currentCallbackUrl(fallback = '/dashboard') {
+  if (typeof window === 'undefined') return fallback;
+  return `${window.location.pathname}${window.location.search}` || fallback;
+}
+
+export function LoginDialog({ open, onOpenChange, callbackUrl }: LoginDialogProps) {
   const t = useTranslations('auth');
   const { update } = useSession();
-  const [providers, setProviders] = useState<AuthProviderConfig[]>([
-    { id: 'password', enabled: true },
-  ]);
-  const [passwordRegisterEnabled, setPasswordRegisterEnabled] = useState(true);
+  const resolvedCallbackUrl = callbackUrl || currentCallbackUrl();
+  const [providers, setProviders] = useState<AuthProviderConfig[]>([]);
+  const [passwordRegisterEnabled, setPasswordRegisterEnabled] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [footerText, setFooterText] = useState('');
+  const [footerLinkText, setFooterLinkText] = useState('');
+  const [footerLinkUrl, setFooterLinkUrl] = useState('');
+  const [providersLoaded, setProvidersLoaded] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    setProvidersLoaded(false);
 
     fetch('/api/auth/providers-config')
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled && Array.isArray(data.providers)) {
-          setProviders(data.providers);
+        if (!cancelled) {
+          setProviders(Array.isArray(data.providers) ? data.providers : []);
           setPasswordRegisterEnabled(data.passwordRegisterEnabled !== false);
+          setFooterText(String(data.loginFooterText || ''));
+          setFooterLinkText(String(data.loginFooterLinkText || ''));
+          setFooterLinkUrl(String(data.loginFooterLinkUrl || ''));
+          setProvidersLoaded(true);
         }
       })
-      .catch(() => null);
+      .catch(() => {
+        if (!cancelled) setProvidersLoaded(true);
+      });
 
     return () => {
       cancelled = true;
@@ -81,8 +96,18 @@ export function LoginDialog({ open, onOpenChange, callbackUrl = '/dashboard' }: 
 
   const handleOAuthSignIn = (providerId: string) => {
     setLoadingProvider(providerId);
-    signIn(providerId, { callbackUrl }).finally(() => setLoadingProvider(null));
+    signIn(providerId, { callbackUrl: resolvedCallbackUrl }).finally(() => setLoadingProvider(null));
   };
+
+  useEffect(() => {
+    if (!open || !providersLoaded || loadingProvider) return;
+    if (!passwordEnabled && oauthProviders.length === 1) {
+      handleOAuthSignIn(oauthProviders[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, providersLoaded, passwordEnabled, oauthProviders.length, loadingProvider]);
+
+  const renderedFooter = footerText || t('agreeTerms');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -93,11 +118,18 @@ export function LoginDialog({ open, onOpenChange, callbackUrl = '/dashboard' }: 
         </DialogHeader>
 
         <div className="space-y-4">
-          {passwordEnabled && (
+          {!providersLoaded && (
+            <div className="flex items-center justify-center py-6 text-sm text-zinc-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t('loading')}
+            </div>
+          )}
+
+          {providersLoaded && passwordEnabled && (
             <EmailAuthForm
               allowLogin={passwordLoginEnabled}
               allowRegister={passwordRegisterEnabled}
-              callbackUrl={callbackUrl}
+              callbackUrl={resolvedCallbackUrl}
               onSuccess={() => {
                 onOpenChange(false);
                 update();
@@ -105,7 +137,7 @@ export function LoginDialog({ open, onOpenChange, callbackUrl = '/dashboard' }: 
             />
           )}
 
-          {passwordEnabled && oauthProviders.length > 0 && (
+          {providersLoaded && passwordEnabled && oauthProviders.length > 0 && (
             <div className="flex items-center gap-3">
               <Separator className="flex-1" />
               <span className="text-[11px] text-zinc-400">{t('or')}</span>
@@ -113,7 +145,7 @@ export function LoginDialog({ open, onOpenChange, callbackUrl = '/dashboard' }: 
             </div>
           )}
 
-          {oauthProviders.map((provider) => (
+          {providersLoaded && oauthProviders.map((provider) => (
             <Button
               key={provider.id}
               type="button"
@@ -131,9 +163,23 @@ export function LoginDialog({ open, onOpenChange, callbackUrl = '/dashboard' }: 
             </Button>
           ))}
 
-          {!anyAuthEnabled && (
+          {providersLoaded && !anyAuthEnabled && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
               {t('noLoginMethods')}
+            </p>
+          )}
+
+          {providersLoaded && renderedFooter && (
+            <p className="text-center text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+              {renderedFooter}
+              {footerLinkText && footerLinkUrl && (
+                <>
+                  {' '}
+                  <a href={footerLinkUrl} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                    {footerLinkText}
+                  </a>
+                </>
+              )}
             </p>
           )}
         </div>

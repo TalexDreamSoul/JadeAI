@@ -13,7 +13,7 @@ export interface OAuthProviderMeta {
   name: string; // human-readable, e.g. "OIDC"
 }
 
-/** Generic OIDC provider configured from the admin panel. */
+/** Generic OIDC provider configured from environment variables. */
 export const GENERIC_OIDC_PROVIDER_ID = 'oidc' as const;
 
 export const OAUTH_PROVIDER_REGISTRY: Record<string, OAuthProviderMeta> = {
@@ -24,6 +24,7 @@ export const OAUTH_PROVIDER_REGISTRY: Record<string, OAuthProviderMeta> = {
 } as const;
 
 export type OAuthProviderId = keyof typeof OAUTH_PROVIDER_REGISTRY;
+export type AuthMode = 'local' | 'oidc-only' | 'oidc-with-admin-password';
 
 export function isOAuthProviderId(value: string): value is OAuthProviderId {
   return value in OAUTH_PROVIDER_REGISTRY;
@@ -37,11 +38,18 @@ export interface OAuthProviderConfig {
   clientSecret: string;
   issuer: string;
   name?: string;
+  source?: 'env' | 'none';
 }
 
 export interface GlobalAuthSettings {
+  authMode: AuthMode;
   passwordLoginEnabled: boolean;
   passwordRegisterEnabled: boolean;
+  publicPasswordEnabled: boolean;
+  adminPasswordEnabled: boolean;
+  loginFooterText: string;
+  loginFooterLinkText: string;
+  loginFooterLinkUrl: string;
   providers: Record<string, OAuthProviderConfig>;
 }
 
@@ -59,6 +67,7 @@ type AuthDbUser = {
   id: string;
   email?: string | null;
   name?: string | null;
+  role?: string | null;
   passwordHash?: string | null;
 };
 
@@ -68,6 +77,72 @@ function boolSetting(value: unknown, fallback: boolean): boolean {
 
 function stringSetting(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function envString(name: string, fallback = ''): string {
+  return (process.env[name] || fallback).trim();
+}
+
+function envBool(name: string, fallback: boolean): boolean {
+  const value = process.env[name];
+  if (value === undefined || value === '') return fallback;
+  return !['0', 'false', 'no', 'off'].includes(value.toLowerCase());
+}
+
+export function getAuthMode(): AuthMode {
+  const value = envString('AUTH_MODE').toLowerCase();
+  if (value === 'local' || value === 'oidc-only' || value === 'oidc-with-admin-password') return value;
+  // Backwards-compatible default: keep local auth unless OIDC is explicitly enabled by env.
+  return envBool('AUTH_OIDC_ENABLED', false) ? 'oidc-with-admin-password' : 'local';
+}
+
+export function getExternalAppUrl(): string {
+  return (
+    envString('AUTH_URL') ||
+    envString('NEXTAUTH_URL') ||
+    envString('PUBLIC_APP_URL') ||
+    envString('NEXT_PUBLIC_APP_URL') ||
+    envString('APP_URL')
+  ).replace(/\/+$/, '');
+}
+
+export function getExternalAppUrlFromRequest(request?: Request): string {
+  const configured = getExternalAppUrl();
+  if (configured) return configured;
+  if (!request) return '';
+
+  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
+  if (!forwardedHost) return '';
+  const forwardedProto = request.headers.get('x-forwarded-proto') || (forwardedHost.includes('localhost') ? 'http' : 'https');
+  return `${forwardedProto}://${forwardedHost}`.replace(/\/+$/, '');
+}
+
+export function getOidcCallbackUrl(request?: Request): string {
+  const base = getExternalAppUrlFromRequest(request);
+  return base ? `${base}/api/auth/callback/${GENERIC_OIDC_PROVIDER_ID}` : `/api/auth/callback/${GENERIC_OIDC_PROVIDER_ID}`;
+}
+
+export function getAdminEmails(): string[] {
+  return envString('ADMIN_EMAILS')
+    .split(/[,;\s]+/)
+    .map((email) => normalizeEmail(email))
+    .filter(Boolean);
+}
+
+function getEnvOidcProvider(): OAuthProviderConfig {
+  const enabled = envBool('AUTH_OIDC_ENABLED', false);
+  return {
+    enabled,
+    clientId: envString('AUTH_OIDC_CLIENT_ID'),
+    clientSecret: envString('AUTH_OIDC_CLIENT_SECRET'),
+    issuer: envString('AUTH_OIDC_ISSUER').replace(/\/+$/, ''),
+    name: envString('AUTH_OIDC_NAME', 'OIDC'),
+    source: enabled ? 'env' : 'none',
+  };
+}
+
+export function isOidcProviderConfigured(provider: OAuthProviderConfig): boolean {
+  return !!(provider.enabled && provider.clientId && provider.clientSecret && provider.issuer);
 }
 
 // ── Provider factory map ──────────────────────────────────────────────────
@@ -104,63 +179,64 @@ const oauthProviderFactories: Record<string, (config: OAuthProviderConfig) => Pr
 // ── Settings ──────────────────────────────────────────────────────────────
 
 /**
- * Read persisted DB settings (set via admin panel).
- * OAuth/OIDC providers are purely backend-configured — no env var overrides.
+ * Read persisted DB settings (set via admin panel) plus env-defined auth providers.
+ * OIDC secrets are intentionally env-only in production modes.
  */
 export async function getGlobalAuthSettings(): Promise<GlobalAuthSettings> {
   await dbReady;
   const rawSettings = await userRepository.getGlobalSettings();
+  const authMode = getAuthMode();
 
-  const dbProviders: Record<string, unknown> =
-    rawSettings.providers && typeof rawSettings.providers === 'object' && !Array.isArray(rawSettings.providers)
-      ? (rawSettings.providers as Record<string, unknown>)
-      : {};
+  const localPasswordLoginEnabled = boolSetting(
+    rawSettings.passwordLoginEnabled,
+    process.env.AUTH_PASSWORD_ENABLED !== 'false'
+  );
+  const localPasswordRegisterEnabled = boolSetting(
+    rawSettings.passwordRegisterEnabled,
+    process.env.AUTH_PASSWORD_REGISTER_ENABLED !== 'false'
+  );
 
-  const providers: Record<string, OAuthProviderConfig> = {};
-
-  for (const meta of Object.values(OAUTH_PROVIDER_REGISTRY)) {
-    const dbProvider =
-      dbProviders && dbProviders[meta.id] && typeof dbProviders[meta.id] === 'object'
-        ? (dbProviders[meta.id] as Record<string, unknown>)
-        : {};
-
-    providers[meta.id] = {
-      enabled: boolSetting(dbProvider.enabled, false),
-      clientId: stringSetting(dbProvider.clientId, ''),
-      clientSecret: stringSetting(dbProvider.clientSecret, ''),
-      issuer: stringSetting(dbProvider.issuer, ''),
-      name: stringSetting(dbProvider.name, meta.name),
-    };
-  }
+  const publicPasswordEnabled = authMode === 'local'
+    ? localPasswordLoginEnabled
+    : envBool('AUTH_PASSWORD_PUBLIC_ENABLED', false);
+  const passwordRegisterEnabled = authMode === 'local'
+    ? localPasswordRegisterEnabled
+    : envBool('AUTH_PASSWORD_REGISTER_ENABLED', false);
+  const adminPasswordEnabled = authMode === 'oidc-with-admin-password'
+    ? envBool('AUTH_ADMIN_PASSWORD_ENABLED', true)
+    : authMode === 'local' && localPasswordLoginEnabled;
 
   return {
-    passwordLoginEnabled: boolSetting(
-      rawSettings.passwordLoginEnabled,
-      process.env.AUTH_PASSWORD_ENABLED !== 'false'
-    ),
-    passwordRegisterEnabled: boolSetting(
-      rawSettings.passwordRegisterEnabled,
-      process.env.AUTH_PASSWORD_REGISTER_ENABLED !== 'false'
-    ),
-    providers,
+    authMode,
+    passwordLoginEnabled: localPasswordLoginEnabled,
+    passwordRegisterEnabled,
+    publicPasswordEnabled,
+    adminPasswordEnabled,
+    loginFooterText: stringSetting(rawSettings.loginFooterText, ''),
+    loginFooterLinkText: stringSetting(rawSettings.loginFooterLinkText, ''),
+    loginFooterLinkUrl: stringSetting(rawSettings.loginFooterLinkUrl, ''),
+    providers: {
+      [GENERIC_OIDC_PROVIDER_ID]: getEnvOidcProvider(),
+    },
   };
 }
 
-/** Returns only the public-safe subset for the login dialog. */
+/** Returns only the public-safe subset for the normal login dialog. */
 export async function getPublicAuthProviders(): Promise<PublicAuthProviderConfig[]> {
   const settings = await getGlobalAuthSettings();
+  const result: PublicAuthProviderConfig[] = [];
 
-  const result: PublicAuthProviderConfig[] = [
-    {
+  if (settings.publicPasswordEnabled || settings.passwordRegisterEnabled) {
+    result.push({
       id: 'password',
-      enabled: settings.passwordLoginEnabled || settings.passwordRegisterEnabled,
-      loginEnabled: settings.passwordLoginEnabled,
+      enabled: true,
+      loginEnabled: settings.publicPasswordEnabled,
       registerEnabled: settings.passwordRegisterEnabled,
-    },
-  ];
+    });
+  }
 
   for (const [providerId, providerConfig] of Object.entries(settings.providers)) {
-    if (providerConfig.enabled && providerConfig.clientId && providerConfig.clientSecret && providerConfig.issuer) {
+    if (isOidcProviderConfigured(providerConfig)) {
       const meta = OAUTH_PROVIDER_REGISTRY[providerId];
       result.push({
         id: providerId,
@@ -185,7 +261,7 @@ export async function createPasswordProvider(): Promise<Provider> {
     },
     async authorize(credentials) {
       const settings = await getGlobalAuthSettings();
-      if (!settings.passwordLoginEnabled) {
+      if (!settings.publicPasswordEnabled && !settings.adminPasswordEnabled) {
         return null;
       }
 
@@ -195,6 +271,11 @@ export async function createPasswordProvider(): Promise<Provider> {
 
       const dbUser = await userRepository.findByEmail(email);
       if (!dbUser || !(await verifyPasswordForAuth(password, (dbUser as AuthDbUser).passwordHash))) {
+        return null;
+      }
+
+      // In OIDC + admin password mode, password login is an emergency/admin entry only.
+      if (settings.authMode === 'oidc-with-admin-password' && dbUser.role !== 'admin') {
         return null;
       }
 
@@ -225,12 +306,15 @@ export function createFingerprintProvider(): Provider {
 }
 
 export async function createRuntimeProviders(): Promise<Provider[]> {
-  const passwordProvider = await createPasswordProvider();
   const settings = await getGlobalAuthSettings();
-  const providers: Provider[] = [passwordProvider];
+  const providers: Provider[] = [];
+
+  if (settings.publicPasswordEnabled || settings.adminPasswordEnabled) {
+    providers.push(await createPasswordProvider());
+  }
 
   for (const [providerId, providerConfig] of Object.entries(settings.providers)) {
-    if (!providerConfig.enabled || !providerConfig.clientId || !providerConfig.clientSecret || !providerConfig.issuer) continue;
+    if (!isOidcProviderConfigured(providerConfig)) continue;
 
     const factory = oauthProviderFactories[providerId];
     if (factory) {
@@ -280,7 +364,7 @@ export async function registerPasswordUser(input: {
     name,
     passwordHash: await hashPasswordForAuth(password),
     authType: 'password',
-    role: hasAdmin ? 'user' : 'admin',
+    role: settings.authMode === 'local' && !hasAdmin ? 'admin' : 'user',
   });
 
   if (user) {
@@ -288,7 +372,7 @@ export async function registerPasswordUser(input: {
   }
 
   return {
-    loginEnabled: settings.passwordLoginEnabled,
+    loginEnabled: settings.publicPasswordEnabled,
     user: user
       ? {
           id: user.id,
