@@ -1,8 +1,5 @@
 import type { Provider } from 'next-auth/providers';
 import Credentials from 'next-auth/providers/credentials';
-import GoogleProvider from 'next-auth/providers/google';
-import GitHubProvider from 'next-auth/providers/github';
-import MicrosoftEntraId from 'next-auth/providers/microsoft-entra-id';
 import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
@@ -13,22 +10,16 @@ import { hashPasswordForAuth, normalizeEmail, verifyPasswordForAuth } from './pa
 
 export interface OAuthProviderMeta {
   id: string;
-  name: string; // human-readable, e.g. "Google", "GitHub"
+  name: string; // human-readable, e.g. "OIDC"
 }
 
-/** All supported OAuth providers. Add new entries here to make them available in the admin panel. */
+/** Generic OIDC provider configured from the admin panel. */
+export const GENERIC_OIDC_PROVIDER_ID = 'oidc' as const;
+
 export const OAUTH_PROVIDER_REGISTRY: Record<string, OAuthProviderMeta> = {
-  google: {
-    id: 'google',
-    name: 'Google',
-  },
-  github: {
-    id: 'github',
-    name: 'GitHub',
-  },
-  'microsoft-entra-id': {
-    id: 'microsoft-entra-id',
-    name: 'Microsoft',
+  [GENERIC_OIDC_PROVIDER_ID]: {
+    id: GENERIC_OIDC_PROVIDER_ID,
+    name: 'OIDC',
   },
 } as const;
 
@@ -44,6 +35,8 @@ export interface OAuthProviderConfig {
   enabled: boolean;
   clientId: string;
   clientSecret: string;
+  issuer: string;
+  name?: string;
 }
 
 export interface GlobalAuthSettings {
@@ -79,50 +72,49 @@ function stringSetting(value: unknown, fallback = ''): string {
 
 // ── Provider factory map ──────────────────────────────────────────────────
 
+type OIDCProfile = {
+  sub?: string;
+  id?: string;
+  email?: string | null;
+  name?: string | null;
+  picture?: string | null;
+  avatar_url?: string | null;
+};
+
 const oauthProviderFactories: Record<string, (config: OAuthProviderConfig) => Provider> = {
-  google: (c) =>
-    GoogleProvider({
-      clientId: c.clientId,
-      clientSecret: c.clientSecret,
-    }),
-  github: (c) =>
-    GitHubProvider({
-      clientId: c.clientId,
-      clientSecret: c.clientSecret,
-    }),
-  'microsoft-entra-id': (c) =>
-    MicrosoftEntraId({
-      clientId: c.clientId,
-      clientSecret: c.clientSecret,
-    }),
+  [GENERIC_OIDC_PROVIDER_ID]: (c) => ({
+    id: GENERIC_OIDC_PROVIDER_ID,
+    name: c.name?.trim() || 'OIDC',
+    type: 'oidc',
+    issuer: c.issuer,
+    clientId: c.clientId,
+    clientSecret: c.clientSecret,
+    checks: ['pkce', 'state'],
+    profile(profile: OIDCProfile) {
+      return {
+        id: profile.sub || profile.id || profile.email || '',
+        name: profile.name || profile.email || 'OIDC User',
+        email: profile.email,
+        image: profile.picture || profile.avatar_url,
+      };
+    },
+  }),
 };
 
 // ── Settings ──────────────────────────────────────────────────────────────
 
 /**
  * Read persisted DB settings (set via admin panel).
- * OAuth providers are purely backend-configured — no env var overrides.
- * Migrates legacy flat keys (`googleLoginEnabled`, `googleClientId`, …) to
- * the new `providers` structure on first read.
+ * OAuth/OIDC providers are purely backend-configured — no env var overrides.
  */
 export async function getGlobalAuthSettings(): Promise<GlobalAuthSettings> {
   await dbReady;
   const rawSettings = await userRepository.getGlobalSettings();
 
-  // Migrate legacy Google flat keys → providers.google
-  let dbProviders: Record<string, unknown> | undefined;
-  if (rawSettings.providers && typeof rawSettings.providers === 'object' && !Array.isArray(rawSettings.providers)) {
-    dbProviders = rawSettings.providers as Record<string, unknown>;
-  } else {
-    dbProviders = {};
-    if (rawSettings.googleLoginEnabled !== undefined || rawSettings.googleClientId !== undefined) {
-      dbProviders.google = {
-        enabled: rawSettings.googleLoginEnabled,
-        clientId: rawSettings.googleClientId || '',
-        clientSecret: rawSettings.googleClientSecret || '',
-      };
-    }
-  }
+  const dbProviders: Record<string, unknown> =
+    rawSettings.providers && typeof rawSettings.providers === 'object' && !Array.isArray(rawSettings.providers)
+      ? (rawSettings.providers as Record<string, unknown>)
+      : {};
 
   const providers: Record<string, OAuthProviderConfig> = {};
 
@@ -136,6 +128,8 @@ export async function getGlobalAuthSettings(): Promise<GlobalAuthSettings> {
       enabled: boolSetting(dbProvider.enabled, false),
       clientId: stringSetting(dbProvider.clientId, ''),
       clientSecret: stringSetting(dbProvider.clientSecret, ''),
+      issuer: stringSetting(dbProvider.issuer, ''),
+      name: stringSetting(dbProvider.name, meta.name),
     };
   }
 
@@ -166,12 +160,12 @@ export async function getPublicAuthProviders(): Promise<PublicAuthProviderConfig
   ];
 
   for (const [providerId, providerConfig] of Object.entries(settings.providers)) {
-    if (providerConfig.enabled && providerConfig.clientId && providerConfig.clientSecret) {
+    if (providerConfig.enabled && providerConfig.clientId && providerConfig.clientSecret && providerConfig.issuer) {
       const meta = OAUTH_PROVIDER_REGISTRY[providerId];
       result.push({
         id: providerId,
         enabled: true,
-        name: meta?.name || providerId,
+        name: providerConfig.name || meta?.name || providerId,
       });
     }
   }
@@ -236,7 +230,7 @@ export async function createRuntimeProviders(): Promise<Provider[]> {
   const providers: Provider[] = [passwordProvider];
 
   for (const [providerId, providerConfig] of Object.entries(settings.providers)) {
-    if (!providerConfig.enabled || !providerConfig.clientId || !providerConfig.clientSecret) continue;
+    if (!providerConfig.enabled || !providerConfig.clientId || !providerConfig.clientSecret || !providerConfig.issuer) continue;
 
     const factory = oauthProviderFactories[providerId];
     if (factory) {

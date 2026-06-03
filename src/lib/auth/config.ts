@@ -10,14 +10,14 @@ type OAuthProfile = {
 };
 
 /** Provider IDs that are OAuth-based (not credentials/password/fingerprint). */
-const OAUTH_PROVIDER_IDS = new Set(['google', 'github', 'microsoft-entra-id']);
+const OAUTH_PROVIDER_IDS = new Set(['oidc']);
 
 export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
   trustHost: true,
   providers: await createRuntimeProviders(),
   callbacks: {
     async jwt({ token, user, account, profile }) {
-      // OAuth sign-in (Google, GitHub, Microsoft, …): create DB user on first login
+      // OIDC sign-in: create DB user on first login
       if (user && account?.provider && OAUTH_PROVIDER_IDS.has(account.provider)) {
         const email = (profile?.email || user.email) as string;
         const name = (profile?.name || user.name) as string | undefined;

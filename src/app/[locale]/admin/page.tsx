@@ -31,6 +31,8 @@ interface OAuthProviderForm {
   enabled: boolean;
   clientId: string;
   clientSecret: string;
+  issuer: string;
+  name: string;
   clientSecretSet?: boolean;
 }
 
@@ -288,6 +290,8 @@ export default function AdminPage() {
           enabled: Boolean(pconf.enabled),
           clientId: String(pconf.clientId || ''),
           clientSecret: '',
+          issuer: String(pconf.issuer || ''),
+          name: String(pconf.name || 'OIDC'),
           clientSecretSet: Boolean(pconf.clientSecretSet),
         };
       }
@@ -350,6 +354,8 @@ export default function AdminPage() {
       safeProviders[pid] = {
         enabled: pconf.enabled,
         clientId: pconf.clientId,
+        issuer: pconf.issuer,
+        name: pconf.name,
       };
       if (pconf.clientSecret.trim()) {
         safeProviders[pid].clientSecret = pconf.clientSecret.trim();
@@ -378,6 +384,8 @@ export default function AdminPage() {
           enabled: Boolean(pconf.enabled),
           clientId: String(pconf.clientId || ''),
           clientSecret: '',
+          issuer: String(pconf.issuer || ''),
+          name: String(pconf.name || 'OIDC'),
           clientSecretSet: Boolean(pconf.clientSecretSet),
         };
       }
@@ -638,14 +646,14 @@ export default function AdminPage() {
                 </label>
               </div>
 
-              {/* OAuth providers */}
+              {/* OIDC provider */}
               {Object.keys(authSettings.providers).length > 0 && (
                 <>
-                  <h3 className="text-sm font-medium text-zinc-700">OAuth Providers</h3>
+                  <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('oidcProvider')}</h3>
                   {Object.entries(authSettings.providers).map(([providerId, providerConfig]) => (
-                    <div key={providerId} className="rounded-lg border p-3 space-y-2">
+                    <div key={providerId} className="space-y-3 rounded-lg border p-3">
                       <label className="flex items-center justify-between text-sm">
-                        <span className="font-medium capitalize">{providerId.replace(/-/g, ' ')}</span>
+                        <span className="font-medium">{providerConfig.name || 'OIDC'}</span>
                         <Switch
                           checked={providerConfig.enabled}
                           onCheckedChange={(checked) =>
@@ -661,6 +669,32 @@ export default function AdminPage() {
                       </label>
                       <div className="grid gap-2 md:grid-cols-2">
                         <Input
+                          value={providerConfig.name}
+                          onChange={(e) =>
+                            setAuthSettings((s) => ({
+                              ...s,
+                              providers: {
+                                ...s.providers,
+                                [providerId]: { ...s.providers[providerId], name: e.target.value },
+                              },
+                            }))
+                          }
+                          placeholder={t('oidcDisplayName')}
+                        />
+                        <Input
+                          value={providerConfig.issuer}
+                          onChange={(e) =>
+                            setAuthSettings((s) => ({
+                              ...s,
+                              providers: {
+                                ...s.providers,
+                                [providerId]: { ...s.providers[providerId], issuer: e.target.value },
+                              },
+                            }))
+                          }
+                          placeholder={t('oidcIssuer')}
+                        />
+                        <Input
                           value={providerConfig.clientId}
                           onChange={(e) =>
                             setAuthSettings((s) => ({
@@ -671,7 +705,7 @@ export default function AdminPage() {
                               },
                             }))
                           }
-                          placeholder={t('oauthClientId', { provider: providerId })}
+                          placeholder={t('oauthClientId', { provider: providerConfig.name || 'OIDC' })}
                         />
                         <Input
                           value={providerConfig.clientSecret}
@@ -686,12 +720,13 @@ export default function AdminPage() {
                           }
                           placeholder={
                             providerConfig.clientSecretSet
-                              ? t('oauthClientSecretSet', { provider: providerId })
-                              : t('oauthClientSecret', { provider: providerId })
+                              ? t('oauthClientSecretSet', { provider: providerConfig.name || 'OIDC' })
+                              : t('oauthClientSecret', { provider: providerConfig.name || 'OIDC' })
                           }
                           type="password"
                         />
                       </div>
+                      <p className="text-xs text-zinc-500">{t('oidcCallbackHint')}</p>
                     </div>
                   ))}
                 </>

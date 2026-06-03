@@ -13,6 +13,8 @@ async function requireAdmin(request: NextRequest) {
 type SanitizedProvider = {
   enabled: boolean;
   clientId: string;
+  issuer: string;
+  name: string;
   clientSecretSet: boolean;
 };
 
@@ -28,6 +30,8 @@ function sanitize(settings: Awaited<ReturnType<typeof getGlobalAuthSettings>>): 
     providers[providerId] = {
       enabled: config.enabled,
       clientId: config.clientId,
+      issuer: config.issuer,
+      name: config.name || OAUTH_PROVIDER_REGISTRY[providerId]?.name || providerId,
       clientSecretSet: !!config.clientSecret,
     };
   }
@@ -75,7 +79,7 @@ export async function PUT(request: NextRequest) {
       for (const [providerId, providerBody] of Object.entries(body.providers as Record<string, Record<string, unknown>>)) {
         if (!OAUTH_PROVIDER_REGISTRY[providerId]) continue; // ignore unknown providers
 
-        const existing = updatedProviders[providerId] || { enabled: false, clientId: '', clientSecret: '' };
+        const existing = updatedProviders[providerId] || { enabled: false, clientId: '', clientSecret: '', issuer: '', name: '' };
         updatedProviders[providerId] = {
           enabled: providerBody.enabled !== undefined ? Boolean(providerBody.enabled) : existing.enabled,
           clientId: providerBody.clientId !== undefined ? String(providerBody.clientId).trim() : existing.clientId,
@@ -83,6 +87,8 @@ export async function PUT(request: NextRequest) {
             providerBody.clientSecret !== undefined && String(providerBody.clientSecret).trim()
               ? String(providerBody.clientSecret).trim()
               : existing.clientSecret,
+          issuer: providerBody.issuer !== undefined ? String(providerBody.issuer).trim().replace(/\/+$/, '') : existing.issuer,
+          name: providerBody.name !== undefined ? String(providerBody.name).trim() || existing.name : existing.name,
         };
       }
 
