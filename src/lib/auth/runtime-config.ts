@@ -89,9 +89,16 @@ function envBool(name: string, fallback: boolean): boolean {
   return !['0', 'false', 'no', 'off'].includes(value.toLowerCase());
 }
 
+function parseAuthMode(value: unknown): AuthMode | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.toLowerCase().trim();
+  if (normalized === 'local' || normalized === 'oidc-only' || normalized === 'oidc-with-admin-password') return normalized;
+  return null;
+}
+
 export function getAuthMode(): AuthMode {
-  const value = envString('AUTH_MODE').toLowerCase();
-  if (value === 'local' || value === 'oidc-only' || value === 'oidc-with-admin-password') return value;
+  const envMode = parseAuthMode(envString('AUTH_MODE'));
+  if (envMode) return envMode;
   // Backwards-compatible default: keep local auth unless OIDC is explicitly enabled by env.
   return envBool('AUTH_OIDC_ENABLED', false) ? 'oidc-with-admin-password' : 'local';
 }
@@ -185,26 +192,28 @@ const oauthProviderFactories: Record<string, (config: OAuthProviderConfig) => Pr
 export async function getGlobalAuthSettings(): Promise<GlobalAuthSettings> {
   await dbReady;
   const rawSettings = await userRepository.getGlobalSettings();
-  const authMode = getAuthMode();
+  const authMode = parseAuthMode(rawSettings.authMode) || getAuthMode();
 
   const localPasswordLoginEnabled = boolSetting(
     rawSettings.passwordLoginEnabled,
     process.env.AUTH_PASSWORD_ENABLED !== 'false'
   );
-  const localPasswordRegisterEnabled = boolSetting(
-    rawSettings.passwordRegisterEnabled,
-    process.env.AUTH_PASSWORD_REGISTER_ENABLED !== 'false'
-  );
-
-  const publicPasswordEnabled = authMode === 'local'
+  const envPublicPasswordEnabled = authMode === 'local'
     ? localPasswordLoginEnabled
     : envBool('AUTH_PASSWORD_PUBLIC_ENABLED', false);
-  const passwordRegisterEnabled = authMode === 'local'
-    ? localPasswordRegisterEnabled
-    : envBool('AUTH_PASSWORD_REGISTER_ENABLED', false);
-  const adminPasswordEnabled = authMode === 'oidc-with-admin-password'
-    ? envBool('AUTH_ADMIN_PASSWORD_ENABLED', true)
-    : authMode === 'local' && localPasswordLoginEnabled;
+  const publicPasswordEnabled = boolSetting(rawSettings.publicPasswordEnabled, envPublicPasswordEnabled);
+  const passwordRegisterEnabled = boolSetting(
+    rawSettings.passwordRegisterEnabled,
+    authMode === 'local'
+      ? process.env.AUTH_PASSWORD_REGISTER_ENABLED !== 'false'
+      : envBool('AUTH_PASSWORD_REGISTER_ENABLED', false)
+  );
+  const adminPasswordEnabled = boolSetting(
+    rawSettings.adminPasswordEnabled,
+    authMode === 'oidc-with-admin-password'
+      ? envBool('AUTH_ADMIN_PASSWORD_ENABLED', true)
+      : authMode === 'local' && localPasswordLoginEnabled
+  );
 
   return {
     authMode,

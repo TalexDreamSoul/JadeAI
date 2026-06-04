@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { getGlobalAuthSettings, getOidcCallbackUrl } from '@/lib/auth/runtime-config';
+import { getGlobalAuthSettings, getOidcCallbackUrl, type AuthMode } from '@/lib/auth/runtime-config';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 
 async function requireAdmin(request: NextRequest) {
@@ -82,9 +82,18 @@ export async function PUT(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const next: Record<string, unknown> = {};
 
-    // Local-mode password settings. In OIDC production modes, env auth mode controls visibility.
-    if (body.passwordLoginEnabled !== undefined) {
-      next.passwordLoginEnabled = Boolean(body.passwordLoginEnabled);
+    if (body.authMode !== undefined) {
+      const authMode = String(body.authMode || '').trim() as AuthMode;
+      if (authMode === 'local' || authMode === 'oidc-only' || authMode === 'oidc-with-admin-password') {
+        next.authMode = authMode;
+      }
+    }
+    if (body.publicPasswordEnabled !== undefined) {
+      next.publicPasswordEnabled = Boolean(body.publicPasswordEnabled);
+      next.passwordLoginEnabled = Boolean(body.publicPasswordEnabled);
+    }
+    if (body.adminPasswordEnabled !== undefined) {
+      next.adminPasswordEnabled = Boolean(body.adminPasswordEnabled);
     }
     if (body.passwordRegisterEnabled !== undefined) {
       next.passwordRegisterEnabled = Boolean(body.passwordRegisterEnabled);

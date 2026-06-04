@@ -372,7 +372,9 @@ export default function AdminPage() {
 
   const saveAuthSettings = async () => {
     const payload = {
-      passwordLoginEnabled: authSettings.passwordLoginEnabled,
+      authMode: authSettings.authMode,
+      publicPasswordEnabled: authSettings.publicPasswordEnabled,
+      adminPasswordEnabled: authSettings.adminPasswordEnabled,
       passwordRegisterEnabled: authSettings.passwordRegisterEnabled,
       loginFooterText: authSettings.loginFooterText,
       loginFooterLinkText: authSettings.loginFooterLinkText,
@@ -657,27 +659,34 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-zinc-500">{t('oauthHint')}</p>
-              <div className="rounded-lg border bg-zinc-50 p-3 text-sm dark:bg-zinc-900/60">
-                <div className="grid gap-2 md:grid-cols-2">
-                  <p><span className="text-zinc-500">{t('authMode')}:</span> <Badge variant="secondary">{authSettings.authMode}</Badge></p>
-                  <p><span className="text-zinc-500">{t('adminPasswordLogin')}:</span> <Badge variant={authSettings.adminPasswordEnabled ? 'secondary' : 'outline'}>{authSettings.adminPasswordEnabled ? t('enabled') : t('disabled')}</Badge></p>
-                  <p><span className="text-zinc-500">{t('publicPasswordLogin')}:</span> <Badge variant={authSettings.publicPasswordEnabled ? 'secondary' : 'outline'}>{authSettings.publicPasswordEnabled ? t('enabled') : t('disabled')}</Badge></p>
-                  <p><span className="text-zinc-500">{t('passwordRegister')}:</span> <Badge variant={authSettings.passwordRegisterEnabled ? 'secondary' : 'outline'}>{authSettings.passwordRegisterEnabled ? t('enabled') : t('disabled')}</Badge></p>
-                </div>
-              </div>
-
-              {authSettings.authMode === 'local' && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                    <span>{t('passwordLogin')}</span>
-                    <Switch checked={authSettings.passwordLoginEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordLoginEnabled: checked }))} />
+              <div className="space-y-3 rounded-lg border bg-zinc-50 p-3 text-sm dark:bg-zinc-900/60">
+                <label className="grid gap-1 text-sm">
+                  <span className="text-zinc-500">{t('authMode')}</span>
+                  <select
+                    value={authSettings.authMode}
+                    onChange={(event) => setAuthSettings((s) => ({ ...s, authMode: event.target.value }))}
+                    className="h-9 rounded-md border bg-background px-2 text-sm"
+                  >
+                    <option value="local">local</option>
+                    <option value="oidc-only">oidc-only</option>
+                    <option value="oidc-with-admin-password">oidc-with-admin-password</option>
+                  </select>
+                </label>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm">
+                    <span>{t('adminPasswordLogin')}</span>
+                    <Switch checked={authSettings.adminPasswordEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, adminPasswordEnabled: checked }))} />
                   </label>
-                  <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                  <label className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm">
+                    <span>{t('publicPasswordLogin')}</span>
+                    <Switch checked={authSettings.publicPasswordEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, publicPasswordEnabled: checked, passwordLoginEnabled: checked }))} />
+                  </label>
+                  <label className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm">
                     <span>{t('passwordRegister')}</span>
                     <Switch checked={authSettings.passwordRegisterEnabled} onCheckedChange={(checked) => setAuthSettings((s) => ({ ...s, passwordRegisterEnabled: checked }))} />
                   </label>
                 </div>
-              )}
+              </div>
 
               {Object.keys(authSettings.providers).length > 0 && (
                 <>
