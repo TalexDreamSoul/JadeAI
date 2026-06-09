@@ -5,6 +5,7 @@ import { hasServerImageAIConfig, selectServerAIConfig } from '@/lib/ai/server-co
 import { sanitizeMcpSettings } from '@/lib/mcp/user-mcp-access';
 import { walletRepository } from '@/lib/db/repositories/commercial.repository';
 import { WALLET_CURRENCY_AI_CREDIT } from '@/lib/commercial/catalog';
+import { getServerAIModelAccess } from '@/lib/commercial/ai-model-tier-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,11 +21,21 @@ export async function GET(request: NextRequest) {
       .catch(() => null);
     const aiCredits = Number(aiCreditAccount?.balance ?? user.aiCredits ?? 0);
     const serverAIConfigured = !!serverAI.apiKey && !!user.email;
+    const serverAIAvailable =
+      serverAIConfigured &&
+      (user.role === 'admin' ||
+        (aiCredits > 0 &&
+          (await getServerAIModelAccess({
+            userId: user.id,
+            model: serverAI.model,
+            legacyAiCredits: Number(user.aiCredits || 0),
+          })).allowed));
+
     return NextResponse.json({
       ...sanitizeMcpSettings(settings),
       aiCredits,
       serverAIConfigured,
-      serverAIAvailable: serverAIConfigured && (user.role === 'admin' || aiCredits > 0),
+      serverAIAvailable,
       serverAIProvider: serverAI.provider,
       serverAIModel: serverAI.model,
       serverOpenAIEndpoint: serverAI.openAIEndpoint,

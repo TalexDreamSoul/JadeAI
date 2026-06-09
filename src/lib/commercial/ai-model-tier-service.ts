@@ -30,21 +30,30 @@ export function inferAIModelTier(model: string): AIModelTier {
   return 'standard';
 }
 
-export async function assertServerAIModelAllowedForUser(input: {
+type ServerAIModelAccessInput = {
   userId: string;
   model: string;
   legacyAiCredits?: number;
-}) {
+};
+
+export async function getServerAIModelAccess(input: ServerAIModelAccessInput) {
   const profile = await getUserEntitlementProfile(input.userId, input.legacyAiCredits || 0);
   const allowedTier = normalizeTier(profile.entitlements['ai.model_tier']);
   const requiredTier = inferAIModelTier(input.model);
 
-  if (TIER_RANK[allowedTier] < TIER_RANK[requiredTier]) {
-    throw new Error(`当前会员仅支持 ${allowedTier} 模型等级，请升级会员后使用 ${requiredTier} 模型。`);
-  }
-
   return {
     allowedTier,
     requiredTier,
+    allowed: TIER_RANK[allowedTier] >= TIER_RANK[requiredTier],
   };
+}
+
+export async function assertServerAIModelAllowedForUser(input: ServerAIModelAccessInput) {
+  const access = await getServerAIModelAccess(input);
+
+  if (!access.allowed) {
+    throw new Error(`当前会员仅支持 ${access.allowedTier} 模型等级，请升级会员后使用 ${access.requiredTier} 模型。`);
+  }
+
+  return access;
 }
