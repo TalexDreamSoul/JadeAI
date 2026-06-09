@@ -10,6 +10,7 @@ const TIER_RANK: Record<AIModelTier, number> = {
 };
 
 const MODEL_TIER_RULES: Array<{ pattern: RegExp; tier: AIModelTier }> = [
+  { pattern: /\b(gpt-4(?:o|\.\d+)?-mini|claude-[\w.-]*haiku|gemini-[\w.-]*flash-lite)\b/i, tier: 'basic' },
   { pattern: /\b(o1|o3|o4|gpt-5|opus|sonnet-4|gemini-3|pro|ultra)\b/i, tier: 'advanced' },
   { pattern: /\b(gpt-4|claude|sonnet|gemini-2|gemini-1\.5|flash)\b/i, tier: 'standard' },
   { pattern: /\b(mini|haiku|lite|small|nano)\b/i, tier: 'basic' },
