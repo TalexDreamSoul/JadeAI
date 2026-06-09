@@ -1,17 +1,16 @@
-name: Build, Publish & Deploy
+name: Legacy Manual GHCR Publish
 
+# Legacy manual publisher kept for emergency/manual image publishing only.
+# Automatic master/preview deployments are handled by docker-ghcr-deploy.yml -> Jenkins.
 on:
-  push:
-    branches: [master, main]
-    tags: ['v*']
   workflow_dispatch:
 
 concurrency:
-  group: docker-publish-deploy
+  group: legacy-docker-publish
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 jobs:
@@ -113,98 +112,3 @@ jobs:
             Docker image: `${{ steps.image.outputs.name }}:${{ github.ref_name }}`
             Digest: `${{ steps.build.outputs.digest }}`
           generate_release_notes: true
-
-      - name: Trigger 1Panel webhook
-        id: deploy_webhook
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-        env:
-          ONEPANEL_WEBHOOK_URL: ${{ secrets.ONEPANEL_WEBHOOK_URL }}
-          ONEPANEL_WEBHOOK_TOKEN: ${{ secrets.ONEPANEL_WEBHOOK_TOKEN }}
-          ONEPANEL_WEBHOOK_SECRET: ${{ secrets.ONEPANEL_WEBHOOK_SECRET }}
-          IMAGE: ${{ steps.image.outputs.name }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-        run: |
-          set -euo pipefail
-          if [ -z "${ONEPANEL_WEBHOOK_URL:-}" ]; then
-            echo "ONEPANEL_WEBHOOK_URL is not configured; skip deploy webhook."
-            echo "triggered=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          image_ref="$IMAGE@$DIGEST"
-          payload="$(jq -n \
-            --arg repository "$GITHUB_REPOSITORY" \
-            --arg sha "$GITHUB_SHA" \
-            --arg ref "$GITHUB_REF" \
-            --arg ref_name "$REF_NAME" \
-            --arg ref_type "$REF_TYPE" \
-            --arg image_repo "$IMAGE" \
-            --arg image_ref "$image_ref" \
-            --arg digest "$DIGEST" \
-            --arg secret "${ONEPANEL_WEBHOOK_SECRET:-}" \
-            '{repository:$repository, sha:$sha, ref:$ref, refName:$ref_name, refType:$ref_type, image:$image_ref, imageRef:$image_ref, imageRepository:$image_repo, digest:$digest, secret:$secret}')"
-
-          headers=(-H "Content-Type: application/json")
-          if [ -n "${ONEPANEL_WEBHOOK_TOKEN:-}" ]; then
-            headers+=( -H "Authorization: Bearer $ONEPANEL_WEBHOOK_TOKEN" )
-          fi
-
-          response="$(curl --fail-with-body -X POST "${headers[@]}" -d "$payload" "$ONEPANEL_WEBHOOK_URL")"
-          echo "$response"
-          echo "triggered=true" >> "$GITHUB_OUTPUT"
-          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
-
-      - name: Verify live deployment commit
-        if: steps.deploy_webhook.outputs.triggered == 'true'
-        env:
-          # Override with repository variable DEPLOY_VERIFY_URL if the production URL changes.
-          DEPLOY_VERIFY_URL: ${{ vars.DEPLOY_VERIFY_URL || 'https://resume.wc1.tagzxia.com' }}
-          DEPLOY_VERIFY_TIMEOUT: ${{ vars.DEPLOY_VERIFY_TIMEOUT || '300' }}
-          EXPECTED_SHA: ${{ github.sha }}
-          IMAGE_REF: ${{ steps.deploy_webhook.outputs.image_ref }}
-        run: |
-          set -euo pipefail
-          if [ -z "${DEPLOY_VERIFY_URL:-}" ]; then
-            echo "DEPLOY_VERIFY_URL is empty; skip deploy verification."
-            exit 0
-          fi
-
-          base="${DEPLOY_VERIFY_URL%/}"
-          if [[ "$base" == */api/ready || "$base" == */api/health ]]; then
-            url="$base"
-          else
-            url="$base/api/ready"
-          fi
-
-          timeout="${DEPLOY_VERIFY_TIMEOUT:-300}"
-          if ! [[ "$timeout" =~ ^[0-9]+$ ]]; then
-            timeout=300
-          fi
-
-          echo "Verify live deployment: url=$url expected_sha=$EXPECTED_SHA image_ref=$IMAGE_REF timeout=${timeout}s"
-          deadline=$((SECONDS + timeout))
-          last_body=""
-          last_commit=""
-
-          while (( SECONDS < deadline )); do
-            if body="$(curl -fsS --max-time 10 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$url" 2>/dev/null)"; then
-              last_body="$body"
-              last_commit="$(printf '%s' "$body" | jq -r '.commit // empty' 2>/dev/null || true)"
-              echo "Live commit: ${last_commit:-<empty>}"
-              if [ "$last_commit" = "$EXPECTED_SHA" ]; then
-                echo "Deployment verified: $EXPECTED_SHA is live."
-                exit 0
-              fi
-            else
-              echo "Waiting for $url ..."
-            fi
-            sleep 10
-          done
-
-          echo "::error::Deployment verification failed. Expected commit $EXPECTED_SHA, got ${last_commit:-<empty>} from $url."
-          if [ -n "$last_body" ]; then
-            echo "Last response: $last_body"
-          fi
-          exit 1

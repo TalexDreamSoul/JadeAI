@@ -1,0 +1,47 @@
+services:
+  jadeai:
+    image: ${JADEAI_IMAGE:?JADEAI_IMAGE is required}
+    container_name: ${CONTAINER_NAME:?CONTAINER_NAME is required}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      AUTH_MODE: ${AUTH_MODE:-oidc-with-admin-password}
+      AUTH_URL: ${AUTH_URL:-}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+      APP_URL: ${APP_URL:-}
+      AUTH_OIDC_ENABLED: ${AUTH_OIDC_ENABLED:-false}
+      AUTH_OIDC_NAME: ${AUTH_OIDC_NAME:-OIDC}
+      AUTH_OIDC_ISSUER: ${AUTH_OIDC_ISSUER:-}
+      AUTH_OIDC_CLIENT_ID: ${AUTH_OIDC_CLIENT_ID:-}
+      AUTH_OIDC_CLIENT_SECRET: ${AUTH_OIDC_CLIENT_SECRET:-}
+      AUTH_PASSWORD_PUBLIC_ENABLED: ${AUTH_PASSWORD_PUBLIC_ENABLED:-false}
+      AUTH_PASSWORD_REGISTER_ENABLED: ${AUTH_PASSWORD_REGISTER_ENABLED:-false}
+      AUTH_ADMIN_PASSWORD_ENABLED: ${AUTH_ADMIN_PASSWORD_ENABLED:-true}
+      AUTH_FIRST_OIDC_USER_ADMIN: ${AUTH_FIRST_OIDC_USER_ADMIN:-false}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-zh}
+      DB_TYPE: ${DB_TYPE:-postgresql}
+      DATABASE_URL: ${DATABASE_URL}
+      NEXT_TELEMETRY_DISABLED: "1"
+      APP_ENV: ${APP_ENV}
+      APP_VERSION: ${APP_VERSION:-latest}
+      GIT_SHA: ${GIT_SHA:-unknown}
+    networks:
+      - app-net
+    ports:
+      - "127.0.0.1:${APP_PORT:-18080}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ready >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+networks:
+  app-net:
+    external: true

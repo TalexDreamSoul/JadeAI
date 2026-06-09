@@ -1,0 +1,95 @@
+pipeline {
+  agent any
+
+  options {
+    disableConcurrentBuilds()
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+  }
+
+  parameters {
+    string(name: 'BRANCH', defaultValue: '', description: 'Git branch: master or preview')
+    string(name: 'ENV_NAME', defaultValue: '', description: 'production or preview')
+    string(name: 'IMAGE', defaultValue: '', description: 'Immutable GHCR image to deploy')
+    string(name: 'DOMAIN', defaultValue: '', description: 'Target domain')
+    string(name: 'COMMIT_SHA', defaultValue: '', description: 'Git commit sha')
+    string(name: 'GITHUB_RUN_NUMBER', defaultValue: '', description: 'GitHub Actions run number')
+    string(name: 'GITHUB_RUN_ID', defaultValue: '', description: 'GitHub Actions run id')
+  }
+
+  environment {
+    // Jenkins runs inside a container on wlcb1; 172.18.0.1 is the Docker bridge host address used by the existing Jenkins jobs.
+    DEPLOY_HOST = 'root@172.18.0.1'
+    RETAIN_COUNT = '5'
+  }
+
+  stages {
+    stage('Validate Parameters') {
+      steps {
+        script {
+          if (!(params.ENV_NAME in ['production', 'preview'])) {
+            error "Invalid ENV_NAME: ${params.ENV_NAME}"
+          }
+
+          if (params.ENV_NAME == 'production' && params.BRANCH != 'master') {
+            error 'production deploy only accepts master branch'
+          }
+
+          if (params.ENV_NAME == 'preview' && params.BRANCH != 'preview') {
+            error 'preview deploy only accepts preview branch'
+          }
+
+          if (!params.IMAGE?.startsWith('ghcr.io/')) {
+            error "IMAGE must be a ghcr.io image: ${params.IMAGE}"
+          }
+
+          if (params.IMAGE.contains(':production-latest') || params.IMAGE.contains(':preview-latest') || params.IMAGE.endsWith(':latest')) {
+            error 'Deploy must use an immutable image tag, not latest.'
+          }
+
+          if (!params.COMMIT_SHA?.trim()) {
+            error 'COMMIT_SHA is required'
+          }
+
+          if (params.ENV_NAME == 'production') {
+            // Production already exists on wlcb1; deploy in-place to avoid changing the current reverse proxy/port.
+            env.DEPLOY_DIR = '/opt/jadeai'
+            env.CONTAINER_NAME = 'jadeai-app'
+            env.HEALTH_URL = 'https://resume.wc1.tagzxia.com/api/ready'
+            if (params.DOMAIN != 'resume.wc1.tagzxia.com') {
+              error "Invalid production DOMAIN: ${params.DOMAIN}"
+            }
+          } else {
+            env.DEPLOY_DIR = '/opt/jadeai/resume-preview'
+            env.CONTAINER_NAME = 'jadeai-resume-preview'
+            env.HEALTH_URL = 'http://127.0.0.1:18081/api/ready'
+            if (params.DOMAIN != 'resume-preview.wc1.tagzxia.com') {
+              error "Invalid preview DOMAIN: ${params.DOMAIN}"
+            }
+          }
+        }
+      }
+    }
+
+    stage('Deploy To wlcb1') {
+      steps {
+        sshagent(credentials: ['touch-wlcb1-ssh']) {
+          sh '''
+            set -euo pipefail
+            ssh -o StrictHostKeyChecking=no "${DEPLOY_HOST}" \
+              "cd '${DEPLOY_DIR}' && COMMIT_SHA='${COMMIT_SHA}' ./deploy.sh '${IMAGE}' '${CONTAINER_NAME}' '${HEALTH_URL}' '${RETAIN_COUNT}'"
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Deploy success: ${params.ENV_NAME} ${params.IMAGE}"
+    }
+    failure {
+      echo 'Deploy failed. deploy.sh should have attempted rollback if a previous image existed.'
+    }
+  }
+}
