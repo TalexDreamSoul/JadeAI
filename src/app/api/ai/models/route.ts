@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { resolveAIRequestUser } from '@/lib/ai/provider';
 import { selectServerAIConfig } from '@/lib/ai/server-config';
 import { getUserEntitlementProfile } from '@/lib/commercial/entitlement-service';
-import { inferAIModelTier } from '@/lib/commercial/ai-model-tier-service';
+import { inferAIModelTier, isAIModelTierAllowed } from '@/lib/commercial/ai-model-tier-service';
 
 async function fetchModels(provider: string, apiKey: string, baseURL: string) {
   let models: { id: string }[] = [];
@@ -68,9 +68,16 @@ export async function GET(request: NextRequest) {
   const allowedModelTier = String(profile?.entitlements['ai.model_tier'] || 'basic');
   const requiredModelTier = inferAIModelTier(serverConfig.model);
   const tierPayload = { allowedModelTier, requiredModelTier };
+  const defaultModelAllowed = user.role === 'admin' || isAIModelTierAllowed(allowedModelTier, requiredModelTier);
+  if (!defaultModelAllowed) {
+    return Response.json({ models: [], mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint, ...tierPayload });
+  }
 
   try {
-    const models = await fetchModels(serverConfig.provider, serverConfig.apiKey, serverConfig.baseURL);
+    const fetchedModels = await fetchModels(serverConfig.provider, serverConfig.apiKey, serverConfig.baseURL);
+    const models = user.role === 'admin'
+      ? fetchedModels
+      : fetchedModels.filter((model) => isAIModelTierAllowed(allowedModelTier, inferAIModelTier(model.id)));
     if (!models.some((m) => m.id === serverConfig.model)) {
       models.unshift({ id: serverConfig.model });
     }

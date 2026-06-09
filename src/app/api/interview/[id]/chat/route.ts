@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages } from 'ai';
-import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError, resolveAllowedAIModelId } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
@@ -64,7 +64,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const aiConfig = await extractAIConfig(request);
-    const model = getModel(aiConfig, modelId);
+    const effectiveModelId = await resolveAllowedAIModelId(request, aiConfig, modelId);
+    const model = getModel(aiConfig, effectiveModelId);
     const modelMessages = await convertToModelMessages(messages);
 
     if (round.status === 'pending') {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const aiUsage = aiConfig.mode === 'server'
       ? await userRepository.reserveAICredit(user.id, {
         feature: 'interview.chat',
-        aiConfig: { ...aiConfig, model: modelId || aiConfig.model },
+        aiConfig: { ...aiConfig, model: effectiveModelId },
         metadata: { sessionId, roundId, interviewerType: round.interviewerType },
       })
       : { ok: true as const, reservation: null };

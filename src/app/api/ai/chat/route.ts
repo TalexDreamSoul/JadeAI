@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { streamText, convertToModelMessages, stepCountIs } from 'ai';
-import { getModel, extractAIConfig, getProviderOptions, AIConfigError } from '@/lib/ai/provider';
+import { getModel, extractAIConfig, getProviderOptions, AIConfigError, resolveAllowedAIModelId } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
     }
 
     const aiConfig = await extractAIConfig(request);
-    const model = getModel(aiConfig, modelId);
+    const effectiveModelId = await resolveAllowedAIModelId(request, aiConfig, modelId);
+    const model = getModel(aiConfig, effectiveModelId);
     const modelMessages = await convertToModelMessages(messages);
 
     // Truncate to last N rounds for LLM context
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     const aiUsage = user && aiConfig.mode === 'server'
       ? await userRepository.reserveAICredit(user.id, {
         feature: 'resume.chat',
-        aiConfig: { ...aiConfig, model: modelId || aiConfig.model },
+        aiConfig: { ...aiConfig, model: effectiveModelId },
         metadata: { resumeId: resumeId || null, sessionId: sessionId || null },
       })
       : { ok: true as const, reservation: null };

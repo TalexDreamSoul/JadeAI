@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
-import { getModel, extractAIConfig, AIConfigError, getProviderOptions } from '@/lib/ai/provider';
+import { getModel, extractAIConfig, AIConfigError, getProviderOptions, resolveAllowedAIModelId } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
@@ -41,7 +41,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { model: modelId, locale = 'zh' } = await request.json();
     const aiConfig = await extractAIConfig(request);
-    const model = getModel(aiConfig, modelId);
+    const effectiveModelId = await resolveAllowedAIModelId(request, aiConfig, modelId);
+    const model = getModel(aiConfig, effectiveModelId);
 
     const roundsWithMessages = await interviewRepository.findAllMessagesBySessionId(sessionId);
     const resume = session.resumeId ? await resumeRepository.findById(session.resumeId as string) : null;
@@ -162,7 +163,7 @@ Output the report in English.`;
 
     const saved = await withMeteredAIUsage({
       userId: user.id,
-      aiConfig: { ...aiConfig, model: modelId || aiConfig.model },
+      aiConfig: { ...aiConfig, model: effectiveModelId },
       feature: 'interview.report',
       metadata: { sessionId, roundCount: conversationLog.length },
       run: async () => {

@@ -9,7 +9,7 @@ import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { selectServerAIConfig, type OpenAIEndpoint } from './server-config';
 import { hasAICredits } from '@/lib/commercial/ai-metering-service';
-import { assertServerAIModelAllowedForUser } from '@/lib/commercial/ai-model-tier-service';
+import { getServerAIModelAccess } from '@/lib/commercial/ai-model-tier-service';
 
 export interface AIConfig {
   provider: string;
@@ -48,13 +48,7 @@ export async function extractAIConfig(request: NextRequest): Promise<AIConfig> {
 
   const serverConfig = await selectServerAIConfig();
   if (serverConfig.apiKey) {
-    if (user.role !== 'admin') {
-      await assertServerAIModelAllowedForUser({
-        userId: user.id,
-        model: serverConfig.model,
-        legacyAiCredits: Number(user.aiCredits || 0),
-      });
-    }
+    await assertAIModelAllowed(user, serverConfig.model);
     return { ...serverConfig, mode: 'server' };
   }
 
@@ -65,7 +59,42 @@ export function extractAIConfigSync(): AIConfig {
   throw new AIConfigError('Cloud AI requests must be resolved asynchronously for user and quota checks.');
 }
 
-export function getModel(config: AIConfig, modelOverride?: string): LanguageModel {
+export async function resolveAllowedAIModelId(
+  request: NextRequest,
+  config: AIConfig,
+  modelOverride?: unknown
+): Promise<string> {
+  const modelId = typeof modelOverride === 'string' && modelOverride.trim()
+    ? modelOverride.trim()
+    : config.model;
+
+  if (modelId === config.model) return modelId;
+
+  const user = await resolveAIRequestUser(request);
+  if (!user) {
+    throw new AIConfigError('Please log in to use the cloud AI service.');
+  }
+
+  await assertAIModelAllowed(user, modelId);
+
+  return modelId;
+}
+
+async function assertAIModelAllowed(user: { id: string; role?: string | null; aiCredits?: unknown }, model: string) {
+  if (user.role === 'admin') return;
+
+  const access = await getServerAIModelAccess({
+    userId: user.id,
+    model,
+    legacyAiCredits: Number(user.aiCredits || 0),
+  });
+
+  if (!access.allowed) {
+    throw new AIConfigError(`当前会员仅支持 ${access.allowedTier} 模型等级，请升级会员后使用 ${access.requiredTier} 模型。`);
+  }
+}
+
+export function getModel(config: AIConfig, modelId = config.model): LanguageModel {
   if (!config.apiKey) {
     throw new AIConfigError(
       config.mode === 'server'
@@ -73,7 +102,6 @@ export function getModel(config: AIConfig, modelOverride?: string): LanguageMode
         : 'Personal API keys are disabled. Please use the cloud AI service.'
     );
   }
-  const modelId = modelOverride || config.model;
 
   switch (config.provider) {
     case 'anthropic': {

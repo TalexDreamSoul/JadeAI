@@ -20,6 +20,12 @@ function normalizeTier(value: unknown): AIModelTier {
   return 'basic';
 }
 
+export function isAIModelTierAllowed(allowedTier: unknown, requiredTier: unknown): boolean {
+  const allowed = normalizeTier(allowedTier);
+  const required = normalizeTier(requiredTier);
+  return TIER_RANK[allowed] >= TIER_RANK[required];
+}
+
 export function inferAIModelTier(model: string): AIModelTier {
   const normalized = model.trim();
   if (!normalized) return 'basic';
@@ -44,7 +50,7 @@ export async function getServerAIModelAccess(input: ServerAIModelAccessInput) {
   return {
     allowedTier,
     requiredTier,
-    allowed: TIER_RANK[allowedTier] >= TIER_RANK[requiredTier],
+    allowed: isAIModelTierAllowed(allowedTier, requiredTier),
   };
 }
 
