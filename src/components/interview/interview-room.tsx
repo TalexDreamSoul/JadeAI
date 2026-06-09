@@ -15,13 +15,15 @@ import { MessageInput } from './message-input';
 import { useInterviewControls } from './control-bar';
 import { RoundTransition } from './round-transition';
 import { ThinkingIndicator } from './thinking-indicator';
-import type { InterviewerConfig } from '@/types/interview';
+import type { InterviewMessage, InterviewRound, InterviewerConfig } from '@/types/interview';
+
+type TextMessagePart = Extract<UIMessage['parts'][number], { type: 'text' }>;
 
 /** Convert DB messages to UIMessage format */
-function dbMessagesToUIMessages(dbMessages: any[]): UIMessage[] {
+function dbMessagesToUIMessages(dbMessages: InterviewMessage[]): UIMessage[] {
   return dbMessages
-    .filter((m: any) => m.role !== 'system')
-    .map((m: any) => ({
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({
       id: m.id,
       role: m.role === 'interviewer' ? ('assistant' as const) : ('user' as const),
       parts: [{ type: 'text' as const, text: m.content }],
@@ -49,7 +51,7 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
     useInterviewChat({
       sessionId,
       roundId: currentRound?.id || '',
-      selectedModel: useSettingsStore.getState().aiModel,
+      selectedModel: useSettingsStore.getState().serverAIModel,
     });
 
   // Load initial messages from DB on first render
@@ -83,8 +85,8 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
     if (!messages.length || isLoading || isViewingHistory) return;
     const lastMsg = messages[messages.length - 1];
     if (lastMsg.role !== 'assistant') return;
-    const text = lastMsg.parts?.find((p: any) => p.type === 'text');
-    if ((text as any)?.text?.includes('[ROUND_COMPLETE]')) {
+    const text = lastMsg.parts?.find((p): p is TextMessagePart => p.type === 'text');
+    if (text?.text?.includes('[ROUND_COMPLETE]')) {
       setShowTransition(true);
     }
   }, [messages, isLoading, isViewingHistory]);
@@ -103,11 +105,12 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
       const res = await fetch(`/api/interview/${sessionId}`, {
         headers: fp ? { 'x-fingerprint': fp } : {},
       });
-      const { rounds: roundsWithMessages } = await res.json();
-      const roundData = roundsWithMessages.find((r: any) => r.id === targetRound.id);
+      const { rounds: roundsWithMessages } = await res.json() as { rounds: InterviewRound[] };
+      const roundData = roundsWithMessages.find((r) => r.id === targetRound.id);
+      const roundMessages = roundData?.messages;
 
-      if (roundData?.messages?.length > 0) {
-        setMessages(dbMessagesToUIMessages(roundData.messages));
+      if (roundMessages && roundMessages.length > 0) {
+        setMessages(dbMessagesToUIMessages(roundMessages));
       } else {
         setMessages([]);
       }

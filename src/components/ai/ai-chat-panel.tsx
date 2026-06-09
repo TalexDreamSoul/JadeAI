@@ -50,7 +50,7 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
   const t = useTranslations('ai');
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | undefined>(
-    () => useSettingsStore.getState().aiModel || undefined
+    () => useSettingsStore.getState().serverAIModel || undefined
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -64,44 +64,33 @@ export function AIChatContent({ resumeId, hideTitle }: AIChatContentProps) {
 
   const { historicalMessages, hasMore, isLoadingMore, loadInitial, loadMore, reset: resetPagination } = useMessagePagination();
 
-  const settingsMode = useSettingsStore((s) => s.aiMode);
-  const settingsModel = useSettingsStore((s) => s.aiModel);
-  const settingsProvider = useSettingsStore((s) => s.aiProvider);
-  const settingsBaseURL = useSettingsStore((s) => s.aiBaseURL);
-  const settingsApiKey = useSettingsStore((s) => s.aiApiKey);
   const serverModel = useSettingsStore((s) => s.serverAIModel);
-  const serverProvider = useSettingsStore((s) => s.serverAIProvider);
   const hydrated = useSettingsStore((s) => s._hydrated);
 
   // Sync selectedModel when settings hydrate or user changes default model
   useEffect(() => {
     if (!hydrated) return;
-    const model = settingsMode === 'server' ? serverModel : settingsModel;
-    if (model) setSelectedModel(model);
-  }, [hydrated, settingsMode, settingsModel, serverModel]);
+    if (serverModel) setSelectedModel(serverModel);
+  }, [hydrated, serverModel]);
 
-  // Fetch models from API — re-fetch when provider/key/baseURL/model changes
+  // Fetch models from API and keep the configured cloud model selectable.
   useEffect(() => {
     if (!hydrated) return;
     fetch('/api/ai/models', { headers: getAIHeaders() })
       .then((res) => res.json())
       .then((data: { models: { id: string }[] }) => {
         const ids = data.models.map((m) => m.id);
-        const effectiveModel = settingsMode === 'server' ? serverModel : settingsModel;
-        // Ensure configured model is always in the list
-        if (effectiveModel && !ids.includes(effectiveModel)) {
-          ids.unshift(effectiveModel);
+        if (serverModel && !ids.includes(serverModel)) {
+          ids.unshift(serverModel);
         }
         setModels(ids);
       })
       .catch(() => {
-        // Even on error, show configured model
-        const effectiveModel = settingsMode === 'server' ? serverModel : settingsModel;
-        if (effectiveModel) {
-          setModels([effectiveModel]);
+        if (serverModel) {
+          setModels([serverModel]);
         }
       });
-  }, [hydrated, settingsMode, settingsProvider, settingsBaseURL, settingsApiKey, settingsModel, serverProvider, serverModel]);
+  }, [hydrated, serverModel]);
 
   // Fetch sessions on mount
   useEffect(() => {
