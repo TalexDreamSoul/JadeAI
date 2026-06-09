@@ -150,7 +150,8 @@ function saveApiKeyLocally(key: string) {
 }
 
 export function hasUsableAIConfig(): boolean {
-  return useSettingsStore.getState().serverAIConfigured;
+  const { serverAIConfigured, aiCredits } = useSettingsStore.getState();
+  return serverAIConfigured && aiCredits > 0;
 }
 
 export function getAIHeaders(): Record<string, string> {

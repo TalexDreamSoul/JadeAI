@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ...sanitizeMcpSettings(settings),
       aiCredits,
-      serverAIConfigured: !!serverAI.apiKey && !!user.email && aiCredits > 0,
+      serverAIConfigured: !!serverAI.apiKey && !!user.email,
       serverAIProvider: serverAI.provider,
       serverAIModel: serverAI.model,
       serverOpenAIEndpoint: serverAI.openAIEndpoint,
