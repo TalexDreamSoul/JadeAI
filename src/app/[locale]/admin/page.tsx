@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Bot, Briefcase, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Bot, Briefcase, Copy, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -74,6 +74,7 @@ interface TemplateItem {
 }
 
 type AdminJobTemplateLevel = 'intern' | 'junior' | 'mid' | 'senior';
+type TemplateStatusFilter = 'all' | 'public' | 'private';
 type JobTemplateLevelFilter = AdminJobTemplateLevel | 'all';
 type JobTemplateSourceFilter = 'all' | 'builtin' | 'custom' | 'enabled' | 'disabled';
 
@@ -255,6 +256,8 @@ export default function AdminPage() {
     providers: {},
   });
   const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
+  const [templateQuery, setTemplateQuery] = useState('');
+  const [templateStatusFilter, setTemplateStatusFilter] = useState<TemplateStatusFilter>('all');
   const [jobTemplateForm, setJobTemplateForm] = useState(EMPTY_JOB_TEMPLATE_FORM);
   const [jobTemplateQuery, setJobTemplateQuery] = useState('');
   const [jobTemplateLevelFilter, setJobTemplateLevelFilter] = useState<JobTemplateLevelFilter>('all');
@@ -269,6 +272,29 @@ export default function AdminPage() {
     value: template,
     label: getTemplateLabel(template, tDashboard),
   })), [tDashboard]);
+
+  const templateStats = useMemo(() => ({
+    total: templates.length,
+    public: templates.filter((template) => template.isPublic).length,
+    private: templates.filter((template) => !template.isPublic).length,
+    installs: templates.reduce((total, template) => total + Number(template.installCount || 0), 0),
+  }), [templates]);
+
+  const filteredTemplates = useMemo(() => {
+    const query = templateQuery.trim().toLowerCase();
+    return templates.filter((template) => {
+      const matchesQuery = !query || [
+        template.name,
+        template.description,
+        template.baseTemplate,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+      const matchesStatus =
+        templateStatusFilter === 'all' ||
+        (templateStatusFilter === 'public' && template.isPublic) ||
+        (templateStatusFilter === 'private' && !template.isPublic);
+      return matchesQuery && matchesStatus;
+    });
+  }, [templateQuery, templates, templateStatusFilter]);
 
   const jobTemplateStats = useMemo(() => ({
     total: jobTemplates.length,
@@ -461,6 +487,18 @@ export default function AdminPage() {
       themeJson: JSON.stringify(template.themeConfig || {}, null, 2),
       customCss: template.customCss || '',
       isPublic: !!template.isPublic,
+    });
+  };
+
+  const copyTemplate = (template: TemplateItem) => {
+    setTemplateForm({
+      id: '',
+      name: t('templateCopyName', { name: template.name }),
+      description: template.description || '',
+      baseTemplate: template.baseTemplate,
+      themeJson: JSON.stringify(template.themeConfig || {}, null, 2),
+      customCss: template.customCss || '',
+      isPublic: false,
     });
   };
 
@@ -819,15 +857,56 @@ export default function AdminPage() {
         <TabsContent value="templates">
           <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
             <Card>
-              <CardHeader><CardTitle className="text-base">{t('templates')}</CardTitle></CardHeader>
+              <CardHeader className="space-y-3">
+                <div>
+                  <CardTitle className="text-base">{t('templates')}</CardTitle>
+                  <p className="mt-1 text-xs text-zinc-500">{t('templateListHint')}</p>
+                </div>
+                <div className="grid gap-2 md:grid-cols-4">
+                  {[
+                    { label: t('templateMetricTotal'), value: templateStats.total },
+                    { label: t('templateMetricPublic'), value: templateStats.public },
+                    { label: t('templateMetricPrivate'), value: templateStats.private },
+                    { label: t('templateMetricInstalls'), value: templateStats.installs },
+                  ].map((metric) => (
+                    <div key={metric.label} className="rounded-lg border px-3 py-2">
+                      <p className="text-xs text-zinc-500">{metric.label}</p>
+                      <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{metric.value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-2 md:grid-cols-[1fr_150px]">
+                  <Input
+                    value={templateQuery}
+                    onChange={(event) => setTemplateQuery(event.target.value)}
+                    placeholder={t('templateSearchPlaceholder')}
+                  />
+                  <select
+                    value={templateStatusFilter}
+                    onChange={(event) => setTemplateStatusFilter(event.target.value as TemplateStatusFilter)}
+                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="all">{t('allTemplateStatuses')}</option>
+                    <option value="public">{t('publicOnly')}</option>
+                    <option value="private">{t('privateOnly')}</option>
+                  </select>
+                </div>
+              </CardHeader>
               <CardContent className="space-y-2">
-                {templates.length === 0 ? <p className="text-sm text-zinc-400">{t('noTemplates')}</p> : templates.map((template) => (
-                  <div key={template.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                {templates.length === 0 ? <p className="text-sm text-zinc-400">{t('noTemplates')}</p> : filteredTemplates.length === 0 ? <p className="text-sm text-zinc-400">{t('noTemplateMatches')}</p> : filteredTemplates.map((template) => (
+                  <div key={template.id} className="flex flex-col gap-3 rounded-lg border px-3 py-2 md:flex-row md:items-center md:justify-between">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2"><span className="font-medium">{template.name}</span>{template.isPublic && <Badge variant="secondary">Public</Badge>}<Badge variant="outline">{template.installCount}</Badge></div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{template.name}</span>
+                        <Badge variant={template.isPublic ? 'secondary' : 'outline'}>{template.isPublic ? t('public') : t('private')}</Badge>
+                        <Badge variant="outline">{t('templateInstallCount', { count: template.installCount })}</Badge>
+                      </div>
                       <p className="truncate text-xs text-zinc-500">{template.baseTemplate} · {template.description}</p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => editTemplate(template)}>{t('edit')}</Button>
+                    <div className="flex shrink-0 gap-2 self-end md:self-auto">
+                      <Button variant="outline" size="sm" onClick={() => copyTemplate(template)} className="gap-1.5"><Copy className="h-4 w-4" />{t('duplicateTemplate')}</Button>
+                      <Button variant="outline" size="sm" onClick={() => editTemplate(template)}>{t('edit')}</Button>
+                    </div>
                   </div>
                 ))}
               </CardContent>
