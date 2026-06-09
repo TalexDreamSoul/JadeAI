@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, Copy, FileSliders, KeyRound, MessageSquareText, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, ClipboardCheck, Copy, FileSliders, KeyRound, MessageSquareText, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -119,6 +119,49 @@ interface AdminReviewComment {
   } | null;
 }
 
+interface AdminChangeProposal {
+  id: string;
+  resumeId: string;
+  userId?: string | null;
+  source?: string | null;
+  sourceId?: string | null;
+  shareId?: string | null;
+  commentId?: string | null;
+  sectionId?: string | null;
+  sectionType: string;
+  targetField: string;
+  current: string;
+  suggested: string;
+  reason: string;
+  evidenceRequired?: boolean | number | null;
+  status: string;
+  createdAt?: string | number | Date;
+  updatedAt?: string | number | Date;
+  resume?: {
+    id: string;
+    title?: string | null;
+    targetCompany?: string | null;
+    targetJobTitle?: string | null;
+  } | null;
+  user?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    role?: string | null;
+  } | null;
+  share?: {
+    id: string;
+    token?: string | null;
+    label?: string | null;
+  } | null;
+  comment?: {
+    id: string;
+    authorName?: string | null;
+    content?: string | null;
+    status?: string | null;
+  } | null;
+}
+
 interface TemplateItem {
   id: string;
   name: string;
@@ -135,6 +178,7 @@ type TemplateStatusFilter = 'all' | 'public' | 'private';
 type JobTemplateLevelFilter = AdminJobTemplateLevel | 'all';
 type JobTemplateSourceFilter = 'all' | 'builtin' | 'custom' | 'enabled' | 'disabled';
 type ReviewCommentStatusFilter = 'all' | 'open' | 'resolved';
+type ChangeProposalStatusFilter = 'all' | 'pending' | 'applied' | 'rejected';
 
 interface AdminJobTemplate {
   id: string;
@@ -258,6 +302,7 @@ const EMPTY_REDEEM_FORM = {
 const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
 const AI_USAGE_STATUS_OPTIONS = ['all', 'success', 'reserved', 'failed_refunded', 'insufficient_credits'];
 const REVIEW_COMMENT_STATUS_OPTIONS: ReviewCommentStatusFilter[] = ['all', 'open', 'resolved'];
+const CHANGE_PROPOSAL_STATUS_OPTIONS: ChangeProposalStatusFilter[] = ['all', 'pending', 'applied', 'rejected'];
 
 function getHeaders() {
   const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
@@ -299,6 +344,9 @@ export default function AdminPage() {
   const [reviewComments, setReviewComments] = useState<AdminReviewComment[]>([]);
   const [reviewCommentStatusFilter, setReviewCommentStatusFilter] = useState<ReviewCommentStatusFilter>('all');
   const [reviewCommentQuery, setReviewCommentQuery] = useState('');
+  const [changeProposals, setChangeProposals] = useState<AdminChangeProposal[]>([]);
+  const [changeProposalStatusFilter, setChangeProposalStatusFilter] = useState<ChangeProposalStatusFilter>('all');
+  const [changeProposalQuery, setChangeProposalQuery] = useState('');
   const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
   const [growth, setGrowth] = useState<AdminGrowthState | null>(null);
   const [error, setError] = useState('');
@@ -444,8 +492,40 @@ export default function AdminPage() {
     });
   }, [reviewCommentQuery, reviewComments, reviewCommentStatusFilter]);
 
+  const changeProposalStats = useMemo(() => ({
+    total: changeProposals.length,
+    pending: changeProposals.filter((proposal) => proposal.status === 'pending').length,
+    applied: changeProposals.filter((proposal) => proposal.status === 'applied').length,
+    rejected: changeProposals.filter((proposal) => proposal.status === 'rejected').length,
+  }), [changeProposals]);
+
+  const filteredChangeProposals = useMemo(() => {
+    const query = changeProposalQuery.trim().toLowerCase();
+    return changeProposals.filter((proposal) => {
+      if (changeProposalStatusFilter !== 'all' && proposal.status !== changeProposalStatusFilter) return false;
+      if (!query) return true;
+      return [
+        proposal.status,
+        proposal.source,
+        proposal.sectionType,
+        proposal.targetField,
+        proposal.current,
+        proposal.suggested,
+        proposal.reason,
+        proposal.resume?.title,
+        proposal.resume?.targetCompany,
+        proposal.resume?.targetJobTitle,
+        proposal.user?.email,
+        proposal.user?.name,
+        proposal.share?.label,
+        proposal.share?.token,
+        proposal.comment?.content,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+    });
+  }, [changeProposalQuery, changeProposals, changeProposalStatusFilter]);
+
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, redeemRes, growthRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
@@ -455,12 +535,13 @@ export default function AdminPage() {
       fetch(`/api/admin/orders?limit=50&status=${orderStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/ai-usage?limit=100&status=${aiUsageStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/review-comments?limit=100&status=${reviewCommentStatusFilter}`, { headers: getHeaders() }),
+      fetch(`/api/admin/change-proposals?limit=100&status=${changeProposalStatusFilter}`, { headers: getHeaders() }),
       fetch('/api/admin/redeem-codes?limit=50', { headers: getHeaders() }),
       fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !reviewCommentsRes.ok || !redeemRes.ok || !growthRes.ok) {
-      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, redeemRes, growthRes].some((res) => res.status === 403);
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !reviewCommentsRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
       setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
@@ -474,12 +555,14 @@ export default function AdminPage() {
     const loadedOrders = await ordersRes.json();
     const loadedAiUsage = await aiUsageRes.json();
     const loadedReviewComments = await reviewCommentsRes.json();
+    const loadedChangeProposals = await changeProposalsRes.json();
     const loadedRedeemCodes = await redeemRes.json();
     const loadedGrowth = await growthRes.json();
     setProducts(Array.isArray(loadedProducts.products) ? loadedProducts.products : []);
     setOrders(Array.isArray(loadedOrders.orders) ? loadedOrders.orders : []);
     setAiUsage(Array.isArray(loadedAiUsage.usage) ? loadedAiUsage.usage : []);
     setReviewComments(Array.isArray(loadedReviewComments.comments) ? loadedReviewComments.comments : []);
+    setChangeProposals(Array.isArray(loadedChangeProposals.proposals) ? loadedChangeProposals.proposals : []);
     setRedeemCodes(Array.isArray(loadedRedeemCodes.redeemCodes) ? loadedRedeemCodes.redeemCodes : []);
     setGrowth(loadedGrowth && typeof loadedGrowth === 'object' ? loadedGrowth : null);
     const loadedAuth = await authRes.json();
@@ -517,7 +600,7 @@ export default function AdminPage() {
     if (!isLoggedIn) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, reviewCommentStatusFilter]);
+  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
 
   const create = async () => {
     const res = await fetch('/api/admin/ai-channels', {
@@ -835,6 +918,7 @@ export default function AdminPage() {
 	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
 	          <TabsTrigger value="aiUsage" className="gap-2"><Activity className="h-4 w-4" />{t('aiUsage')}</TabsTrigger>
 	          <TabsTrigger value="reviewComments" className="gap-2"><MessageSquareText className="h-4 w-4" />{t('reviewComments')}</TabsTrigger>
+	          <TabsTrigger value="changeProposals" className="gap-2"><ClipboardCheck className="h-4 w-4" />{t('changeProposals')}</TabsTrigger>
 	          <TabsTrigger value="templates" className="gap-2"><FileSliders className="h-4 w-4" />{t('templates')}</TabsTrigger>
 	          <TabsTrigger value="jobTemplates" className="gap-2"><Briefcase className="h-4 w-4" />{t('jobTemplates')}</TabsTrigger>
 	          <TabsTrigger value="commerce" className="gap-2"><ReceiptText className="h-4 w-4" />{t('commerce')}</TabsTrigger>
@@ -1117,6 +1201,76 @@ export default function AdminPage() {
                   <div className="text-xs text-zinc-500">
                     <div>{formatDate(comment.createdAt)}</div>
                     {comment.share?.token && <code className="mt-1 block truncate rounded bg-zinc-100 px-2 py-1 dark:bg-zinc-900">{comment.share.token}</code>}
+                  </div>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="changeProposals">
+          <Card>
+            <CardHeader className="space-y-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck className="h-4 w-4" />{t('changeProposals')}</CardTitle>
+                <p className="mt-1 text-xs text-zinc-500">{t('changeProposalsHint')}</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                {[
+                  { label: t('changeProposalMetricTotal'), value: changeProposalStats.total },
+                  { label: t('changeProposalMetricPending'), value: changeProposalStats.pending },
+                  { label: t('changeProposalMetricApplied'), value: changeProposalStats.applied },
+                  { label: t('changeProposalMetricRejected'), value: changeProposalStats.rejected },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/60">
+                    <div className="text-xs text-zinc-500">{item.label}</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_180px]">
+                <Input
+                  value={changeProposalQuery}
+                  onChange={(event) => setChangeProposalQuery(event.target.value)}
+                  placeholder={t('changeProposalSearchPlaceholder')}
+                />
+                <select
+                  value={changeProposalStatusFilter}
+                  onChange={(event) => setChangeProposalStatusFilter(event.target.value as ChangeProposalStatusFilter)}
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  {CHANGE_PROPOSAL_STATUS_OPTIONS.map((statusOption) => (
+                    <option key={statusOption} value={statusOption}>
+                      {statusOption === 'all' ? t('allChangeProposalStatuses') : statusOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {changeProposals.length === 0 ? <p className="text-sm text-zinc-400">{t('noChangeProposals')}</p> : filteredChangeProposals.length === 0 ? <p className="text-sm text-zinc-400">{t('noChangeProposalMatches')}</p> : filteredChangeProposals.map((proposal) => (
+                <div key={proposal.id} className="grid gap-3 rounded-lg border px-3 py-2 text-sm xl:grid-cols-[1.2fr_1fr_160px] xl:items-start">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{proposal.resume?.title || proposal.resumeId}</span>
+                      <Badge variant={proposal.status === 'pending' ? 'outline' : proposal.status === 'applied' ? 'secondary' : 'destructive'}>{proposal.status}</Badge>
+                      <Badge variant="outline">{proposal.source || 'ai'}</Badge>
+                      <Badge variant="secondary">{proposal.sectionType}</Badge>
+                    </div>
+                    <p className="mt-1 line-clamp-3 text-sm text-zinc-700 dark:text-zinc-200">{proposal.suggested}</p>
+                    {proposal.reason && <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{proposal.reason}</p>}
+                  </div>
+                  <div className="min-w-0 text-xs text-zinc-500">
+                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">{proposal.user?.name || proposal.user?.email || proposal.userId || '-'}</p>
+                    <p className="truncate">{[proposal.resume?.targetCompany, proposal.resume?.targetJobTitle].filter(Boolean).join(' · ') || '-'}</p>
+                    <p className="mt-2 truncate">{proposal.share?.label || proposal.share?.token || proposal.shareId || '-'}</p>
+                    {proposal.comment?.content && <p className="mt-1 line-clamp-2">{proposal.comment.content}</p>}
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    <div>{formatDate(proposal.createdAt)}</div>
+                    <div className="mt-1 truncate">{proposal.targetField}</div>
+                    {proposal.evidenceRequired && <Badge variant="outline" className="mt-2">{t('changeProposalEvidenceRequired')}</Badge>}
                   </div>
                 </div>
               ))}

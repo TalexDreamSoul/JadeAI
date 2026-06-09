@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../index';
-import { jdAnalyses, grammarChecks, resumeChangeProposals } from '../schema';
+import { jdAnalyses, grammarChecks, resumeChangeProposals, resumeReviewComments, resumes, resumeShares, users } from '../schema';
 
 export const analysisRepository = {
   // ── JD Analysis ──────────────────────────────────────────
@@ -36,7 +36,7 @@ export const analysisRepository = {
       atsScore: data.atsScore,
       status: 'success',
       error: null,
-    } as any);
+    } as typeof jdAnalyses.$inferInsert);
     const rows = await db.select().from(jdAnalyses).where(eq(jdAnalyses.id, id)).limit(1);
     return rows[0];
   },
@@ -69,7 +69,7 @@ export const analysisRepository = {
       atsScore: 0,
       status: 'pending',
       error: null,
-    } as any);
+    } as typeof jdAnalyses.$inferInsert);
     const rows = await db.select().from(jdAnalyses).where(eq(jdAnalyses.id, id)).limit(1);
     return rows[0];
   },
@@ -85,7 +85,7 @@ export const analysisRepository = {
       atsScore: data.atsScore,
       status: 'success',
       error: null,
-    } as any).where(eq(jdAnalyses.id, id));
+    } as Partial<typeof jdAnalyses.$inferInsert>).where(eq(jdAnalyses.id, id));
     const rows = await db.select().from(jdAnalyses).where(eq(jdAnalyses.id, id)).limit(1);
     return rows[0];
   },
@@ -94,7 +94,7 @@ export const analysisRepository = {
     await db.update(jdAnalyses).set({
       status: 'failed',
       error,
-    } as any).where(eq(jdAnalyses.id, id));
+    } as Partial<typeof jdAnalyses.$inferInsert>).where(eq(jdAnalyses.id, id));
     const rows = await db.select().from(jdAnalyses).where(eq(jdAnalyses.id, id)).limit(1);
     return rows[0];
   },
@@ -163,7 +163,7 @@ export const analysisRepository = {
       evidenceRequired: !!data.evidenceRequired,
       status: 'pending',
       metadata: data.metadata || {},
-    } as any);
+    } as typeof resumeChangeProposals.$inferInsert);
     const rows = await db.select().from(resumeChangeProposals).where(eq(resumeChangeProposals.id, id)).limit(1);
     return rows[0] ?? null;
   },
@@ -175,6 +175,83 @@ export const analysisRepository = {
       .where(eq(resumeChangeProposals.resumeId, resumeId))
       .orderBy(desc(resumeChangeProposals.createdAt))
       .limit(limit);
+  },
+
+  async listAllChangeProposalsDetailed(limit = 100, status?: string) {
+    const baseQuery = db
+      .select({
+        proposal: resumeChangeProposals,
+        resume: {
+          id: resumes.id,
+          title: resumes.title,
+          targetCompany: resumes.targetCompany,
+          targetJobTitle: resumes.targetJobTitle,
+        },
+        user: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+        },
+        share: {
+          id: resumeShares.id,
+          token: resumeShares.token,
+          label: resumeShares.label,
+        },
+        comment: {
+          id: resumeReviewComments.id,
+          authorName: resumeReviewComments.authorName,
+          content: resumeReviewComments.content,
+          status: resumeReviewComments.status,
+        },
+      })
+      .from(resumeChangeProposals)
+      .leftJoin(resumes, eq(resumeChangeProposals.resumeId, resumes.id))
+      .leftJoin(users, eq(resumeChangeProposals.userId, users.id))
+      .leftJoin(resumeShares, eq(resumeChangeProposals.shareId, resumeShares.id))
+      .leftJoin(resumeReviewComments, eq(resumeChangeProposals.commentId, resumeReviewComments.id));
+
+    const rows = status
+      ? await baseQuery
+        .where(eq(resumeChangeProposals.status, status))
+        .orderBy(desc(resumeChangeProposals.createdAt))
+        .limit(limit)
+      : await baseQuery
+        .orderBy(desc(resumeChangeProposals.createdAt))
+        .limit(limit);
+
+    return rows.map((row: {
+      proposal: typeof resumeChangeProposals.$inferSelect;
+      resume: {
+        id: string | null;
+        title: string | null;
+        targetCompany: string | null;
+        targetJobTitle: string | null;
+      } | null;
+      user: {
+        id: string | null;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      } | null;
+      share: {
+        id: string | null;
+        token: string | null;
+        label: string | null;
+      } | null;
+      comment: {
+        id: string | null;
+        authorName: string | null;
+        content: string | null;
+        status: string | null;
+      } | null;
+    }) => ({
+      ...row.proposal,
+      resume: row.resume?.id ? row.resume : null,
+      user: row.user?.id ? row.user : null,
+      share: row.share?.id ? row.share : null,
+      comment: row.comment?.id ? row.comment : null,
+    }));
   },
 
   async findChangeProposalById(id: string) {
@@ -194,7 +271,7 @@ export const analysisRepository = {
     undoContent: unknown;
     metadata: unknown;
   }>) {
-    await db.update(resumeChangeProposals).set({ ...data, updatedAt: new Date() } as any).where(eq(resumeChangeProposals.id, id));
+    await db.update(resumeChangeProposals).set({ ...data, updatedAt: new Date() } as Partial<typeof resumeChangeProposals.$inferInsert>).where(eq(resumeChangeProposals.id, id));
     const rows = await db.select().from(resumeChangeProposals).where(eq(resumeChangeProposals.id, id)).limit(1);
     return rows[0] ?? null;
   },
@@ -236,7 +313,7 @@ export const analysisRepository = {
       issueCount: data.issueCount,
       status: 'success',
       error: null,
-    } as any);
+    } as typeof grammarChecks.$inferInsert);
     const rows = await db.select().from(grammarChecks).where(eq(grammarChecks.id, id)).limit(1);
     return rows[0];
   },
@@ -251,7 +328,7 @@ export const analysisRepository = {
       issueCount: 0,
       status: 'pending',
       error: null,
-    } as any);
+    } as typeof grammarChecks.$inferInsert);
     const rows = await db.select().from(grammarChecks).where(eq(grammarChecks.id, id)).limit(1);
     return rows[0] ?? null;
   },
@@ -263,13 +340,13 @@ export const analysisRepository = {
       issueCount: data.issueCount,
       status: 'success',
       error: null,
-    } as any).where(eq(grammarChecks.id, id));
+    } as Partial<typeof grammarChecks.$inferInsert>).where(eq(grammarChecks.id, id));
     const rows = await db.select().from(grammarChecks).where(eq(grammarChecks.id, id)).limit(1);
     return rows[0] ?? null;
   },
 
   async markGrammarCheckFailed(id: string, error: string) {
-    await db.update(grammarChecks).set({ status: 'failed', error } as any).where(eq(grammarChecks.id, id));
+    await db.update(grammarChecks).set({ status: 'failed', error } as Partial<typeof grammarChecks.$inferInsert>).where(eq(grammarChecks.id, id));
     const rows = await db.select().from(grammarChecks).where(eq(grammarChecks.id, id)).limit(1);
     return rows[0] ?? null;
   },
