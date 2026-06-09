@@ -11,7 +11,9 @@ export async function GET(request: NextRequest) {
   try {
     await ensureCommercialCatalog();
     const user = await resolveUser(getUserIdFromRequest(request)).catch(() => null);
-    const templates = await templateMarketRepository.listVisible(user?.id);
+    const templates = user?.role === 'admin'
+      ? await templateMarketRepository.listAll()
+      : await templateMarketRepository.listVisible(user?.id);
     const enriched = await Promise.all((templates as TemplateMarketItem[]).map(async (template) => {
       if (!user) {
         return { ...template, product: null, purchased: false, locked: true, freeDownloads: null };

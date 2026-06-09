@@ -3,6 +3,13 @@ import { db } from '../index';
 import { templateMarketItems } from '../schema';
 
 export const templateMarketRepository = {
+  async listAll() {
+    return db
+      .select()
+      .from(templateMarketItems)
+      .orderBy(desc(templateMarketItems.updatedAt));
+  },
+
   async listVisible(userId?: string | null) {
     const predicate = userId
       ? or(eq(templateMarketItems.isPublic, true), eq(templateMarketItems.ownerUserId, userId))
