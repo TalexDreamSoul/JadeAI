@@ -403,7 +403,8 @@
       "serverNotConfigured": "Unified AI is not configured by the admin. Please contact an administrator.",
       "loginRequiredForServer": "Log in to use the system AI.",
       "creditsLeft": "AI credits left: {count}",
-      "serverModeDescription": "Using admin unified config: {provider} / {model}{endpoint}. All AI requests use the cloud channel and count against credits."
+      "serverModeDescription": "Using admin unified config: {provider} / {model}{endpoint}. All AI requests use the cloud channel and count against credits.",
+      "serverUnavailableDescription": "Unified AI is configured: {provider} / {model}{endpoint}, but this account has no available credits. Add credits or upgrade the plan."
     },
     "appearance": {
       "title": "Appearance",

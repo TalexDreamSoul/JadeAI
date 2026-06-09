@@ -40,6 +40,7 @@ export function SettingsDialog() {
   const { activeModal, closeModal, settingsTab, setSettingsTab } = useUIStore();
   const {
     serverAIConfigured,
+    serverAIAvailable,
     serverAIProvider,
     serverAIModel,
     serverOpenAIEndpoint,
@@ -130,7 +131,7 @@ export function SettingsDialog() {
               {localOnly
                 ? t('ai.loginRequiredForServer')
                 : serverAIConfigured
-                ? t('ai.serverModeDescription', {
+                ? t(serverAIAvailable ? 'ai.serverModeDescription' : 'ai.serverUnavailableDescription', {
                     provider: serverAIProvider,
                     model: serverAIModel,
                     endpoint: serverAIProvider === 'openai' ? ` / ${serverOpenAIEndpoint}` : '',

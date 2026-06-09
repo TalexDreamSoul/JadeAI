@@ -16,15 +16,37 @@ interface UseAIChatOptions {
   selectedModel?: string;
 }
 
+class LatestChatOptions {
+  #selectedModel?: string;
+  #sessionId?: string;
+
+  update(selectedModel?: string, sessionId?: string) {
+    this.#selectedModel = selectedModel;
+    this.#sessionId = sessionId;
+  }
+
+  get selectedModel() {
+    return this.#selectedModel;
+  }
+
+  get sessionId() {
+    return this.#sessionId;
+  }
+}
+
 export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel }: UseAIChatOptions) {
   const [input, setInput] = useState('');
   const [localMessages, setLocalMessages] = useState<UIMessage[]>([]);
 
-  const modelRef = useRef(selectedModel);
-  modelRef.current = selectedModel;
+  const [latest] = useState(() => {
+    const options = new LatestChatOptions();
+    options.update(selectedModel, sessionId);
+    return options;
+  });
 
-  const sessionIdRef = useRef(sessionId);
-  sessionIdRef.current = sessionId;
+  useEffect(() => {
+    latest.update(selectedModel, sessionId);
+  }, [latest, selectedModel, sessionId]);
 
   const transport = useMemo(
     () =>
@@ -34,8 +56,8 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
           const current = useResumeStore.getState().currentResume;
           return {
             resumeId,
-            model: modelRef.current,
-            sessionId: sessionIdRef.current,
+            model: latest.selectedModel,
+            sessionId: latest.sessionId,
             ...(isLocalResumeId(resumeId) && current ? { resume: current } : {}),
           };
         },
@@ -48,7 +70,7 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
           return { ...(fp ? { 'x-fingerprint': fp } : {}), ...getAIHeaders() };
         },
       }),
-    [resumeId]
+    [latest, resumeId]
   );
 
   const { messages, sendMessage, status, error, setMessages } = useChat({
@@ -60,6 +82,15 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
 
   // Track completed tool call count to detect new tool results
   const completedToolCountRef = useRef(0);
+
+  const countCompletedToolCalls = useCallback((items: UIMessage[]) => items.reduce((count, message) => {
+    if (message.role !== 'assistant') return count;
+    return count + message.parts.filter((part) =>
+      (part.type === 'dynamic-tool' || part.type.startsWith('tool-')) &&
+      'state' in part &&
+      part.state === 'output-available'
+    ).length;
+  }, 0), []);
 
   const reloadResume = useCallback(async () => {
     if (!resumeId || isLocalResumeId(resumeId)) return;
@@ -85,33 +116,23 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
 
   // Reload resume data when new tool results appear during streaming
   useEffect(() => {
-    const completedToolCount = messages.reduce((count, m) => {
-      if (m.role !== 'assistant' || !m.parts) return count;
-      return count + m.parts.filter((p: any) =>
-        typeof p.type === 'string' && p.type.startsWith('tool-') && p.state === 'output-available'
-      ).length;
-    }, 0);
+    const completedToolCount = countCompletedToolCalls(messages);
 
     if (completedToolCount > completedToolCountRef.current) {
       completedToolCountRef.current = completedToolCount;
       reloadResume();
     }
-  }, [messages, reloadResume]);
+  }, [countCompletedToolCalls, messages, reloadResume]);
 
   // Load initial messages when session changes; sync tool count ref to avoid false reload
   useEffect(() => {
     if (initialMessages) {
       // Pre-calculate tool count from initial messages to avoid triggering a redundant reload
-      const initialToolCount = initialMessages.reduce((count, m) => {
-        if (m.role !== 'assistant' || !m.parts) return count;
-        return count + m.parts.filter((p: any) =>
-          typeof p.type === 'string' && p.type.startsWith('tool-') && p.state === 'output-available'
-        ).length;
-      }, 0);
+      const initialToolCount = countCompletedToolCalls(initialMessages);
       completedToolCountRef.current = initialToolCount;
       setMessages(initialMessages);
     }
-  }, [initialMessages, setMessages]);
+  }, [countCompletedToolCalls, initialMessages, setMessages]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -121,7 +142,7 @@ export function useAIChat({ resumeId, sessionId, initialMessages, selectedModel 
     e.preventDefault();
     if (!input.trim()) return;
 
-    // Check if an AI configuration is usable (unified server AI or user's custom AI)
+    // Check if the cloud AI channel is usable for the current account.
     if (!hasUsableAIConfig()) {
       const userMsg: UIMessage = {
         id: generateId(),

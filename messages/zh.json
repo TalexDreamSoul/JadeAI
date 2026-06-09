@@ -403,7 +403,8 @@
       "serverNotConfigured": "管理员尚未配置统一 AI，请联系管理员。",
       "loginRequiredForServer": "登录后才能使用系统统一 AI。",
       "creditsLeft": "剩余 AI 额度：{count}",
-      "serverModeDescription": "当前使用管理员统一配置：{provider} / {model}{endpoint}。所有 AI 请求都会走云端统一通道并计入额度。"
+      "serverModeDescription": "当前使用管理员统一配置：{provider} / {model}{endpoint}。所有 AI 请求都会走云端统一通道并计入额度。",
+      "serverUnavailableDescription": "统一 AI 已配置：{provider} / {model}{endpoint}，但当前账号没有可用额度。请补充额度或升级套餐。"
     },
     "appearance": {
       "title": "外观",

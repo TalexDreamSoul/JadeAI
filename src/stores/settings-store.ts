@@ -7,6 +7,7 @@ export type OpenAIEndpoint = 'chat' | 'responses';
 interface SettingsStore {
   // AI settings
   serverAIConfigured: boolean;
+  serverAIAvailable: boolean;
   serverAIProvider: AIProvider;
   serverAIModel: string;
   serverOpenAIEndpoint: OpenAIEndpoint;
@@ -87,8 +88,7 @@ function syncToServer(state: SettingsStore) {
 }
 
 export function hasUsableAIConfig(): boolean {
-  const { serverAIConfigured, aiCredits } = useSettingsStore.getState();
-  return serverAIConfigured && aiCredits > 0;
+  return useSettingsStore.getState().serverAIAvailable;
 }
 
 export function getAIHeaders(): Record<string, string> {
@@ -97,6 +97,7 @@ export function getAIHeaders(): Record<string, string> {
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   serverAIConfigured: false,
+  serverAIAvailable: false,
   serverAIProvider: 'openai',
   serverAIModel: 'gpt-4o',
   serverOpenAIEndpoint: 'chat',
@@ -129,7 +130,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     if (current._hydrated && (localOnly || !current._localOnlyHydrated)) return;
 
     if (localOnly || !isCloudAvailable()) {
-      set({ autoSave: true, _hydrated: true, _localOnlyHydrated: true });
+      set({
+        autoSave: true,
+        serverAIConfigured: false,
+        serverAIAvailable: false,
+        serverImageAIConfigured: false,
+        aiCredits: 0,
+        _hydrated: true,
+        _localOnlyHydrated: true,
+      });
       return;
     }
 
@@ -139,10 +148,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         const serverAIConfigured = !!data.serverAIConfigured;
+        const serverAIAvailable =
+          typeof data.serverAIAvailable === 'boolean'
+            ? data.serverAIAvailable
+            : serverAIConfigured && typeof data.aiCredits === 'number' && data.aiCredits > 0;
         const serverProvider = normalizeProvider(data.serverAIProvider) || 'openai';
         const serverAIModel = typeof data.serverAIModel === 'string' ? data.serverAIModel : DEFAULT_MODELS[serverProvider];
         set({
           serverAIConfigured,
+          serverAIAvailable,
           serverAIProvider: serverProvider,
           serverAIModel,
           serverOpenAIEndpoint: normalizeOpenAIEndpoint(data.serverOpenAIEndpoint),
@@ -158,7 +172,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       }
     } catch { /* fall through */ }
 
-    set({ _hydrated: true, _localOnlyHydrated: false });
+    set({ serverAIAvailable: false, _hydrated: true, _localOnlyHydrated: false });
   },
 }));
 

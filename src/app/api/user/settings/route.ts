@@ -19,10 +19,12 @@ export async function GET(request: NextRequest) {
       .findAccount(user.id, WALLET_CURRENCY_AI_CREDIT)
       .catch(() => null);
     const aiCredits = Number(aiCreditAccount?.balance ?? user.aiCredits ?? 0);
+    const serverAIConfigured = !!serverAI.apiKey && !!user.email;
     return NextResponse.json({
       ...sanitizeMcpSettings(settings),
       aiCredits,
-      serverAIConfigured: !!serverAI.apiKey && !!user.email,
+      serverAIConfigured,
+      serverAIAvailable: serverAIConfigured && (user.role === 'admin' || aiCredits > 0),
       serverAIProvider: serverAI.provider,
       serverAIModel: serverAI.model,
       serverOpenAIEndpoint: serverAI.openAIEndpoint,

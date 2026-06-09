@@ -204,7 +204,7 @@ export function PublicResumeReview({
 }) {
   const t = useTranslations('publicView');
   const { user, isAuthenticated } = useAuth();
-  const { hydrate, _hydrated, _localOnlyHydrated, serverAIConfigured } = useSettingsStore();
+  const { hydrate, _hydrated, _localOnlyHydrated, serverAIAvailable } = useSettingsStore();
   const localOnly = useIsLocalOnly();
   const previewRef = useRef<HTMLDivElement>(null);
   const selectionMarkerRef = useRef<HTMLSpanElement | null>(null);
@@ -244,7 +244,7 @@ export function PublicResumeReview({
   const copyright = safeCopy(t('copyright', { owner: ownerName }), `© TouchResume & ${ownerName}`);
   const visitorWatermark = `${safeCopy(t('visitor'), 'Visitor')}: ${visitorName} · ${copyright}`;
   const sensitiveWatermark = `${safeCopy(t('sensitiveWatermark'), 'Sensitive content - do not share')} · ${safeCopy(t('antiCrawlerWatermark'), 'No AI crawler / training collection')}`;
-  const aiAvailable = isAuthenticated && serverAIConfigured;
+  const aiAvailable = isAuthenticated && serverAIAvailable;
 
   const headers = useCallback((json = false): Record<string, string> => ({
     ...(json ? { 'Content-Type': 'application/json' } : {}),

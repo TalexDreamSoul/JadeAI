@@ -4,7 +4,7 @@ import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import { MessageSquare, Minus, AlertTriangle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEditorStore } from '@/stores/editor-store';
-import { hasUsableAIConfig, useSettingsStore } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { AIChatContent } from './ai-chat-panel';
 
 const WIN_W_DESKTOP = 440;
@@ -52,8 +52,7 @@ function calcWindowPos(bubbleRight: number, bubbleBottom: number, winW: number, 
 export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
   const t = useTranslations('ai');
   const { showAiChat, toggleAiChat } = useEditorStore();
-  useSettingsStore((s) => s.serverAIConfigured);
-  const hasAIConfig = hasUsableAIConfig();
+  const hasAIConfig = useSettingsStore((s) => s.serverAIAvailable);
 
   // Bubble position (draggable, right/bottom offsets)
   const [bubblePos, setBubblePos] = useState({ x: 24, y: 24 });
