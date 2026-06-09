@@ -117,7 +117,7 @@ export const userRepository = {
     return this.findById(id);
   },
 
-  async setAICredits(id: string, aiCredits: number, source = 'manual_adjust') {
+  async setAICredits(id: string, aiCredits: number, source = 'manual_adjust', metadata: Record<string, unknown> = {}) {
     const nextBalance = Math.max(0, Math.floor(Number(aiCredits) || 0));
     await ensureUserCommercialDefaults(id, 0);
     const account = await walletRepository.ensureAccount(id, WALLET_CURRENCY_AI_CREDIT);
@@ -131,18 +131,19 @@ export const userRepository = {
         source,
         sourceId: crypto.randomUUID(),
         description: '管理员调整 AI 点数',
-        metadata: { previousBalance: currentBalance, nextBalance },
+        metadata: { ...metadata, previousBalance: currentBalance, nextBalance },
       });
     } else if (delta < 0) {
-      await walletRepository.debit({
+      const result = await walletRepository.debit({
         userId: id,
         currency: WALLET_CURRENCY_AI_CREDIT,
         amount: Math.abs(delta),
         source,
         sourceId: crypto.randomUUID(),
         description: '管理员调整 AI 点数',
-        metadata: { previousBalance: currentBalance, nextBalance },
+        metadata: { ...metadata, previousBalance: currentBalance, nextBalance },
       });
+      if (!result.ok) throw new Error('AI credit balance adjustment failed');
     }
     await syncLegacyAICredits(id, nextBalance);
     return walletRepository.findAccount(id, WALLET_CURRENCY_AI_CREDIT);

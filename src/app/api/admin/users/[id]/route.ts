@@ -26,14 +26,19 @@ export async function PATCH(
     if (body.role === 'user' || body.role === 'admin') {
       patch.role = body.role;
     }
-    const aiCreditBalance = body.aiCreditBalance ?? body.aiCredits;
-    if (aiCreditBalance !== undefined) {
-      patch.aiCredits = Math.max(0, Math.floor(Number(aiCreditBalance) || 0));
-    }
 
     const updated = await userRepository.update(id, patch);
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const aiCreditAccount = await walletRepository.findAccount(updated.id, WALLET_CURRENCY_AI_CREDIT);
+
+    const aiCreditBalance = body.aiCreditBalance ?? body.aiCredits;
+    let aiCreditAccount = await walletRepository.findAccount(updated.id, WALLET_CURRENCY_AI_CREDIT);
+    if (aiCreditBalance !== undefined) {
+      const targetBalance = Math.max(0, Math.floor(Number(aiCreditBalance) || 0));
+      aiCreditAccount = await userRepository.setAICredits(updated.id, targetBalance, 'admin_adjustment', {
+        adminUserId: admin.user.id,
+        targetBalance,
+      });
+    }
 
     return NextResponse.json({
       id: updated.id,
@@ -42,7 +47,7 @@ export async function PATCH(
       avatarUrl: updated.avatarUrl,
       authType: updated.authType,
       role: updated.role,
-      aiCredits: updated.aiCredits,
+      aiCredits: Number(aiCreditAccount?.balance ?? updated.aiCredits ?? 0),
       aiCreditBalance: Number(aiCreditAccount?.balance ?? updated.aiCredits ?? 0),
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,

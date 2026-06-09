@@ -1090,7 +1090,6 @@ export default function AdminPage() {
                         setUsers((prev) => prev.map((item) => item.id === user.id ? {
                           ...item,
                           aiCreditBalance,
-                          aiCredits: aiCreditBalance,
                         } : item));
                       }}
                       onBlur={(event) => updateUser(user.id, { aiCreditBalance: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
