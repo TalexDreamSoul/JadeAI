@@ -1323,6 +1323,8 @@
     "duplicateJobTemplate": "复制",
     "jobTemplateCopyTitle": "{title} 副本",
     "jobTemplateFormHint": "可从内置模板复制为草稿，再按业务线调整唯一标识、JD、关键词和排序。",
+    "jobTemplateRoleKeyDuplicate": "职位模板唯一标识已存在，请换一个新的 roleKey。",
+    "jobTemplateRoleKeyReserved": "该唯一标识已被内置模板占用，请使用新的 roleKey。",
     "noJobTemplateMatches": "没有匹配的职位模板",
     "noUsers": "暂无用户",
     "email": "邮箱",

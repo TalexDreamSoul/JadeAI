@@ -652,6 +652,15 @@ export default function AdminPage() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      if (res.status === 409 && data?.code === 'duplicate_role_key') {
+        setError(t('jobTemplateRoleKeyDuplicate'));
+        return;
+      }
+      if (res.status === 409 && data?.code === 'reserved_role_key') {
+        setError(t('jobTemplateRoleKeyReserved'));
+        return;
+      }
       setError(t('loadFailed'));
       return;
     }

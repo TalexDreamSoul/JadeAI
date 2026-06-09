@@ -86,6 +86,11 @@ export const jobTemplateRepository = {
     return rows[0] ?? null;
   },
 
+  async findByRoleKey(roleKey: string) {
+    const rows = await db.select().from(jobTemplates).where(eq(jobTemplates.roleKey, roleKey)).limit(1);
+    return rows[0] ?? null;
+  },
+
   async create(data: JobTemplateInput) {
     const id = crypto.randomUUID();
     await db.insert(jobTemplates).values({

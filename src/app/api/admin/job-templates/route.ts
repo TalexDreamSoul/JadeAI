@@ -6,8 +6,8 @@ import { jobTemplateRepository, toJobTemplate, type JobTemplateRecord } from '@/
 
 const levelSchema = z.enum(['intern', 'junior', 'mid', 'senior']);
 const inputSchema = z.object({
-  roleKey: z.string().min(1),
-  title: z.string().min(1),
+  roleKey: z.string().trim().min(1),
+  title: z.string().trim().min(1),
   level: levelSchema.default('mid'),
   industry: z.string().default(''),
   jd: z.string().default(''),
@@ -60,7 +60,12 @@ export async function POST(request: NextRequest) {
 
     const existsInBuiltin = JOB_TEMPLATES.some((template) => template.roleKey === parsed.data.roleKey);
     if (existsInBuiltin) {
-      return NextResponse.json({ error: 'roleKey is reserved by a built-in template' }, { status: 409 });
+      return NextResponse.json({ error: 'roleKey is reserved by a built-in template', code: 'reserved_role_key' }, { status: 409 });
+    }
+
+    const existingCustom = await jobTemplateRepository.findByRoleKey(parsed.data.roleKey);
+    if (existingCustom) {
+      return NextResponse.json({ error: 'roleKey already exists', code: 'duplicate_role_key' }, { status: 409 });
     }
 
     const template = await jobTemplateRepository.create({
@@ -73,4 +78,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

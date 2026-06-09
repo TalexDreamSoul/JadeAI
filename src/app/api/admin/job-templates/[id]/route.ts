@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod/v4';
+import { JOB_TEMPLATES } from '@/lib/career/job-templates';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { jobTemplateRepository, toJobTemplate } from '@/lib/db/repositories/job-template.repository';
 
 const updateSchema = z.object({
-  roleKey: z.string().min(1).optional(),
-  title: z.string().min(1).optional(),
+  roleKey: z.string().trim().min(1).optional(),
+  title: z.string().trim().min(1).optional(),
   level: z.enum(['intern', 'junior', 'mid', 'senior']).optional(),
   industry: z.string().optional(),
   jd: z.string().optional(),
@@ -37,6 +38,18 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid input', details: parsed.error.issues }, { status: 400 });
     }
 
+    if (parsed.data.roleKey) {
+      const existsInBuiltin = JOB_TEMPLATES.some((template) => template.roleKey === parsed.data.roleKey);
+      if (existsInBuiltin) {
+        return NextResponse.json({ error: 'roleKey is reserved by a built-in template', code: 'reserved_role_key' }, { status: 409 });
+      }
+
+      const existingCustom = await jobTemplateRepository.findByRoleKey(parsed.data.roleKey);
+      if (existingCustom && existingCustom.id !== id) {
+        return NextResponse.json({ error: 'roleKey already exists', code: 'duplicate_role_key' }, { status: 409 });
+      }
+    }
+
     const template = await jobTemplateRepository.update(id, parsed.data);
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     return NextResponse.json({ id: template.id, ...toJobTemplate(template), enabled: template.enabled, sortOrder: template.sortOrder });
@@ -45,4 +58,3 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

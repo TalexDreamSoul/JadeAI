@@ -1323,6 +1323,8 @@
     "duplicateJobTemplate": "Copy",
     "jobTemplateCopyTitle": "{title} copy",
     "jobTemplateFormHint": "Copy a built-in template into a draft, then adjust the key, JD, keywords, and sort order for your business line.",
+    "jobTemplateRoleKeyDuplicate": "This role template key already exists. Please choose a new roleKey.",
+    "jobTemplateRoleKeyReserved": "This role template key is reserved by a built-in template. Please use a different roleKey.",
     "noJobTemplateMatches": "No role templates match the filters",
     "noUsers": "No users",
     "email": "Email",
