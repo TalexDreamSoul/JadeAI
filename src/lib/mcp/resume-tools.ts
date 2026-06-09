@@ -541,14 +541,13 @@ function summarizeResumeDiff(before: unknown, after: unknown) {
 
 function getMcpAIConfig(args: Record<string, unknown>): AIConfig | null {
   const raw = optionalObjectArg(args, 'aiConfig');
-  const hasInlineApiKey = typeof raw.apiKey === 'string' && raw.apiKey.trim().length > 0;
   const provider = textOfValue(raw.provider || process.env.JADEAI_MCP_AI_PROVIDER || process.env.AI_PROVIDER || 'openai');
-  const apiKey = textOfValue(raw.apiKey || process.env.JADEAI_MCP_AI_API_KEY || process.env.AI_API_KEY || '');
+  const apiKey = textOfValue(process.env.JADEAI_MCP_AI_API_KEY || process.env.AI_API_KEY || '');
   const baseURL = textOfValue(raw.baseURL || raw.baseUrl || process.env.JADEAI_MCP_AI_BASE_URL || process.env.AI_BASE_URL || (provider === 'openai' ? 'https://api.openai.com/v1' : ''));
   const model = textOfValue(raw.model || process.env.JADEAI_MCP_AI_MODEL || process.env.AI_MODEL || '');
   const openAIEndpoint: AIConfig['openAIEndpoint'] = textOfValue(raw.openAIEndpoint || raw.openaiEndpoint || process.env.JADEAI_MCP_AI_OPENAI_ENDPOINT || process.env.AI_OPENAI_ENDPOINT || 'chat') === 'responses' ? 'responses' : 'chat';
   if (!apiKey || !model) return null;
-  return { provider, apiKey, baseURL, model, mode: hasInlineApiKey ? 'custom' : 'server', openAIEndpoint };
+  return { provider, apiKey, baseURL, model, mode: 'server', openAIEndpoint };
 }
 
 function actionSuggestionsFromReadiness(readiness: Awaited<ReturnType<typeof analyzeResumeReadiness>>) {

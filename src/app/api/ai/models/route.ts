@@ -54,48 +54,28 @@ async function fetchModels(provider: string, apiKey: string, baseURL: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const requestedMode = request.headers.get('x-ai-mode');
+  const user = await resolveAIRequestUser(request);
+  if (!user) {
+    return Response.json({ models: [], mode: 'server', loginRequired: true });
+  }
+  const profile = await getUserEntitlementProfile(user.id, Number(user.aiCredits || 0)).catch(() => null);
 
-  if (requestedMode !== 'custom') {
-    const user = await resolveAIRequestUser(request);
-    if (!user) {
-      return Response.json({ models: [], mode: 'server', loginRequired: true });
-    }
-    const profile = await getUserEntitlementProfile(user.id, Number(user.aiCredits || 0)).catch(() => null);
-
-    const serverConfig = await selectServerAIConfig();
-    if (serverConfig.apiKey) {
-      const allowedModelTier = String(profile?.entitlements['ai.model_tier'] || 'basic');
-      const requiredModelTier = inferAIModelTier(serverConfig.model);
-      const tierPayload = { allowedModelTier, requiredModelTier };
-      try {
-        const models = await fetchModels(serverConfig.provider, serverConfig.apiKey, serverConfig.baseURL);
-        if (!models.some((m) => m.id === serverConfig.model)) {
-          models.unshift({ id: serverConfig.model });
-        }
-        return Response.json({ models, mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint, ...tierPayload });
-      } catch {
-        return Response.json({ models: [{ id: serverConfig.model }], mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint, ...tierPayload });
-      }
-    }
+  const serverConfig = await selectServerAIConfig();
+  if (!serverConfig.apiKey) {
+    return Response.json({ models: [], mode: 'server', configured: false });
   }
 
-  const provider = request.headers.get('x-provider') || 'openai';
-  const apiKey = request.headers.get('x-api-key') || '';
-  const baseURL = request.headers.get('x-base-url') || '';
-  const model = request.headers.get('x-model') || '';
-
-  if (!apiKey) {
-    return Response.json({ models: model ? [{ id: model }] : [], mode: 'custom' });
-  }
+  const allowedModelTier = String(profile?.entitlements['ai.model_tier'] || 'basic');
+  const requiredModelTier = inferAIModelTier(serverConfig.model);
+  const tierPayload = { allowedModelTier, requiredModelTier };
 
   try {
-    const models = await fetchModels(provider, apiKey, baseURL);
-    if (model && !models.some((m) => m.id === model)) {
-      models.unshift({ id: model });
+    const models = await fetchModels(serverConfig.provider, serverConfig.apiKey, serverConfig.baseURL);
+    if (!models.some((m) => m.id === serverConfig.model)) {
+      models.unshift({ id: serverConfig.model });
     }
-    return Response.json({ models, mode: 'custom' });
+    return Response.json({ models, mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint, ...tierPayload });
   } catch {
-    return Response.json({ models: model ? [{ id: model }] : [], mode: 'custom' });
+    return Response.json({ models: [{ id: serverConfig.model }], mode: 'server', openAIEndpoint: serverConfig.openAIEndpoint, ...tierPayload });
   }
 }

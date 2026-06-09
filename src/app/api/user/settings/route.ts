@@ -45,7 +45,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
 
     // Only allow known settings keys (exclude sensitive data like API keys)
-    const allowedKeys = ['aiMode', 'aiProvider', 'aiBaseURL', 'aiModel', 'openAIEndpoint', 'autoSave', 'autoSaveInterval', 'browserNotifications'];
+    const allowedKeys = ['autoSave', 'autoSaveInterval', 'browserNotifications'];
     const filtered: Record<string, unknown> = {};
     for (const key of allowedKeys) {
       if (key in body) {

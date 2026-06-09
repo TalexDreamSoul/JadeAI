@@ -5,13 +5,12 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
-    const { image, prompt, requirements, aspectRatio, apiKey } = await request.json();
+    const { image, prompt, requirements, aspectRatio } = await request.json();
     const serverImageAI = getServerImageAIConfig();
-    const effectiveApiKey = (typeof apiKey === 'string' && apiKey.trim()) || serverImageAI.apiKey;
 
-    if (!effectiveApiKey) {
+    if (!serverImageAI.apiKey) {
       return NextResponse.json(
-        { error: 'API Key is required' },
+        { error: 'Cloud image AI is not configured' },
         { status: 400 }
       );
     }
@@ -40,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Gemini REST API accepts both camelCase and snake_case in requests,
     // but we use camelCase to match the canonical proto-JSON format.
     const endpoint = `${serverImageAI.baseURL.replace(/\/$/, '')}/models/${serverImageAI.model}:generateContent`;
-    const res = await fetch(`${endpoint}?key=${encodeURIComponent(effectiveApiKey)}`, {
+    const res = await fetch(`${endpoint}?key=${encodeURIComponent(serverImageAI.apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

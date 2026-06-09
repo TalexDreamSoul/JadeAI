@@ -64,9 +64,8 @@ function normalizeProvider(value: unknown): AIProvider | undefined {
   return undefined;
 }
 
-function normalizeMode(value: unknown, serverAIConfigured: boolean): AIMode {
-  if (value === 'server' || value === 'custom') return value;
-  return serverAIConfigured ? 'server' : 'custom';
+function normalizeMode(): AIMode {
+  return 'server';
 }
 
 function normalizeOpenAIEndpoint(value: unknown): OpenAIEndpoint {
@@ -116,11 +115,7 @@ function syncToServer(state: SettingsStore) {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify({
-          aiMode: state.aiMode,
-          aiProvider: state.aiProvider,
-          aiBaseURL: state.aiBaseURL,
-          aiModel: state.aiModel,
-          openAIEndpoint: state.openAIEndpoint,
+          aiMode: 'server',
           autoSave: state.autoSave,
           autoSaveInterval: state.autoSaveInterval,
           browserNotifications: state.browserNotifications,
@@ -154,36 +149,12 @@ function saveApiKeyLocally(key: string) {
   } catch { /* ignore */ }
 }
 
-function loadApiKeyLocally(): string {
-  if (typeof window === 'undefined') return '';
-  try {
-    return localStorage.getItem(API_KEY_STORAGE_KEY) || '';
-  } catch {
-    return '';
-  }
-}
-
 export function hasUsableAIConfig(): boolean {
-  const { aiMode, aiApiKey, serverAIConfigured } = useSettingsStore.getState();
-  return aiMode === 'server' ? serverAIConfigured : !!aiApiKey;
+  return useSettingsStore.getState().serverAIConfigured;
 }
 
 export function getAIHeaders(): Record<string, string> {
-  const { aiMode, aiProvider, aiApiKey, aiBaseURL, aiModel, openAIEndpoint } = useSettingsStore.getState();
-  const headers: Record<string, string> = { 'x-ai-mode': aiMode };
-
-  // In unified mode the API key/base URL/model are read from server env vars.
-  // Never send personal credentials when the user selected unified AI.
-  if (aiMode === 'server') {
-    return headers;
-  }
-
-  if (aiProvider) headers['x-provider'] = aiProvider;
-  if (aiApiKey) headers['x-api-key'] = aiApiKey;
-  if (aiBaseURL) headers['x-base-url'] = aiBaseURL;
-  if (aiModel) headers['x-model'] = aiModel;
-  if (aiProvider === 'openai') headers['x-openai-endpoint'] = openAIEndpoint;
-  return headers;
+  return { 'x-ai-mode': 'server' };
 }
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
@@ -206,8 +177,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   _localOnlyHydrated: false,
   _syncing: false,
 
-  setAIMode: (mode) => {
-    set({ aiMode: mode });
+  setAIMode: () => {
+    set({ aiMode: 'server' });
     syncToServer(get());
   },
 
@@ -283,12 +254,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const current = get();
     if (current._hydrated && (localOnly || !current._localOnlyHydrated)) return;
 
-    // Load API key from localStorage immediately
-    const apiKey = loadApiKeyLocally();
-    set({ aiApiKey: apiKey });
+    saveApiKeyLocally('');
 
     if (localOnly || !isCloudAvailable()) {
-      set({ aiMode: 'custom', autoSave: true, _hydrated: true, _localOnlyHydrated: true });
+      set({ aiMode: 'server', aiApiKey: '', autoSave: true, _hydrated: true, _localOnlyHydrated: true });
       return;
     }
 
@@ -301,7 +270,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const provider = normalizeProvider(data.aiProvider);
         const serverProvider = normalizeProvider(data.serverAIProvider) || 'openai';
         set({
-          aiMode: normalizeMode(data.aiMode, serverAIConfigured),
+          aiMode: normalizeMode(),
+          aiApiKey: '',
           ...(provider && { aiProvider: provider }),
           ...(data.aiBaseURL && { aiBaseURL: data.aiBaseURL }),
           ...(data.aiModel && { aiModel: data.aiModel }),
@@ -324,7 +294,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       }
     } catch { /* fall through */ }
 
-    set({ aiMode: 'custom', _hydrated: true, _localOnlyHydrated: false });
+    set({ aiMode: 'server', aiApiKey: '', _hydrated: true, _localOnlyHydrated: false });
   },
 }));
 

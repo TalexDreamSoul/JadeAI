@@ -7,7 +7,7 @@ import { auth } from '@/lib/auth/config';
 import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
-import { hasServerAIConfig, selectServerAIConfig, type OpenAIEndpoint } from './server-config';
+import { selectServerAIConfig, type OpenAIEndpoint } from './server-config';
 import { hasAICredits } from '@/lib/commercial/ai-metering-service';
 import { assertServerAIModelAllowedForUser } from '@/lib/commercial/ai-model-tier-service';
 
@@ -18,10 +18,6 @@ export interface AIConfig {
   model: string;
   mode: 'server' | 'custom';
   openAIEndpoint: OpenAIEndpoint;
-}
-
-function normalizeOpenAIEndpoint(value: string | null): OpenAIEndpoint {
-  return value === 'responses' ? 'responses' : 'chat';
 }
 
 export async function resolveAIRequestUser(request: NextRequest) {
@@ -42,73 +38,39 @@ export async function resolveAIRequestUser(request: NextRequest) {
 }
 
 export async function extractAIConfig(request: NextRequest): Promise<AIConfig> {
-  const requestedMode = request.headers.get('x-ai-mode');
-  const wantsServerAI = requestedMode !== 'custom';
-
-  if (wantsServerAI) {
-    const user = await resolveAIRequestUser(request);
-    if (!user) {
-      throw new AIConfigError('Please log in to use the system AI, or switch to a custom API key in Settings.');
-    }
-    if (user.role !== 'admin' && !await hasAICredits(user.id, Number(user.aiCredits || 0))) {
-      throw new AIConfigError('AI credits exhausted. Please contact an administrator or switch to a custom API key.');
-    }
-
-    const serverConfig = await selectServerAIConfig();
-    if (serverConfig.apiKey) {
-      if (user.role !== 'admin') {
-        await assertServerAIModelAllowedForUser({
-          userId: user.id,
-          model: serverConfig.model,
-          legacyAiCredits: Number(user.aiCredits || 0),
-        });
-      }
-      return { ...serverConfig, mode: 'server' };
-    }
+  const user = await resolveAIRequestUser(request);
+  if (!user) {
+    throw new AIConfigError('Please log in to use the cloud AI service.');
+  }
+  if (user.role !== 'admin' && !await hasAICredits(user.id, Number(user.aiCredits || 0))) {
+    throw new AIConfigError('AI credits exhausted. Please contact an administrator or upgrade your plan.');
   }
 
-  const provider = request.headers.get('x-provider') || 'openai';
-  const apiKey = request.headers.get('x-api-key') || '';
-  const baseURL = request.headers.get('x-base-url') || 'https://api.openai.com/v1';
-  const model = request.headers.get('x-model') || 'gpt-4o';
-  return {
-    provider,
-    apiKey,
-    baseURL,
-    model,
-    mode: 'custom',
-    openAIEndpoint: normalizeOpenAIEndpoint(request.headers.get('x-openai-endpoint')),
-  };
+  const serverConfig = await selectServerAIConfig();
+  if (serverConfig.apiKey) {
+    if (user.role !== 'admin') {
+      await assertServerAIModelAllowedForUser({
+        userId: user.id,
+        model: serverConfig.model,
+        legacyAiCredits: Number(user.aiCredits || 0),
+      });
+    }
+    return { ...serverConfig, mode: 'server' };
+  }
+
+  throw new AIConfigError('Cloud AI is not configured. Please ask an administrator to configure an AI channel.');
 }
 
-export function extractAIConfigSync(request: NextRequest): AIConfig {
-  const requestedMode = request.headers.get('x-ai-mode');
-  const wantsServerAI = requestedMode !== 'custom';
-
-  if (wantsServerAI && hasServerAIConfig()) {
-    throw new AIConfigError('Please log in to use the system AI, or switch to a custom API key in Settings.');
-  }
-
-  const provider = request.headers.get('x-provider') || 'openai';
-  const apiKey = request.headers.get('x-api-key') || '';
-  const baseURL = request.headers.get('x-base-url') || 'https://api.openai.com/v1';
-  const model = request.headers.get('x-model') || 'gpt-4o';
-  return {
-    provider,
-    apiKey,
-    baseURL,
-    model,
-    mode: 'custom',
-    openAIEndpoint: normalizeOpenAIEndpoint(request.headers.get('x-openai-endpoint')),
-  };
+export function extractAIConfigSync(): AIConfig {
+  throw new AIConfigError('Cloud AI requests must be resolved asynchronously for user and quota checks.');
 }
 
 export function getModel(config: AIConfig, modelOverride?: string): LanguageModel {
   if (!config.apiKey) {
     throw new AIConfigError(
       config.mode === 'server'
-        ? 'Unified AI is not configured. Please set AI_API_KEY on the server or switch to custom AI in Settings.'
-        : 'API key is required. Please configure it in Settings.'
+        ? 'Cloud AI is not configured. Please ask an administrator to configure an AI channel.'
+        : 'Personal API keys are disabled. Please use the cloud AI service.'
     );
   }
   const modelId = modelOverride || config.model;

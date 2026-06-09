@@ -52,7 +52,7 @@ function calcWindowPos(bubbleRight: number, bubbleBottom: number, winW: number, 
 export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
   const t = useTranslations('ai');
   const { showAiChat, toggleAiChat } = useEditorStore();
-  useSettingsStore((s) => `${s.aiMode}:${s.aiApiKey}:${s.serverAIConfigured}`);
+  useSettingsStore((s) => s.serverAIConfigured);
   const hasAIConfig = hasUsableAIConfig();
 
   // Bubble position (draggable, right/bottom offsets)
@@ -78,7 +78,6 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
   const autoWindowPos = useMemo(() => {
     if (typeof window === 'undefined') return { left: 100, top: 100 };
     return calcWindowPos(bubblePos.x, bubblePos.y, winSize.w, winSize.h);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bubblePos.x, bubblePos.y, winSize.w, winSize.h]);
 
   const winPos = windowPos ?? autoWindowPos;

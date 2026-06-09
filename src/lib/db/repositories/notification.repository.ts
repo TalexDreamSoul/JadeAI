@@ -29,8 +29,8 @@ export const notificationRepository = {
       type: 'notification_low_credits',
       title: credits <= 0 ? 'AI 额度已用完' : 'AI 额度偏低',
       description: credits <= 0
-        ? '系统 AI 额度已用完，可以联系管理员补充或切换为自定义 API Key。'
-        : `当前剩余 AI 额度：${credits}，建议及时补充或切换为自定义 API Key。`,
+        ? '系统 AI 额度已用完，请联系管理员补充额度或升级套餐。'
+        : `当前剩余 AI 额度：${credits}，建议及时补充额度或升级套餐。`,
       actionUrl: '/zh/account',
       metadata: { sourceId, aiCredits: credits, level },
     });
