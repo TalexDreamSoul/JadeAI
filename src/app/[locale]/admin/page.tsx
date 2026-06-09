@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, Copy, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, Copy, FileSliders, KeyRound, MessageSquareText, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -84,6 +84,41 @@ interface AdminAIUsageLog {
   } | null;
 }
 
+interface AdminReviewComment {
+  id: string;
+  shareId: string;
+  resumeId: string;
+  parentCommentId?: string | null;
+  authorUserId?: string | null;
+  authorName: string;
+  authorEmail?: string | null;
+  sectionId?: string | null;
+  selectedText?: string | null;
+  content: string;
+  status: string;
+  createdAt?: string | number | Date;
+  updatedAt?: string | number | Date;
+  share?: {
+    id: string;
+    token?: string | null;
+    label?: string | null;
+    reviewEnabled?: boolean | number | null;
+    isActive?: boolean | number | null;
+  } | null;
+  resume?: {
+    id: string;
+    title?: string | null;
+    targetCompany?: string | null;
+    targetJobTitle?: string | null;
+  } | null;
+  authorUser?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    role?: string | null;
+  } | null;
+}
+
 interface TemplateItem {
   id: string;
   name: string;
@@ -99,6 +134,7 @@ type AdminJobTemplateLevel = 'intern' | 'junior' | 'mid' | 'senior';
 type TemplateStatusFilter = 'all' | 'public' | 'private';
 type JobTemplateLevelFilter = AdminJobTemplateLevel | 'all';
 type JobTemplateSourceFilter = 'all' | 'builtin' | 'custom' | 'enabled' | 'disabled';
+type ReviewCommentStatusFilter = 'all' | 'open' | 'resolved';
 
 interface AdminJobTemplate {
   id: string;
@@ -221,6 +257,7 @@ const EMPTY_REDEEM_FORM = {
 
 const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
 const AI_USAGE_STATUS_OPTIONS = ['all', 'success', 'reserved', 'failed_refunded', 'insufficient_credits'];
+const REVIEW_COMMENT_STATUS_OPTIONS: ReviewCommentStatusFilter[] = ['all', 'open', 'resolved'];
 
 function getHeaders() {
   const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
@@ -259,6 +296,9 @@ export default function AdminPage() {
   const [aiUsage, setAiUsage] = useState<AdminAIUsageLog[]>([]);
   const [aiUsageStatusFilter, setAiUsageStatusFilter] = useState('all');
   const [aiUsageQuery, setAiUsageQuery] = useState('');
+  const [reviewComments, setReviewComments] = useState<AdminReviewComment[]>([]);
+  const [reviewCommentStatusFilter, setReviewCommentStatusFilter] = useState<ReviewCommentStatusFilter>('all');
+  const [reviewCommentQuery, setReviewCommentQuery] = useState('');
   const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
   const [growth, setGrowth] = useState<AdminGrowthState | null>(null);
   const [error, setError] = useState('');
@@ -375,8 +415,37 @@ export default function AdminPage() {
     });
   }, [aiUsage, aiUsageQuery, aiUsageStatusFilter]);
 
+  const reviewCommentStats = useMemo(() => ({
+    total: reviewComments.length,
+    open: reviewComments.filter((comment) => comment.status === 'open').length,
+    resolved: reviewComments.filter((comment) => comment.status === 'resolved').length,
+    shares: new Set(reviewComments.map((comment) => comment.shareId)).size,
+  }), [reviewComments]);
+
+  const filteredReviewComments = useMemo(() => {
+    const query = reviewCommentQuery.trim().toLowerCase();
+    return reviewComments.filter((comment) => {
+      if (reviewCommentStatusFilter !== 'all' && comment.status !== reviewCommentStatusFilter) return false;
+      if (!query) return true;
+      return [
+        comment.authorName,
+        comment.authorEmail,
+        comment.content,
+        comment.selectedText,
+        comment.status,
+        comment.resume?.title,
+        comment.resume?.targetCompany,
+        comment.resume?.targetJobTitle,
+        comment.share?.label,
+        comment.share?.token,
+        comment.authorUser?.email,
+        comment.authorUser?.name,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+    });
+  }, [reviewCommentQuery, reviewComments, reviewCommentStatusFilter]);
+
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, redeemRes, growthRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
@@ -385,12 +454,13 @@ export default function AdminPage() {
       fetch('/api/admin/products?activeOnly=0', { headers: getHeaders() }),
       fetch(`/api/admin/orders?limit=50&status=${orderStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/ai-usage?limit=100&status=${aiUsageStatusFilter}`, { headers: getHeaders() }),
+      fetch(`/api/admin/review-comments?limit=100&status=${reviewCommentStatusFilter}`, { headers: getHeaders() }),
       fetch('/api/admin/redeem-codes?limit=50', { headers: getHeaders() }),
       fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !redeemRes.ok || !growthRes.ok) {
-      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, redeemRes, growthRes].some((res) => res.status === 403);
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !reviewCommentsRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, redeemRes, growthRes].some((res) => res.status === 403);
       setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
@@ -403,11 +473,13 @@ export default function AdminPage() {
     const loadedProducts = await productsRes.json();
     const loadedOrders = await ordersRes.json();
     const loadedAiUsage = await aiUsageRes.json();
+    const loadedReviewComments = await reviewCommentsRes.json();
     const loadedRedeemCodes = await redeemRes.json();
     const loadedGrowth = await growthRes.json();
     setProducts(Array.isArray(loadedProducts.products) ? loadedProducts.products : []);
     setOrders(Array.isArray(loadedOrders.orders) ? loadedOrders.orders : []);
     setAiUsage(Array.isArray(loadedAiUsage.usage) ? loadedAiUsage.usage : []);
+    setReviewComments(Array.isArray(loadedReviewComments.comments) ? loadedReviewComments.comments : []);
     setRedeemCodes(Array.isArray(loadedRedeemCodes.redeemCodes) ? loadedRedeemCodes.redeemCodes : []);
     setGrowth(loadedGrowth && typeof loadedGrowth === 'object' ? loadedGrowth : null);
     const loadedAuth = await authRes.json();
@@ -445,7 +517,7 @@ export default function AdminPage() {
     if (!isLoggedIn) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter]);
+  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, reviewCommentStatusFilter]);
 
   const create = async () => {
     const res = await fetch('/api/admin/ai-channels', {
@@ -762,6 +834,7 @@ export default function AdminPage() {
           <TabsTrigger value="auth" className="gap-2"><KeyRound className="h-4 w-4" />{t('authSettings')}</TabsTrigger>
 	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
 	          <TabsTrigger value="aiUsage" className="gap-2"><Activity className="h-4 w-4" />{t('aiUsage')}</TabsTrigger>
+	          <TabsTrigger value="reviewComments" className="gap-2"><MessageSquareText className="h-4 w-4" />{t('reviewComments')}</TabsTrigger>
 	          <TabsTrigger value="templates" className="gap-2"><FileSliders className="h-4 w-4" />{t('templates')}</TabsTrigger>
 	          <TabsTrigger value="jobTemplates" className="gap-2"><Briefcase className="h-4 w-4" />{t('jobTemplates')}</TabsTrigger>
 	          <TabsTrigger value="commerce" className="gap-2"><ReceiptText className="h-4 w-4" />{t('commerce')}</TabsTrigger>
@@ -977,6 +1050,74 @@ export default function AdminPage() {
                     <div>{Number(item.totalTokens || 0).toLocaleString()} tokens</div>
                   </div>
                   <span className="text-xs text-zinc-500">{formatDate(item.createdAt)}</span>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reviewComments">
+          <Card>
+            <CardHeader className="space-y-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base"><MessageSquareText className="h-4 w-4" />{t('reviewComments')}</CardTitle>
+                <p className="mt-1 text-xs text-zinc-500">{t('reviewCommentsHint')}</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                {[
+                  { label: t('reviewCommentMetricTotal'), value: reviewCommentStats.total },
+                  { label: t('reviewCommentMetricOpen'), value: reviewCommentStats.open },
+                  { label: t('reviewCommentMetricResolved'), value: reviewCommentStats.resolved },
+                  { label: t('reviewCommentMetricShares'), value: reviewCommentStats.shares },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/60">
+                    <div className="text-xs text-zinc-500">{item.label}</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_180px]">
+                <Input
+                  value={reviewCommentQuery}
+                  onChange={(event) => setReviewCommentQuery(event.target.value)}
+                  placeholder={t('reviewCommentSearchPlaceholder')}
+                />
+                <select
+                  value={reviewCommentStatusFilter}
+                  onChange={(event) => setReviewCommentStatusFilter(event.target.value as ReviewCommentStatusFilter)}
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  {REVIEW_COMMENT_STATUS_OPTIONS.map((statusOption) => (
+                    <option key={statusOption} value={statusOption}>
+                      {statusOption === 'all' ? t('allReviewCommentStatuses') : statusOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {reviewComments.length === 0 ? <p className="text-sm text-zinc-400">{t('noReviewComments')}</p> : filteredReviewComments.length === 0 ? <p className="text-sm text-zinc-400">{t('noReviewCommentMatches')}</p> : filteredReviewComments.map((comment) => (
+                <div key={comment.id} className="grid gap-3 rounded-lg border px-3 py-2 text-sm xl:grid-cols-[1.2fr_1fr_140px] xl:items-start">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{comment.resume?.title || comment.resumeId}</span>
+                      <Badge variant={comment.status === 'resolved' ? 'secondary' : 'outline'}>{comment.status}</Badge>
+                      {comment.parentCommentId && <Badge variant="outline">{t('reviewCommentReply')}</Badge>}
+                    </div>
+                    <p className="mt-1 line-clamp-3 text-sm text-zinc-700 dark:text-zinc-200">{comment.content}</p>
+                    {comment.selectedText && <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{t('reviewCommentSelectedText')}: {comment.selectedText}</p>}
+                  </div>
+                  <div className="min-w-0 text-xs text-zinc-500">
+                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">{comment.authorUser?.name || comment.authorName || '-'}</p>
+                    <p className="truncate">{comment.authorUser?.email || comment.authorEmail || '-'}</p>
+                    <p className="mt-2 truncate">{[comment.resume?.targetCompany, comment.resume?.targetJobTitle].filter(Boolean).join(' · ') || '-'}</p>
+                    <p className="truncate">{comment.share?.label || comment.share?.token || comment.shareId}</p>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    <div>{formatDate(comment.createdAt)}</div>
+                    {comment.share?.token && <code className="mt-1 block truncate rounded bg-zinc-100 px-2 py-1 dark:bg-zinc-900">{comment.share.token}</code>}
+                  </div>
                 </div>
               ))}
               <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>

@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gt, max, sql } from 'drizzle-orm';
 import { db } from '../index';
-import { resumeReviewComments, resumeReviewPresence, resumeShares } from '../schema';
+import { resumeReviewComments, resumeReviewPresence, resumes, resumeShares, users } from '../schema';
 
 export const shareRepository = {
   async findByResumeId(resumeId: string) {
@@ -123,6 +123,73 @@ export const shareRepository = {
       .from(resumeReviewComments)
       .where(eq(resumeReviewComments.shareId, shareId))
       .orderBy(desc(resumeReviewComments.createdAt));
+  },
+
+  async listAllCommentsDetailed(limit = 100, status?: string) {
+    const baseQuery = db
+      .select({
+        comment: resumeReviewComments,
+        share: {
+          id: resumeShares.id,
+          token: resumeShares.token,
+          label: resumeShares.label,
+          reviewEnabled: resumeShares.reviewEnabled,
+          isActive: resumeShares.isActive,
+        },
+        resume: {
+          id: resumes.id,
+          title: resumes.title,
+          targetCompany: resumes.targetCompany,
+          targetJobTitle: resumes.targetJobTitle,
+        },
+        authorUser: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+        },
+      })
+      .from(resumeReviewComments)
+      .leftJoin(resumeShares, eq(resumeReviewComments.shareId, resumeShares.id))
+      .leftJoin(resumes, eq(resumeReviewComments.resumeId, resumes.id))
+      .leftJoin(users, eq(resumeReviewComments.authorUserId, users.id));
+
+    const rows = status
+      ? await baseQuery
+        .where(eq(resumeReviewComments.status, status))
+        .orderBy(desc(resumeReviewComments.createdAt))
+        .limit(limit)
+      : await baseQuery
+        .orderBy(desc(resumeReviewComments.createdAt))
+        .limit(limit);
+
+    return rows.map((row: {
+      comment: typeof resumeReviewComments.$inferSelect;
+      share: {
+        id: string | null;
+        token: string | null;
+        label: string | null;
+        reviewEnabled: boolean | number | null;
+        isActive: boolean | number | null;
+      } | null;
+      resume: {
+        id: string | null;
+        title: string | null;
+        targetCompany: string | null;
+        targetJobTitle: string | null;
+      } | null;
+      authorUser: {
+        id: string | null;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      } | null;
+    }) => ({
+      ...row.comment,
+      share: row.share?.id ? row.share : null,
+      resume: row.resume?.id ? row.resume : null,
+      authorUser: row.authorUser?.id ? row.authorUser : null,
+    }));
   },
 
   async createComment(data: {
