@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, ClipboardCheck, Copy, FileSliders, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, ClipboardCheck, Coins, Copy, FileSliders, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -74,6 +74,27 @@ interface AdminAIUsageLog {
   creditsCharged: number;
   status: string;
   error?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt?: string | number | Date;
+  user?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    role?: string | null;
+  } | null;
+}
+
+interface AdminWalletTransaction {
+  id: string;
+  accountId: string;
+  userId: string;
+  currency: string;
+  direction: string;
+  amount: number;
+  balanceAfter: number;
+  source: string;
+  sourceId?: string | null;
+  description: string;
   metadata?: Record<string, unknown> | null;
   createdAt?: string | number | Date;
   user?: {
@@ -336,6 +357,7 @@ const EMPTY_REDEEM_FORM = {
 
 const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
 const AI_USAGE_STATUS_OPTIONS = ['all', 'success', 'reserved', 'failed_refunded', 'insufficient_credits'];
+const WALLET_TRANSACTION_DIRECTION_OPTIONS = ['all', 'credit', 'debit'];
 const REVIEW_COMMENT_STATUS_OPTIONS: ReviewCommentStatusFilter[] = ['all', 'open', 'resolved'];
 const CHANGE_PROPOSAL_STATUS_OPTIONS: ChangeProposalStatusFilter[] = ['all', 'pending', 'applied', 'rejected'];
 
@@ -382,6 +404,9 @@ export default function AdminPage() {
   const [aiUsage, setAiUsage] = useState<AdminAIUsageLog[]>([]);
   const [aiUsageStatusFilter, setAiUsageStatusFilter] = useState('all');
   const [aiUsageQuery, setAiUsageQuery] = useState('');
+  const [walletTransactions, setWalletTransactions] = useState<AdminWalletTransaction[]>([]);
+  const [walletDirectionFilter, setWalletDirectionFilter] = useState('all');
+  const [walletTransactionQuery, setWalletTransactionQuery] = useState('');
   const [reviewComments, setReviewComments] = useState<AdminReviewComment[]>([]);
   const [reviewCommentStatusFilter, setReviewCommentStatusFilter] = useState<ReviewCommentStatusFilter>('all');
   const [reviewCommentQuery, setReviewCommentQuery] = useState('');
@@ -506,6 +531,35 @@ export default function AdminPage() {
     });
   }, [aiUsage, aiUsageQuery, aiUsageStatusFilter]);
 
+  const walletTransactionStats = useMemo(() => ({
+    total: walletTransactions.length,
+    credited: walletTransactions
+      .filter((transaction) => transaction.direction === 'credit')
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0),
+    debited: walletTransactions
+      .filter((transaction) => transaction.direction === 'debit')
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0),
+    users: new Set(walletTransactions.map((transaction) => transaction.userId)).size,
+  }), [walletTransactions]);
+
+  const filteredWalletTransactions = useMemo(() => {
+    const query = walletTransactionQuery.trim().toLowerCase();
+    return walletTransactions.filter((transaction) => {
+      if (walletDirectionFilter !== 'all' && transaction.direction !== walletDirectionFilter) return false;
+      if (!query) return true;
+      return [
+        transaction.currency,
+        transaction.direction,
+        transaction.source,
+        transaction.sourceId,
+        transaction.description,
+        transaction.user?.email,
+        transaction.user?.name,
+        transaction.userId,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+    });
+  }, [walletDirectionFilter, walletTransactionQuery, walletTransactions]);
+
   const reviewCommentStats = useMemo(() => ({
     total: reviewComments.length,
     open: reviewComments.filter((comment) => comment.status === 'open').length,
@@ -599,7 +653,7 @@ export default function AdminPage() {
   }, [changeProposalQuery, changeProposals, changeProposalStatusFilter]);
 
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
@@ -608,6 +662,7 @@ export default function AdminPage() {
       fetch('/api/admin/products?activeOnly=0', { headers: getHeaders() }),
       fetch(`/api/admin/orders?limit=50&status=${orderStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/ai-usage?limit=100&status=${aiUsageStatusFilter}`, { headers: getHeaders() }),
+      fetch(`/api/admin/wallet-transactions?limit=100&direction=${walletDirectionFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/review-comments?limit=100&status=${reviewCommentStatusFilter}`, { headers: getHeaders() }),
       fetch('/api/admin/review-presence?limit=100&minutes=30', { headers: getHeaders() }),
       fetch(`/api/admin/change-proposals?limit=100&status=${changeProposalStatusFilter}`, { headers: getHeaders() }),
@@ -615,8 +670,8 @@ export default function AdminPage() {
       fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !reviewCommentsRes.ok || !reviewPresenceRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
-      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !walletTransactionsRes.ok || !reviewCommentsRes.ok || !reviewPresenceRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
       setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
@@ -629,6 +684,7 @@ export default function AdminPage() {
     const loadedProducts = await productsRes.json();
     const loadedOrders = await ordersRes.json();
     const loadedAiUsage = await aiUsageRes.json();
+    const loadedWalletTransactions = await walletTransactionsRes.json();
     const loadedReviewComments = await reviewCommentsRes.json();
     const loadedReviewPresence = await reviewPresenceRes.json();
     const loadedChangeProposals = await changeProposalsRes.json();
@@ -637,6 +693,7 @@ export default function AdminPage() {
     setProducts(Array.isArray(loadedProducts.products) ? loadedProducts.products : []);
     setOrders(Array.isArray(loadedOrders.orders) ? loadedOrders.orders : []);
     setAiUsage(Array.isArray(loadedAiUsage.usage) ? loadedAiUsage.usage : []);
+    setWalletTransactions(Array.isArray(loadedWalletTransactions.transactions) ? loadedWalletTransactions.transactions : []);
     setReviewComments(Array.isArray(loadedReviewComments.comments) ? loadedReviewComments.comments : []);
     setReviewPresence(Array.isArray(loadedReviewPresence.presence) ? loadedReviewPresence.presence : []);
     setChangeProposals(Array.isArray(loadedChangeProposals.proposals) ? loadedChangeProposals.proposals : []);
@@ -677,7 +734,7 @@ export default function AdminPage() {
     if (!isLoggedIn) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
+  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, walletDirectionFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
 
   const create = async () => {
     const res = await fetch('/api/admin/ai-channels', {
@@ -994,6 +1051,7 @@ export default function AdminPage() {
           <TabsTrigger value="auth" className="gap-2"><KeyRound className="h-4 w-4" />{t('authSettings')}</TabsTrigger>
 	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
 	          <TabsTrigger value="aiUsage" className="gap-2"><Activity className="h-4 w-4" />{t('aiUsage')}</TabsTrigger>
+	          <TabsTrigger value="walletTransactions" className="gap-2"><Coins className="h-4 w-4" />{t('walletTransactions')}</TabsTrigger>
 	          <TabsTrigger value="reviewComments" className="gap-2"><MessageSquareText className="h-4 w-4" />{t('reviewComments')}</TabsTrigger>
 	          <TabsTrigger value="reviewPresence" className="gap-2"><Radio className="h-4 w-4" />{t('reviewPresence')}</TabsTrigger>
 	          <TabsTrigger value="changeProposals" className="gap-2"><ClipboardCheck className="h-4 w-4" />{t('changeProposals')}</TabsTrigger>
@@ -1212,6 +1270,77 @@ export default function AdminPage() {
                     <div>{Number(item.totalTokens || 0).toLocaleString()} tokens</div>
                   </div>
                   <span className="text-xs text-zinc-500">{formatDate(item.createdAt)}</span>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="walletTransactions">
+          <Card>
+            <CardHeader className="space-y-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base"><Coins className="h-4 w-4" />{t('walletTransactions')}</CardTitle>
+                <p className="mt-1 text-xs text-zinc-500">{t('walletTransactionsHint')}</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                {[
+                  { label: t('walletTransactionMetricTotal'), value: walletTransactionStats.total },
+                  { label: t('walletTransactionMetricCredited'), value: walletTransactionStats.credited },
+                  { label: t('walletTransactionMetricDebited'), value: walletTransactionStats.debited },
+                  { label: t('walletTransactionMetricUsers'), value: walletTransactionStats.users },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/60">
+                    <div className="text-xs text-zinc-500">{item.label}</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_180px]">
+                <Input
+                  value={walletTransactionQuery}
+                  onChange={(event) => setWalletTransactionQuery(event.target.value)}
+                  placeholder={t('walletTransactionSearchPlaceholder')}
+                />
+                <select
+                  value={walletDirectionFilter}
+                  onChange={(event) => setWalletDirectionFilter(event.target.value)}
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  {WALLET_TRANSACTION_DIRECTION_OPTIONS.map((direction) => (
+                    <option key={direction} value={direction}>
+                      {direction === 'all' ? t('allWalletTransactionDirections') : direction}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {walletTransactions.length === 0 ? <p className="text-sm text-zinc-400">{t('noWalletTransactions')}</p> : filteredWalletTransactions.length === 0 ? <p className="text-sm text-zinc-400">{t('noWalletTransactionMatches')}</p> : filteredWalletTransactions.map((transaction) => (
+                <div key={transaction.id} className="grid gap-3 rounded-lg border px-3 py-2 text-sm xl:grid-cols-[1fr_1fr_140px_140px] xl:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{transaction.source}</span>
+                      <Badge variant={transaction.direction === 'credit' ? 'secondary' : 'outline'}>{transaction.direction}</Badge>
+                      <Badge variant="outline">{transaction.currency}</Badge>
+                    </div>
+                    <p className="mt-1 truncate text-xs text-zinc-500">{transaction.description || transaction.sourceId || '-'}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{transaction.user?.name || transaction.user?.email || transaction.userId}</p>
+                    <p className="truncate text-xs text-zinc-500">{transaction.user?.email || transaction.user?.role || '-'}</p>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    <div className="font-medium text-zinc-950 dark:text-zinc-50">
+                      {transaction.direction === 'credit' ? '+' : '-'}{Number(transaction.amount || 0)}
+                    </div>
+                    <div>{t('walletBalanceAfter')}: {Number(transaction.balanceAfter || 0)}</div>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    <div>{formatDateTime(transaction.createdAt)}</div>
+                    {transaction.sourceId && <code className="mt-1 block truncate rounded bg-zinc-100 px-2 py-1 dark:bg-zinc-900">{transaction.sourceId}</code>}
+                  </div>
                 </div>
               ))}
               <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>

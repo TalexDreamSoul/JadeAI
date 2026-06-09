@@ -777,6 +777,47 @@ export const walletRepository = {
       .limit(limit);
   },
 
+  async listAllTransactionsDetailed(limit = 100, currency?: WalletCurrency, direction?: string) {
+    const filters = [
+      ...(currency ? [eq(walletTransactions.currency, currency)] : []),
+      ...(direction ? [eq(walletTransactions.direction, direction)] : []),
+    ];
+    const baseQuery = db
+      .select({
+        transaction: walletTransactions,
+        user: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+        },
+      })
+      .from(walletTransactions)
+      .leftJoin(users, eq(walletTransactions.userId, users.id));
+
+    const rows = filters.length
+      ? await baseQuery
+        .where(and(...filters))
+        .orderBy(desc(walletTransactions.createdAt))
+        .limit(limit)
+      : await baseQuery
+        .orderBy(desc(walletTransactions.createdAt))
+        .limit(limit);
+
+    return rows.map((row: {
+      transaction: typeof walletTransactions.$inferSelect;
+      user: {
+        id: string | null;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      } | null;
+    }) => ({
+      ...row.transaction,
+      user: row.user?.id ? row.user : null,
+    }));
+  },
+
   async sumCredits(userId: string, currency: WalletCurrency) {
     const rows = await db
       .select({ total: sql<number>`coalesce(sum(${walletTransactions.amount}), 0)` })
