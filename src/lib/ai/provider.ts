@@ -18,6 +18,7 @@ export interface AIConfig {
   model: string;
   mode: 'server' | 'custom';
   openAIEndpoint: OpenAIEndpoint;
+  userId?: string;
 }
 
 export async function resolveAIRequestUser(request: NextRequest) {
@@ -49,7 +50,7 @@ export async function extractAIConfig(request: NextRequest): Promise<AIConfig> {
   const serverConfig = await selectServerAIConfig();
   if (serverConfig.apiKey) {
     await assertAIModelAllowed(user, serverConfig.model);
-    return { ...serverConfig, mode: 'server' };
+    return { ...serverConfig, mode: 'server', userId: user.id };
   }
 
   throw new AIConfigError('Cloud AI is not configured. Please ask an administrator to configure an AI channel.');

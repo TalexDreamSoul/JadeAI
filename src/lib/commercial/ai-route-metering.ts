@@ -12,7 +12,7 @@ export class AIUsageInsufficientCreditsError extends Error {
 
 export async function withMeteredAIUsage<T>(input: {
   userId?: string | null;
-  aiConfig: Pick<AIConfig, 'provider' | 'model' | 'mode'>;
+  aiConfig: Pick<AIConfig, 'provider' | 'model' | 'mode' | 'userId'>;
   feature: string;
   credits?: number;
   metadata?: Record<string, unknown>;
@@ -22,12 +22,14 @@ export async function withMeteredAIUsage<T>(input: {
     metadata?: Record<string, unknown>;
   }>;
 }) {
-  if (!input.userId || input.aiConfig.mode !== 'server') {
+  const userId = input.userId || input.aiConfig.userId;
+
+  if (!userId || input.aiConfig.mode !== 'server') {
     const output = await input.run();
     return output.value;
   }
 
-  const reserved = await userRepository.reserveAICredit(input.userId, {
+  const reserved = await userRepository.reserveAICredit(userId, {
     feature: input.feature,
     aiConfig: input.aiConfig,
     credits: input.credits,
