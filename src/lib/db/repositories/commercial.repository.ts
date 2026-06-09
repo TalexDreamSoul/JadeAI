@@ -1311,6 +1311,43 @@ export const aiUsageRepository = {
       .orderBy(desc(aiUsageLogs.createdAt))
       .limit(limit);
   },
+
+  async listAllDetailed(limit = 100, status?: string) {
+    const baseQuery = db
+      .select({
+        usage: aiUsageLogs,
+        user: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+        },
+      })
+      .from(aiUsageLogs)
+      .leftJoin(users, eq(aiUsageLogs.userId, users.id));
+
+    const rows = status
+      ? await baseQuery
+        .where(eq(aiUsageLogs.status, status))
+        .orderBy(desc(aiUsageLogs.createdAt))
+        .limit(limit)
+      : await baseQuery
+        .orderBy(desc(aiUsageLogs.createdAt))
+        .limit(limit);
+
+    return rows.map((row: {
+      usage: typeof aiUsageLogs.$inferSelect;
+      user: {
+        id: string | null;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      } | null;
+    }) => ({
+      ...row.usage,
+      user: row.user?.id ? row.user : null,
+    }));
+  },
 };
 
 export const interviewQuestionBankRepository = {

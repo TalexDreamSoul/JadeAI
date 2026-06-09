@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Bot, Briefcase, Copy, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, Copy, FileSliders, KeyRound, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -60,6 +60,28 @@ interface AdminUser {
   aiCredits: number;
   aiCreditBalance?: number;
   createdAt?: string | number | Date;
+}
+
+interface AdminAIUsageLog {
+  id: string;
+  userId: string;
+  feature: string;
+  provider?: string | null;
+  model?: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  creditsCharged: number;
+  status: string;
+  error?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt?: string | number | Date;
+  user?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    role?: string | null;
+  } | null;
 }
 
 interface TemplateItem {
@@ -198,6 +220,7 @@ const EMPTY_REDEEM_FORM = {
 };
 
 const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
+const AI_USAGE_STATUS_OPTIONS = ['all', 'success', 'reserved', 'failed_refunded', 'insufficient_credits'];
 
 function getHeaders() {
   const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
@@ -233,6 +256,9 @@ export default function AdminPage() {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [aiUsage, setAiUsage] = useState<AdminAIUsageLog[]>([]);
+  const [aiUsageStatusFilter, setAiUsageStatusFilter] = useState('all');
+  const [aiUsageQuery, setAiUsageQuery] = useState('');
   const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
   const [growth, setGrowth] = useState<AdminGrowthState | null>(null);
   const [error, setError] = useState('');
@@ -324,8 +350,33 @@ export default function AdminPage() {
     });
   }, [jobTemplateLevelFilter, jobTemplateQuery, jobTemplateSourceFilter, jobTemplates]);
 
+  const aiUsageStats = useMemo(() => ({
+    total: aiUsage.length,
+    charged: aiUsage.reduce((total, item) => total + Number(item.creditsCharged || 0), 0),
+    failed: aiUsage.filter((item) => item.status !== 'success' && item.status !== 'reserved').length,
+    tokens: aiUsage.reduce((total, item) => total + Number(item.totalTokens || 0), 0),
+  }), [aiUsage]);
+
+  const filteredAiUsage = useMemo(() => {
+    const query = aiUsageQuery.trim().toLowerCase();
+    return aiUsage.filter((item) => {
+      if (aiUsageStatusFilter !== 'all' && item.status !== aiUsageStatusFilter) return false;
+      if (!query) return true;
+      return [
+        item.feature,
+        item.provider,
+        item.model,
+        item.status,
+        item.user?.email,
+        item.user?.name,
+        item.userId,
+        item.error,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+    });
+  }, [aiUsage, aiUsageQuery, aiUsageStatusFilter]);
+
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, redeemRes, growthRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
@@ -333,12 +384,13 @@ export default function AdminPage() {
       fetch('/api/admin/job-templates', { headers: getHeaders() }),
       fetch('/api/admin/products?activeOnly=0', { headers: getHeaders() }),
       fetch(`/api/admin/orders?limit=50&status=${orderStatusFilter}`, { headers: getHeaders() }),
+      fetch(`/api/admin/ai-usage?limit=100&status=${aiUsageStatusFilter}`, { headers: getHeaders() }),
       fetch('/api/admin/redeem-codes?limit=50', { headers: getHeaders() }),
       fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !redeemRes.ok || !growthRes.ok) {
-      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, redeemRes, growthRes].some((res) => res.status === 403);
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, redeemRes, growthRes].some((res) => res.status === 403);
       setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
@@ -350,10 +402,12 @@ export default function AdminPage() {
     setJobTemplates([...(loadedJobTemplates.builtin || []), ...(loadedJobTemplates.custom || [])]);
     const loadedProducts = await productsRes.json();
     const loadedOrders = await ordersRes.json();
+    const loadedAiUsage = await aiUsageRes.json();
     const loadedRedeemCodes = await redeemRes.json();
     const loadedGrowth = await growthRes.json();
     setProducts(Array.isArray(loadedProducts.products) ? loadedProducts.products : []);
     setOrders(Array.isArray(loadedOrders.orders) ? loadedOrders.orders : []);
+    setAiUsage(Array.isArray(loadedAiUsage.usage) ? loadedAiUsage.usage : []);
     setRedeemCodes(Array.isArray(loadedRedeemCodes.redeemCodes) ? loadedRedeemCodes.redeemCodes : []);
     setGrowth(loadedGrowth && typeof loadedGrowth === 'object' ? loadedGrowth : null);
     const loadedAuth = await authRes.json();
@@ -391,7 +445,7 @@ export default function AdminPage() {
     if (!isLoggedIn) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, status, isLoggedIn, orderStatusFilter]);
+  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter]);
 
   const create = async () => {
     const res = await fetch('/api/admin/ai-channels', {
@@ -698,6 +752,7 @@ export default function AdminPage() {
           <TabsTrigger value="users" className="gap-2"><Users className="h-4 w-4" />{t('users')}</TabsTrigger>
           <TabsTrigger value="auth" className="gap-2"><KeyRound className="h-4 w-4" />{t('authSettings')}</TabsTrigger>
 	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
+	          <TabsTrigger value="aiUsage" className="gap-2"><Activity className="h-4 w-4" />{t('aiUsage')}</TabsTrigger>
 	          <TabsTrigger value="templates" className="gap-2"><FileSliders className="h-4 w-4" />{t('templates')}</TabsTrigger>
 	          <TabsTrigger value="jobTemplates" className="gap-2"><Briefcase className="h-4 w-4" />{t('jobTemplates')}</TabsTrigger>
 	          <TabsTrigger value="commerce" className="gap-2"><ReceiptText className="h-4 w-4" />{t('commerce')}</TabsTrigger>
@@ -850,6 +905,72 @@ export default function AdminPage() {
                 ))}
                 <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="aiUsage">
+          <Card>
+            <CardHeader className="space-y-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base"><Activity className="h-4 w-4" />{t('aiUsage')}</CardTitle>
+                <p className="mt-1 text-xs text-zinc-500">{t('aiUsageHint')}</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                {[
+                  { label: t('aiUsageMetricTotal'), value: aiUsageStats.total },
+                  { label: t('aiUsageMetricCharged'), value: aiUsageStats.charged },
+                  { label: t('aiUsageMetricFailed'), value: aiUsageStats.failed },
+                  { label: t('aiUsageMetricTokens'), value: aiUsageStats.tokens.toLocaleString() },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/60">
+                    <div className="text-xs text-zinc-500">{item.label}</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_220px]">
+                <Input
+                  value={aiUsageQuery}
+                  onChange={(event) => setAiUsageQuery(event.target.value)}
+                  placeholder={t('aiUsageSearchPlaceholder')}
+                />
+                <select
+                  value={aiUsageStatusFilter}
+                  onChange={(event) => setAiUsageStatusFilter(event.target.value)}
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  {AI_USAGE_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status === 'all' ? t('allAiUsageStatuses') : status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {aiUsage.length === 0 ? <p className="text-sm text-zinc-400">{t('noAiUsage')}</p> : filteredAiUsage.length === 0 ? <p className="text-sm text-zinc-400">{t('noAiUsageMatches')}</p> : filteredAiUsage.map((item) => (
+                <div key={item.id} className="grid gap-3 rounded-lg border px-3 py-2 text-sm lg:grid-cols-[1.1fr_1fr_120px_120px] lg:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{item.feature}</span>
+                      <Badge variant={item.status === 'success' ? 'secondary' : item.status === 'reserved' ? 'outline' : 'destructive'}>{item.status}</Badge>
+                    </div>
+                    <p className="mt-1 truncate text-xs text-zinc-500">{[item.provider, item.model].filter(Boolean).join(' · ') || '-'}</p>
+                    {item.error && <p className="mt-1 line-clamp-2 text-xs text-red-600 dark:text-red-400">{item.error}</p>}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{item.user?.name || item.user?.email || item.userId}</p>
+                    <p className="truncate text-xs text-zinc-500">{item.user?.email || item.user?.role || '-'}</p>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    <div className="font-medium text-zinc-950 dark:text-zinc-50">{item.creditsCharged} {t('aiUsageCreditsUnit')}</div>
+                    <div>{Number(item.totalTokens || 0).toLocaleString()} tokens</div>
+                  </div>
+                  <span className="text-xs text-zinc-500">{formatDate(item.createdAt)}</span>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
             </CardContent>
           </Card>
         </TabsContent>
