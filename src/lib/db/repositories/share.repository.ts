@@ -192,6 +192,73 @@ export const shareRepository = {
     }));
   },
 
+  async listAllPresenceDetailed(limit = 100, since?: Date) {
+    const baseQuery = db
+      .select({
+        presence: resumeReviewPresence,
+        share: {
+          id: resumeShares.id,
+          token: resumeShares.token,
+          label: resumeShares.label,
+          reviewEnabled: resumeShares.reviewEnabled,
+          isActive: resumeShares.isActive,
+        },
+        resume: {
+          id: resumes.id,
+          title: resumes.title,
+          targetCompany: resumes.targetCompany,
+          targetJobTitle: resumes.targetJobTitle,
+        },
+        user: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+        },
+      })
+      .from(resumeReviewPresence)
+      .leftJoin(resumeShares, eq(resumeReviewPresence.shareId, resumeShares.id))
+      .leftJoin(resumes, eq(resumeReviewPresence.resumeId, resumes.id))
+      .leftJoin(users, eq(resumeReviewPresence.userId, users.id));
+
+    const rows = since
+      ? await baseQuery
+        .where(gt(resumeReviewPresence.lastSeenAt, since))
+        .orderBy(desc(resumeReviewPresence.lastSeenAt))
+        .limit(limit)
+      : await baseQuery
+        .orderBy(desc(resumeReviewPresence.lastSeenAt))
+        .limit(limit);
+
+    return rows.map((row: {
+      presence: typeof resumeReviewPresence.$inferSelect;
+      share: {
+        id: string | null;
+        token: string | null;
+        label: string | null;
+        reviewEnabled: boolean | number | null;
+        isActive: boolean | number | null;
+      } | null;
+      resume: {
+        id: string | null;
+        title: string | null;
+        targetCompany: string | null;
+        targetJobTitle: string | null;
+      } | null;
+      user: {
+        id: string | null;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      } | null;
+    }) => ({
+      ...row.presence,
+      share: row.share?.id ? row.share : null,
+      resume: row.resume?.id ? row.resume : null,
+      user: row.user?.id ? row.user : null,
+    }));
+  },
+
   async createComment(data: {
     shareId: string;
     resumeId: string;

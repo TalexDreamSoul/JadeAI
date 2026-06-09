@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, ClipboardCheck, Copy, FileSliders, KeyRound, MessageSquareText, Plus, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, ClipboardCheck, Copy, FileSliders, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -112,6 +112,41 @@ interface AdminReviewComment {
     targetJobTitle?: string | null;
   } | null;
   authorUser?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    role?: string | null;
+  } | null;
+}
+
+interface AdminReviewPresence {
+  id: string;
+  shareId: string;
+  resumeId: string;
+  userId: string;
+  reviewerName: string;
+  reviewerEmail?: string | null;
+  reviewerAvatarUrl?: string | null;
+  cursorX: number;
+  cursorY: number;
+  color: string;
+  lastSeenAt?: string | number | Date;
+  createdAt?: string | number | Date;
+  updatedAt?: string | number | Date;
+  share?: {
+    id: string;
+    token?: string | null;
+    label?: string | null;
+    reviewEnabled?: boolean | number | null;
+    isActive?: boolean | number | null;
+  } | null;
+  resume?: {
+    id: string;
+    title?: string | null;
+    targetCompany?: string | null;
+    targetJobTitle?: string | null;
+  } | null;
+  user?: {
     id: string;
     email?: string | null;
     name?: string | null;
@@ -318,6 +353,12 @@ function formatDate(value?: string | number | Date) {
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString() : '-';
 }
 
+function formatDateTime(value?: string | number | Date) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : '-';
+}
+
 function money(cents: number, currency = 'CNY') {
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
@@ -344,6 +385,8 @@ export default function AdminPage() {
   const [reviewComments, setReviewComments] = useState<AdminReviewComment[]>([]);
   const [reviewCommentStatusFilter, setReviewCommentStatusFilter] = useState<ReviewCommentStatusFilter>('all');
   const [reviewCommentQuery, setReviewCommentQuery] = useState('');
+  const [reviewPresence, setReviewPresence] = useState<AdminReviewPresence[]>([]);
+  const [reviewPresenceQuery, setReviewPresenceQuery] = useState('');
   const [changeProposals, setChangeProposals] = useState<AdminChangeProposal[]>([]);
   const [changeProposalStatusFilter, setChangeProposalStatusFilter] = useState<ChangeProposalStatusFilter>('all');
   const [changeProposalQuery, setChangeProposalQuery] = useState('');
@@ -492,6 +535,37 @@ export default function AdminPage() {
     });
   }, [reviewCommentQuery, reviewComments, reviewCommentStatusFilter]);
 
+  const reviewPresenceStats = useMemo(() => {
+    const activeSince = Date.now() - 2 * 60 * 1000;
+    return {
+      total: reviewPresence.length,
+      active: reviewPresence.filter((presence) => {
+        const lastSeen = presence.lastSeenAt ? new Date(presence.lastSeenAt).getTime() : 0;
+        return Number.isFinite(lastSeen) && lastSeen >= activeSince;
+      }).length,
+      shares: new Set(reviewPresence.map((presence) => presence.shareId)).size,
+      resumes: new Set(reviewPresence.map((presence) => presence.resumeId)).size,
+    };
+  }, [reviewPresence]);
+
+  const filteredReviewPresence = useMemo(() => {
+    const query = reviewPresenceQuery.trim().toLowerCase();
+    if (!query) return reviewPresence;
+    return reviewPresence.filter((presence) => [
+      presence.reviewerName,
+      presence.reviewerEmail,
+      presence.user?.email,
+      presence.user?.name,
+      presence.userId,
+      presence.resume?.title,
+      presence.resume?.targetCompany,
+      presence.resume?.targetJobTitle,
+      presence.share?.label,
+      presence.share?.token,
+      presence.shareId,
+    ].some((value) => String(value || '').toLowerCase().includes(query)));
+  }, [reviewPresence, reviewPresenceQuery]);
+
   const changeProposalStats = useMemo(() => ({
     total: changeProposals.length,
     pending: changeProposals.filter((proposal) => proposal.status === 'pending').length,
@@ -525,7 +599,7 @@ export default function AdminPage() {
   }, [changeProposalQuery, changeProposals, changeProposalStatusFilter]);
 
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
@@ -535,13 +609,14 @@ export default function AdminPage() {
       fetch(`/api/admin/orders?limit=50&status=${orderStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/ai-usage?limit=100&status=${aiUsageStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/review-comments?limit=100&status=${reviewCommentStatusFilter}`, { headers: getHeaders() }),
+      fetch('/api/admin/review-presence?limit=100&minutes=30', { headers: getHeaders() }),
       fetch(`/api/admin/change-proposals?limit=100&status=${changeProposalStatusFilter}`, { headers: getHeaders() }),
       fetch('/api/admin/redeem-codes?limit=50', { headers: getHeaders() }),
       fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !reviewCommentsRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
-      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !reviewCommentsRes.ok || !reviewPresenceRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
       setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
@@ -555,6 +630,7 @@ export default function AdminPage() {
     const loadedOrders = await ordersRes.json();
     const loadedAiUsage = await aiUsageRes.json();
     const loadedReviewComments = await reviewCommentsRes.json();
+    const loadedReviewPresence = await reviewPresenceRes.json();
     const loadedChangeProposals = await changeProposalsRes.json();
     const loadedRedeemCodes = await redeemRes.json();
     const loadedGrowth = await growthRes.json();
@@ -562,6 +638,7 @@ export default function AdminPage() {
     setOrders(Array.isArray(loadedOrders.orders) ? loadedOrders.orders : []);
     setAiUsage(Array.isArray(loadedAiUsage.usage) ? loadedAiUsage.usage : []);
     setReviewComments(Array.isArray(loadedReviewComments.comments) ? loadedReviewComments.comments : []);
+    setReviewPresence(Array.isArray(loadedReviewPresence.presence) ? loadedReviewPresence.presence : []);
     setChangeProposals(Array.isArray(loadedChangeProposals.proposals) ? loadedChangeProposals.proposals : []);
     setRedeemCodes(Array.isArray(loadedRedeemCodes.redeemCodes) ? loadedRedeemCodes.redeemCodes : []);
     setGrowth(loadedGrowth && typeof loadedGrowth === 'object' ? loadedGrowth : null);
@@ -918,6 +995,7 @@ export default function AdminPage() {
 	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
 	          <TabsTrigger value="aiUsage" className="gap-2"><Activity className="h-4 w-4" />{t('aiUsage')}</TabsTrigger>
 	          <TabsTrigger value="reviewComments" className="gap-2"><MessageSquareText className="h-4 w-4" />{t('reviewComments')}</TabsTrigger>
+	          <TabsTrigger value="reviewPresence" className="gap-2"><Radio className="h-4 w-4" />{t('reviewPresence')}</TabsTrigger>
 	          <TabsTrigger value="changeProposals" className="gap-2"><ClipboardCheck className="h-4 w-4" />{t('changeProposals')}</TabsTrigger>
 	          <TabsTrigger value="templates" className="gap-2"><FileSliders className="h-4 w-4" />{t('templates')}</TabsTrigger>
 	          <TabsTrigger value="jobTemplates" className="gap-2"><Briefcase className="h-4 w-4" />{t('jobTemplates')}</TabsTrigger>
@@ -1201,6 +1279,59 @@ export default function AdminPage() {
                   <div className="text-xs text-zinc-500">
                     <div>{formatDate(comment.createdAt)}</div>
                     {comment.share?.token && <code className="mt-1 block truncate rounded bg-zinc-100 px-2 py-1 dark:bg-zinc-900">{comment.share.token}</code>}
+                  </div>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reviewPresence">
+          <Card>
+            <CardHeader className="space-y-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base"><Radio className="h-4 w-4" />{t('reviewPresence')}</CardTitle>
+                <p className="mt-1 text-xs text-zinc-500">{t('reviewPresenceHint')}</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                {[
+                  { label: t('reviewPresenceMetricRecent'), value: reviewPresenceStats.total },
+                  { label: t('reviewPresenceMetricActive'), value: reviewPresenceStats.active },
+                  { label: t('reviewPresenceMetricShares'), value: reviewPresenceStats.shares },
+                  { label: t('reviewPresenceMetricResumes'), value: reviewPresenceStats.resumes },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/60">
+                    <div className="text-xs text-zinc-500">{item.label}</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <Input
+                value={reviewPresenceQuery}
+                onChange={(event) => setReviewPresenceQuery(event.target.value)}
+                placeholder={t('reviewPresenceSearchPlaceholder')}
+              />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {reviewPresence.length === 0 ? <p className="text-sm text-zinc-400">{t('noReviewPresence')}</p> : filteredReviewPresence.length === 0 ? <p className="text-sm text-zinc-400">{t('noReviewPresenceMatches')}</p> : filteredReviewPresence.map((presence) => (
+                <div key={presence.id} className="grid gap-3 rounded-lg border px-3 py-2 text-sm xl:grid-cols-[1fr_1fr_160px] xl:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: presence.color || '#10b981' }} />
+                      <span className="truncate font-medium">{presence.user?.name || presence.reviewerName || presence.user?.email || presence.userId}</span>
+                      {presence.share?.isActive === false && <Badge variant="destructive">{t('reviewPresenceInactiveShare')}</Badge>}
+                    </div>
+                    <p className="mt-1 truncate text-xs text-zinc-500">{presence.user?.email || presence.reviewerEmail || '-'}</p>
+                  </div>
+                  <div className="min-w-0 text-xs text-zinc-500">
+                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">{presence.resume?.title || presence.resumeId}</p>
+                    <p className="truncate">{[presence.resume?.targetCompany, presence.resume?.targetJobTitle].filter(Boolean).join(' · ') || '-'}</p>
+                    <p className="mt-1 truncate">{presence.share?.label || presence.share?.token || presence.shareId}</p>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    <div className="font-medium text-zinc-950 dark:text-zinc-50">{formatDateTime(presence.lastSeenAt)}</div>
+                    {presence.share?.token && <code className="mt-1 block truncate rounded bg-zinc-100 px-2 py-1 dark:bg-zinc-900">{presence.share.token}</code>}
                   </div>
                 </div>
               ))}
