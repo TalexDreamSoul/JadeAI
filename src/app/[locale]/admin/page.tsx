@@ -74,6 +74,8 @@ interface TemplateItem {
 }
 
 type AdminJobTemplateLevel = 'intern' | 'junior' | 'mid' | 'senior';
+type JobTemplateLevelFilter = AdminJobTemplateLevel | 'all';
+type JobTemplateSourceFilter = 'all' | 'builtin' | 'custom' | 'enabled' | 'disabled';
 
 interface AdminJobTemplate {
   id: string;
@@ -254,6 +256,9 @@ export default function AdminPage() {
   });
   const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
   const [jobTemplateForm, setJobTemplateForm] = useState(EMPTY_JOB_TEMPLATE_FORM);
+  const [jobTemplateQuery, setJobTemplateQuery] = useState('');
+  const [jobTemplateLevelFilter, setJobTemplateLevelFilter] = useState<JobTemplateLevelFilter>('all');
+  const [jobTemplateSourceFilter, setJobTemplateSourceFilter] = useState<JobTemplateSourceFilter>('all');
   const [redeemForm, setRedeemForm] = useState(EMPTY_REDEEM_FORM);
 
   const isLoggedIn = status === 'authenticated' && !!session?.user?.email;
@@ -264,6 +269,34 @@ export default function AdminPage() {
     value: template,
     label: getTemplateLabel(template, tDashboard),
   })), [tDashboard]);
+
+  const jobTemplateStats = useMemo(() => ({
+    total: jobTemplates.length,
+    custom: jobTemplates.filter((template) => !template.builtin).length,
+    enabled: jobTemplates.filter((template) => template.enabled).length,
+    disabled: jobTemplates.filter((template) => !template.enabled).length,
+  }), [jobTemplates]);
+
+  const filteredJobTemplates = useMemo(() => {
+    const query = jobTemplateQuery.trim().toLowerCase();
+    return jobTemplates.filter((template) => {
+      const matchesQuery = !query || [
+        template.roleKey,
+        template.title,
+        template.industry,
+        template.jd,
+        ...template.keywords,
+      ].some((value) => value.toLowerCase().includes(query));
+      const matchesLevel = jobTemplateLevelFilter === 'all' || template.level === jobTemplateLevelFilter;
+      const matchesSource =
+        jobTemplateSourceFilter === 'all' ||
+        (jobTemplateSourceFilter === 'builtin' && template.builtin) ||
+        (jobTemplateSourceFilter === 'custom' && !template.builtin) ||
+        (jobTemplateSourceFilter === 'enabled' && template.enabled) ||
+        (jobTemplateSourceFilter === 'disabled' && !template.enabled);
+      return matchesQuery && matchesLevel && matchesSource;
+    });
+  }, [jobTemplateLevelFilter, jobTemplateQuery, jobTemplateSourceFilter, jobTemplates]);
 
   const load = async () => {
     const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, redeemRes, growthRes] = await Promise.all([
@@ -481,6 +514,30 @@ export default function AdminPage() {
       recommendedSectionsText: template.recommendedSections.join('\n'),
       enabled: template.enabled,
       sortOrder: template.sortOrder,
+    });
+  };
+
+  const copyJobTemplate = (template: AdminJobTemplate) => {
+    const nextSortOrder = Math.max(1000, ...jobTemplates.filter((item) => !item.builtin).map((item) => item.sortOrder)) + 10;
+    const existingKeys = new Set(jobTemplates.map((item) => item.roleKey));
+    let nextRoleKey = `${template.roleKey}-custom`;
+    let suffix = 2;
+    while (existingKeys.has(nextRoleKey)) {
+      nextRoleKey = `${template.roleKey}-custom-${suffix}`;
+      suffix += 1;
+    }
+    setJobTemplateForm({
+      id: '',
+      roleKey: nextRoleKey,
+      title: t('jobTemplateCopyTitle', { title: template.title }),
+      level: template.level,
+      industry: template.industry,
+      jd: template.jd,
+      keywordsText: template.keywords.join('\n'),
+      interviewQuestionsText: template.interviewQuestions.join('\n'),
+      recommendedSectionsText: template.recommendedSections.join('\n'),
+      enabled: true,
+      sortOrder: nextSortOrder,
     });
   };
 
@@ -795,12 +852,59 @@ export default function AdminPage() {
           </div>
         </TabsContent>
 
-	        <TabsContent value="jobTemplates">
+        <TabsContent value="jobTemplates">
           <div className="grid gap-4 lg:grid-cols-[1fr_460px]">
             <Card>
-              <CardHeader><CardTitle className="text-base">{t('jobTemplates')}</CardTitle></CardHeader>
+              <CardHeader className="space-y-3">
+                <div>
+                  <CardTitle className="text-base">{t('jobTemplates')}</CardTitle>
+                  <p className="mt-1 text-xs text-zinc-500">{t('jobTemplateListHint')}</p>
+                </div>
+                <div className="grid gap-2 md:grid-cols-4">
+                  {[
+                    { label: t('jobTemplateMetricTotal'), value: jobTemplateStats.total },
+                    { label: t('jobTemplateMetricCustom'), value: jobTemplateStats.custom },
+                    { label: t('jobTemplateMetricEnabled'), value: jobTemplateStats.enabled },
+                    { label: t('jobTemplateMetricDisabled'), value: jobTemplateStats.disabled },
+                  ].map((metric) => (
+                    <div key={metric.label} className="rounded-lg border px-3 py-2">
+                      <p className="text-xs text-zinc-500">{metric.label}</p>
+                      <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{metric.value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-2 md:grid-cols-[1fr_140px_140px]">
+                  <Input
+                    value={jobTemplateQuery}
+                    onChange={(event) => setJobTemplateQuery(event.target.value)}
+                    placeholder={t('jobTemplateSearchPlaceholder')}
+                  />
+                  <select
+                    value={jobTemplateLevelFilter}
+                    onChange={(event) => setJobTemplateLevelFilter(event.target.value as JobTemplateLevelFilter)}
+                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="all">{t('allLevels')}</option>
+                    <option value="intern">intern</option>
+                    <option value="junior">junior</option>
+                    <option value="mid">mid</option>
+                    <option value="senior">senior</option>
+                  </select>
+                  <select
+                    value={jobTemplateSourceFilter}
+                    onChange={(event) => setJobTemplateSourceFilter(event.target.value as JobTemplateSourceFilter)}
+                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="all">{t('allSources')}</option>
+                    <option value="builtin">{t('sourceBuiltin')}</option>
+                    <option value="custom">{t('sourceCustom')}</option>
+                    <option value="enabled">{t('sourceEnabled')}</option>
+                    <option value="disabled">{t('sourceDisabled')}</option>
+                  </select>
+                </div>
+              </CardHeader>
               <CardContent className="space-y-2">
-                {jobTemplates.length === 0 ? <p className="text-sm text-zinc-400">{t('noJobTemplates')}</p> : jobTemplates.map((template) => (
+                {jobTemplates.length === 0 ? <p className="text-sm text-zinc-400">{t('noJobTemplates')}</p> : filteredJobTemplates.length === 0 ? <p className="text-sm text-zinc-400">{t('noJobTemplateMatches')}</p> : filteredJobTemplates.map((template) => (
                   <div key={template.id} className="rounded-lg border px-3 py-2">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -815,21 +919,27 @@ export default function AdminPage() {
                           {template.keywords.slice(0, 8).map((keyword) => <Badge key={keyword} variant="secondary">{keyword}</Badge>)}
                         </div>
                       </div>
-                      {!template.builtin && (
-                        <div className="flex shrink-0 gap-2">
-                          <Button variant="outline" size="sm" onClick={() => editJobTemplate(template)}>{t('edit')}</Button>
+                      <div className="flex shrink-0 gap-2">
+                        <Button variant="outline" size="sm" onClick={() => copyJobTemplate(template)}>{t('duplicateJobTemplate')}</Button>
+                        {!template.builtin && (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => editJobTemplate(template)}>{t('edit')}</Button>
                           <Button variant="outline" size="sm" onClick={() => toggleJobTemplate(template)}>
                             {template.enabled ? t('disable') : t('enable')}
                           </Button>
-                        </div>
-                      )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
               </CardContent>
             </Card>
             <Card>
-              <CardHeader><CardTitle className="text-base">{jobTemplateForm.id ? t('saveJobTemplate') : t('createJobTemplate')}</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">{jobTemplateForm.id ? t('saveJobTemplate') : t('createJobTemplate')}</CardTitle>
+                <p className="text-xs text-zinc-500">{t('jobTemplateFormHint')}</p>
+              </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid gap-2 md:grid-cols-2">
                   <Input value={jobTemplateForm.roleKey} onChange={(e) => setJobTemplateForm({ ...jobTemplateForm, roleKey: e.target.value })} placeholder={t('jobTemplateRoleKey')} />
