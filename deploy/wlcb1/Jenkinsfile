@@ -18,8 +18,8 @@ pipeline {
   }
 
   environment {
-    // Jenkins runs inside a container on wlcb1; 172.18.0.1 is the Docker bridge host address used by the existing Jenkins jobs.
-    DEPLOY_HOST = 'root@172.18.0.1'
+    // Jenkins runs inside a container on wlcb1 app-net; 172.20.0.1 is the Docker bridge host address.
+    DEPLOY_HOST = 'root@172.20.0.1'
     RETAIN_COUNT = '5'
   }
 

@@ -63,7 +63,7 @@ Parameters:
 - `GITHUB_RUN_NUMBER`
 - `GITHUB_RUN_ID`
 
-Use `deploy/wlcb1/Jenkinsfile` as the Pipeline script, or paste it into the job.
+Use `deploy/wlcb1/Jenkinsfile` as the Pipeline script, or paste it into the job. If the Jenkins container network changes, update `DEPLOY_HOST` to the Docker bridge gateway reachable from the Jenkins container.
 
 Credential required by the Jenkinsfile:
 
