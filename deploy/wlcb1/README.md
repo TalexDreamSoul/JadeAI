@@ -3,7 +3,7 @@
 This directory contains the deployment assets for the new JadeAI flow:
 
 ```text
-GitHub push master/preview
+GitHub push main/preview
   -> GitHub Actions builds and pushes GHCR image
   -> GitHub Actions triggers Jenkins job jadeai-deploy
   -> Jenkins SSHs to wlcb1
@@ -15,7 +15,7 @@ GitHub push master/preview
 
 | Branch | Environment | Directory | Container | Local port | Domain |
 | --- | --- | --- | --- | --- | --- |
-| `master` | `production` | `/opt/jadeai/resume-production` | `jadeai-resume-production` | `127.0.0.1:3710` on current wlcb1 migration | `resume.wc1.tagzxia.com` |
+| `main` | `production` | `/opt/jadeai/resume-production` | `jadeai-resume-production` | `127.0.0.1:3710` on current wlcb1 migration | `resume.wc1.tagzxia.com` |
 | `preview` | `preview` | `/opt/jadeai/resume-preview` | `jadeai-resume-preview` | `127.0.0.1:18081` | `resume-preview.wc1.tagzxia.com` |
 
 Production keeps the existing public port mapping during migration. Preview uses `127.0.0.1:18081`; after it is deployed, configure reverse proxy:

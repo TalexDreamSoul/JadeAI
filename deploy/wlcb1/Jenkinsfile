@@ -8,7 +8,7 @@ pipeline {
   }
 
   parameters {
-    string(name: 'BRANCH', defaultValue: '', description: 'Git branch: master or preview')
+    string(name: 'BRANCH', defaultValue: '', description: 'Git branch: main or preview')
     string(name: 'ENV_NAME', defaultValue: '', description: 'production or preview')
     string(name: 'IMAGE', defaultValue: '', description: 'Immutable GHCR image to deploy')
     string(name: 'DOMAIN', defaultValue: '', description: 'Target domain')
@@ -31,8 +31,8 @@ pipeline {
             error "Invalid ENV_NAME: ${params.ENV_NAME}"
           }
 
-          if (params.ENV_NAME == 'production' && params.BRANCH != 'master') {
-            error 'production deploy only accepts master branch'
+          if (params.ENV_NAME == 'production' && params.BRANCH != 'main') {
+            error 'production deploy only accepts main branch'
           }
 
           if (params.ENV_NAME == 'preview' && params.BRANCH != 'preview') {

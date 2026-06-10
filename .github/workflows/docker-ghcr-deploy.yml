@@ -3,7 +3,7 @@ name: Build GHCR Image And Trigger Jenkins
 on:
   push:
     branches:
-      - master
+      - main
       - preview
   workflow_dispatch:
 
@@ -42,7 +42,7 @@ jobs:
           image_name="${image_name,,}"
 
           case "$branch" in
-            master)
+            main)
               env_name="production"
               domain="resume.wc1.tagzxia.com"
               ;;
