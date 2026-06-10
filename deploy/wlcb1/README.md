@@ -91,6 +91,14 @@ previous-image.txt     # generated after first upgrade
 
 Secrets and auth/database config stay in `.env`.
 
+Production uses the existing reverse proxy port and external Docker network. Ensure `/opt/jadeai/.env` contains:
+
+```bash
+CONTAINER_NAME=jadeai-app
+APP_PORT=3710
+APP_ENV=production
+```
+
 ## Manual deploy test
 
 ```bash
