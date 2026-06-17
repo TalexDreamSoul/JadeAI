@@ -78,8 +78,8 @@ else
 fi
 
 log "starting service"
-"${compose[@]}" up -d --no-deps jadeai
-"${compose[@]}" up -d --no-deps jadeai-worker
+"${compose[@]}" up -d --no-deps --force-recreate jadeai
+"${compose[@]}" up -d --no-deps --force-recreate jadeai-worker
 
 log "waiting for service health: $HEALTH_URL"
 health_timeout="${HEALTH_TIMEOUT:-120}"
@@ -134,8 +134,8 @@ if [[ "$healthy" != "true" ]]; then
   else
     "${compose[@]}" pull jadeai || true
   fi
-  "${compose[@]}" up -d --no-deps jadeai
-  "${compose[@]}" up -d --no-deps jadeai-worker
+  "${compose[@]}" up -d --no-deps --force-recreate jadeai
+  "${compose[@]}" up -d --no-deps --force-recreate jadeai-worker
   printf '%s\n' "$OLD_IMAGE" > current-image.txt
 
   rollback_ok=false
