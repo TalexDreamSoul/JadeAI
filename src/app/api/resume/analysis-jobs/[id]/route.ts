@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { resumeAnalysisJobRepository } from '@/lib/db/repositories/resume-analysis-job.repository';
+import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function withoutAnalysisJob(themeConfig: unknown) {
+  const next = asRecord(themeConfig);
+  delete next.analysisJob;
+  return next;
+}
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -19,6 +30,38 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     });
   } catch (error) {
     console.error('GET /api/resume/analysis-jobs/[id] error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const request = _request;
+    const user = await resolveUser(getUserIdFromRequest(request));
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { id } = await context.params;
+    const job = await resumeAnalysisJobRepository.findByIdForUser(id, user.id);
+    if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+
+    let deletedResumeId: string | null = null;
+    if (job.resumeId) {
+      const resume = await resumeRepository.findById(job.resumeId);
+      if (resume?.userId === user.id) {
+        const analysisJob = asRecord(asRecord(resume.themeConfig).analysisJob);
+        if (analysisJob.id === job.id && job.status !== 'succeeded') {
+          await resumeRepository.delete(resume.id);
+          deletedResumeId = resume.id;
+        } else if (analysisJob.id === job.id) {
+          await resumeRepository.update(resume.id, { themeConfig: withoutAnalysisJob(resume.themeConfig) });
+        }
+      }
+    }
+
+    await resumeAnalysisJobRepository.delete(job.id);
+    return NextResponse.json({ success: true, deletedResumeId });
+  } catch (error) {
+    console.error('DELETE /api/resume/analysis-jobs/[id] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

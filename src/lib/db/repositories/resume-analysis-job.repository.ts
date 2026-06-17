@@ -129,6 +129,16 @@ export const resumeAnalysisJobRepository = {
     return rows[0] ?? null;
   },
 
+  async findLatestByResumeIdForUser(resumeId: string, userId: string) {
+    const rows = await db
+      .select()
+      .from(resumeAnalysisJobs)
+      .where(and(eq(resumeAnalysisJobs.resumeId, resumeId), eq(resumeAnalysisJobs.userId, userId)))
+      .orderBy(desc(resumeAnalysisJobs.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
   async listForUser(userId: string, limit = 20) {
     return db
       .select()
@@ -212,6 +222,16 @@ export const resumeAnalysisJobRepository = {
 
   async heartbeat(id: string, workerId: string) {
     return this.updateStatus(id, { workerId, lastHeartbeatAt: now() });
+  },
+
+  async delete(id: string) {
+    await db.delete(resumeAnalysisJobs).where(eq(resumeAnalysisJobs.id, id));
+  },
+
+  async deleteByResumeIdForUser(resumeId: string, userId: string) {
+    await db
+      .delete(resumeAnalysisJobs)
+      .where(and(eq(resumeAnalysisJobs.resumeId, resumeId), eq(resumeAnalysisJobs.userId, userId)));
   },
 
   async releaseStaleRunningJobs(staleBefore: Date) {

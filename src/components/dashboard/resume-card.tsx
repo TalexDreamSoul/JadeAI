@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Copy, Loader2, Trash2, MoreVertical, Share2, Pencil } from 'lucide-react';
+import { Copy, Loader2, Trash2, MoreVertical, Share2, Pencil, RefreshCw } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,10 +21,11 @@ interface ResumeCardProps {
   onDelete: () => void;
   onDuplicate: () => void;
   onRename: (title: string) => void;
+  onRetryAnalysis?: (jobId: string) => void;
   onShare?: () => void;
 }
 
-export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }: ResumeCardProps) {
+export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAnalysis, onShare }: ResumeCardProps) {
   const t = useTranslations();
   const router = useRouter();
   const [isRenaming, setIsRenaming] = useState(false);
@@ -83,6 +84,14 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
   const templateLabel = getTemplateLabel(resume.template, t);
   const analysis = getResumeAnalysisState(resume);
   const isAnalysisActive = !!analysis && ['queued', 'running', 'retrying'].includes(analysis.status);
+  const canRetryAnalysis = !!analysis && ['retrying', 'failed'].includes(analysis.status);
+  const analysisLabel = analysis?.status === 'failed'
+    ? '解析失败'
+    : analysis?.status === 'retrying'
+      ? '等待重试'
+      : analysis
+        ? '解析中'
+        : templateLabel;
 
   return (
     <div
@@ -130,7 +139,7 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
             )}
             <div className="mt-1.5 flex items-center gap-1.5">
               <Badge variant={analysis?.status === 'failed' ? 'destructive' : isAnalysisActive ? 'outline' : 'secondary'} className="text-[11px] px-1.5 py-0">
-                {analysis ? (analysis.status === 'failed' ? '解析失败' : '解析中') : templateLabel}
+                {analysisLabel}
               </Badge>
               <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
                 {resume.updatedAt
@@ -143,22 +152,36 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="cursor-pointer rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className={`cursor-pointer rounded-md p-1 transition-opacity hover:bg-zinc-100 dark:hover:bg-zinc-800 ${analysis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-4 w-4 text-zinc-400" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onCloseAutoFocus={(e) => { if (renamingRef.current) e.preventDefault(); }}>
-              <DropdownMenuItem
-                className="cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startRenaming();
-                }}
-              >
-                <Pencil className="mr-2 h-4 w-4" />
-                {t('common.rename')}
-              </DropdownMenuItem>
+              {canRetryAnalysis && onRetryAnalysis && (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRetryAnalysis(analysis.id);
+                  }}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  重新分析
+                </DropdownMenuItem>
+              )}
+              {!analysis && (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startRenaming();
+                  }}
+                >
+                  <Pencil className="mr-2 h-4 w-4" />
+                  {t('common.rename')}
+                </DropdownMenuItem>
+              )}
               {!analysis && <DropdownMenuItem
                 className="cursor-pointer"
                 onClick={(e) => {

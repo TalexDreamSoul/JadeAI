@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Copy, Loader2, Trash2, MoreVertical, Pencil } from 'lucide-react';
+import { Copy, Loader2, Trash2, MoreVertical, Pencil, RefreshCw } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,9 +20,10 @@ interface ResumeListItemProps {
   onDelete: () => void;
   onDuplicate: () => void;
   onRename: (title: string) => void;
+  onRetryAnalysis?: (jobId: string) => void;
 }
 
-export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: ResumeListItemProps) {
+export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetryAnalysis }: ResumeListItemProps) {
   const t = useTranslations();
   const router = useRouter();
   const [isRenaming, setIsRenaming] = useState(false);
@@ -80,6 +81,14 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: Resu
   const templateLabel = getTemplateLabel(resume.template, t);
   const analysis = getResumeAnalysisState(resume);
   const isAnalysisActive = !!analysis && ['queued', 'running', 'retrying'].includes(analysis.status);
+  const canRetryAnalysis = !!analysis && ['retrying', 'failed'].includes(analysis.status);
+  const analysisLabel = analysis?.status === 'failed'
+    ? '解析失败'
+    : analysis?.status === 'retrying'
+      ? '等待重试'
+      : analysis
+        ? '解析中'
+        : templateLabel;
 
   return (
     <div
@@ -111,7 +120,7 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: Resu
 
       {/* Template / analysis badge */}
       <Badge variant={analysis?.status === 'failed' ? 'destructive' : isAnalysisActive ? 'outline' : 'secondary'} className="shrink-0 text-[11px] px-1.5 py-0">
-        {analysis ? (analysis.status === 'failed' ? '解析失败' : '解析中') : templateLabel}
+        {analysisLabel}
       </Badge>
       {isAnalysisActive && (
         <span className="flex shrink-0 items-center gap-1 text-xs text-zinc-500">
@@ -135,22 +144,36 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: Resu
       {/* Actions */}
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="cursor-pointer rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className={`cursor-pointer rounded-md p-1 transition-opacity hover:bg-zinc-100 dark:hover:bg-zinc-800 ${analysis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
           onClick={(e) => e.stopPropagation()}
         >
           <MoreVertical className="h-4 w-4 text-zinc-400" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onCloseAutoFocus={(e) => { if (renamingRef.current) e.preventDefault(); }}>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              startRenaming();
-            }}
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            {t('common.rename')}
-          </DropdownMenuItem>
+          {canRetryAnalysis && onRetryAnalysis && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetryAnalysis(analysis.id);
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              重新分析
+            </DropdownMenuItem>
+          )}
+          {!analysis && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                startRenaming();
+              }}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              {t('common.rename')}
+            </DropdownMenuItem>
+          )}
           {!analysis && (
             <DropdownMenuItem
               className="cursor-pointer"

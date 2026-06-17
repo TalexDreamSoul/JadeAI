@@ -70,7 +70,7 @@ function sortResumes(resumes: Resume[], sort: SortOption): Resume[] {
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
-  const { resumes, isLoading, fetchResumes, createResume, deleteResume, renameResume, duplicateResume } = useResume();
+  const { resumes, isLoading, fetchResumes, createResume, deleteResume, renameResume, retryAnalysisJob, duplicateResume } = useResume();
   const { openModal, activeModal, closeModal } = useUIStore();
   const { fingerprint, isLoading: fpLoading } = useFingerprint();
   const localOnly = useIsLocalOnly();
@@ -271,6 +271,7 @@ export default function DashboardPage() {
           onDelete={deleteResume}
           onDuplicate={duplicateResume}
           onRename={renameResume}
+          onRetryAnalysis={retryAnalysisJob}
           onShare={localOnly ? undefined : (id) => setShareResumeId(id)}
         />
       ) : (
@@ -282,6 +283,7 @@ export default function DashboardPage() {
               onDelete={() => deleteResume(resume.id)}
               onDuplicate={() => duplicateResume(resume.id)}
               onRename={(title) => renameResume(resume.id, title)}
+              onRetryAnalysis={(jobId) => retryAnalysisJob(jobId)}
             />
           ))}
         </div>

@@ -146,6 +146,9 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
       const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
       const title = resumeData.personalInfo?.fullName || '未命名简历';
       let resume = input.resumeId ? await resumeRepository.findById(input.resumeId) : null;
+      if (input.resumeId && !resume) {
+        throw new Error('关联简历不存在，解析任务可能已被删除');
+      }
 
       if (resume) {
         await resumeRepository.update(resume.id, {

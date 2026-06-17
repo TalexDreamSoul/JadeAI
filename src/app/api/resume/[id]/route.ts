@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { resumeAnalysisJobRepository } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { storeDataUrlObject } from '@/lib/storage/object-storage';
 
@@ -251,6 +252,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    await resumeAnalysisJobRepository.deleteByResumeIdForUser(id, user.id);
     await resumeRepository.delete(id);
     return NextResponse.json({ success: true });
   } catch (error) {

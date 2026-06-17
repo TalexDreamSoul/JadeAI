@@ -123,6 +123,23 @@ export function useResume() {
     return false;
   }, [localOnly]);
 
+  const retryAnalysisJob = useCallback(async (jobId: string) => {
+    try {
+      if (localOnly) return false;
+      const res = await fetch(`/api/resume/analysis-jobs/${jobId}/retry`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      if (res.ok) {
+        await fetchResumes();
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to retry analysis job:', error);
+    }
+    return false;
+  }, [fetchResumes, localOnly]);
+
   const duplicateResume = useCallback(async (id: string) => {
     try {
       if (localOnly || isLocalResumeId(id)) {
@@ -167,6 +184,7 @@ export function useResume() {
     createResume,
     deleteResume,
     renameResume,
+    retryAnalysisJob,
     duplicateResume,
   };
 }
