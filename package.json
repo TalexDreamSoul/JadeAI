@@ -43,6 +43,8 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fingerprintjs/fingerprintjs": "^5.0.1",
+    "@langchain/core": "1.1.49",
+    "@langchain/openai": "1.4.7",
     "@sparticuz/chromium-min": "^143.0.4",
     "ai": "^6.0.78",
     "better-sqlite3": "^12.6.2",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { aiChannelRepository, type AIChannelRecord } from '@/lib/db/repositories/ai-channel.repository';
+import { normalizeOpenAICompatibleBaseUrl } from '@/lib/ai/compatibility';
 
 async function requireAdmin(request: NextRequest) {
   const user = await resolveUser(getUserIdFromRequest(request));
@@ -31,7 +32,7 @@ export async function PATCH(
       ...(body.name !== undefined ? { name: String(body.name) } : {}),
       ...(body.provider !== undefined ? { provider: String(body.provider) } : {}),
       ...(body.apiKey !== undefined && body.apiKey !== '********' ? { apiKey: String(body.apiKey) } : {}),
-      ...(body.baseUrl !== undefined ? { baseUrl: String(body.baseUrl) } : {}),
+      ...(body.baseUrl !== undefined ? { baseUrl: String(body.provider || channel.provider) === 'openai' ? normalizeOpenAICompatibleBaseUrl(String(body.baseUrl)) : String(body.baseUrl) } : {}),
       ...(body.model !== undefined ? { model: String(body.model) } : {}),
       ...(body.openAIEndpoint !== undefined ? { openAIEndpoint: body.openAIEndpoint === 'responses' ? 'responses' : 'chat' } : {}),
       ...(body.weight !== undefined ? { weight: Number(body.weight) || 1 } : {}),

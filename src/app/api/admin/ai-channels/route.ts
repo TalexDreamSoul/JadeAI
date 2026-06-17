@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { aiChannelRepository, type AIChannelRecord } from '@/lib/db/repositories/ai-channel.repository';
+import { normalizeOpenAICompatibleBaseUrl } from '@/lib/ai/compatibility';
 
 async function requireAdmin(request: NextRequest) {
   const user = await resolveUser(getUserIdFromRequest(request));
@@ -33,7 +34,8 @@ export async function POST(request: NextRequest) {
     const name = String(body.name || '').trim();
     const provider = String(body.provider || 'openai').trim();
     const apiKey = String(body.apiKey || '').trim();
-    const baseUrl = String(body.baseUrl || '').trim();
+    const rawBaseUrl = String(body.baseUrl || '').trim();
+    const baseUrl = provider === 'openai' ? normalizeOpenAICompatibleBaseUrl(rawBaseUrl) : rawBaseUrl;
     const model = String(body.model || '').trim();
     if (!name || !apiKey || !baseUrl || !model) {
       return NextResponse.json({ error: 'name, apiKey, baseUrl and model are required' }, { status: 400 });

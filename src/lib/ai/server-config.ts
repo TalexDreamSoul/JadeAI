@@ -1,5 +1,6 @@
 import type { AIProvider } from '@/stores/settings-store';
 import { aiChannelRepository, type AIChannelRecord } from '@/lib/db/repositories/ai-channel.repository';
+import { normalizeOpenAICompatibleBaseUrl } from './compatibility';
 
 export type OpenAIEndpoint = 'chat' | 'responses';
 
@@ -55,7 +56,9 @@ export async function selectServerAIConfig(): Promise<ServerAIConfig> {
   return {
     provider,
     apiKey: channel.apiKey || '',
-    baseURL: channel.baseUrl || DEFAULT_BASE_URLS[provider],
+    baseURL: provider === 'openai'
+      ? normalizeOpenAICompatibleBaseUrl(channel.baseUrl || DEFAULT_BASE_URLS[provider])
+      : channel.baseUrl || DEFAULT_BASE_URLS[provider],
     model: channel.model || DEFAULT_MODELS[provider],
     openAIEndpoint: normalizeOpenAIEndpoint(channel.openAIEndpoint),
   };

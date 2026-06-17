@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, ClipboardCheck, Coins, Copy, FileClock, FileSliders, HardDrive, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, CheckCircle2, ClipboardCheck, Coins, Copy, FileClock, FileSliders, HardDrive, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, TestTube2, Users, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -27,6 +27,25 @@ interface AIChannel {
   weight: number;
   enabled: boolean;
 }
+
+type AIChannelTestAttempt = {
+  endpoint: string;
+  baseUrl: string;
+  ok: boolean;
+  message: string;
+  elapsedMs: number;
+  rawError?: string;
+};
+
+type AIChannelTestResult = {
+  ok: boolean;
+  provider: string;
+  recommendedBaseUrl: string;
+  recommendedEndpoint: string;
+  model: string;
+  message: string;
+  attempts: AIChannelTestAttempt[];
+};
 
 interface OAuthProviderForm {
   enabled: boolean;
@@ -531,8 +550,12 @@ export default function AdminPage() {
     apiKey: '',
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o',
+    openAIEndpoint: 'chat',
     weight: 1,
   });
+  const [aiTestResult, setAiTestResult] = useState<AIChannelTestResult | null>(null);
+  const [testingChannelId, setTestingChannelId] = useState<string | null>(null);
+  const [aiTestTargetChannelId, setAiTestTargetChannelId] = useState<string | null>(null);
   const [authSettings, setAuthSettings] = useState<AuthSettings>({
     authMode: 'local',
     passwordLoginEnabled: true,
@@ -877,6 +900,50 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, resumeAnalysisStatusFilter, walletDirectionFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
 
+  const testAIChannel = async (channel?: AIChannel) => {
+    const targetId = channel?.id || 'new';
+    setTestingChannelId(targetId);
+    setAiTestTargetChannelId(channel?.id || null);
+    setAiTestResult(null);
+    try {
+      const payload = channel
+        ? { id: channel.id, apiKey: channel.apiKey, provider: channel.provider, baseUrl: channel.baseUrl, model: channel.model, openAIEndpoint: channel.openAIEndpoint }
+        : form;
+      const res = await fetch('/api/admin/ai-channels/test', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json().catch(() => ({}));
+      setAiTestResult(result as AIChannelTestResult);
+    } finally {
+      setTestingChannelId(null);
+    }
+  };
+
+  const applyAIChannelRecommendation = async () => {
+    if (!aiTestResult) return;
+    if (aiTestTargetChannelId) {
+      await fetch(`/api/admin/ai-channels/${aiTestTargetChannelId}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          baseUrl: aiTestResult.recommendedBaseUrl,
+          openAIEndpoint: aiTestResult.recommendedEndpoint,
+          model: aiTestResult.model,
+        }),
+      });
+      await load();
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      baseUrl: aiTestResult.recommendedBaseUrl || current.baseUrl,
+      openAIEndpoint: aiTestResult.recommendedEndpoint || current.openAIEndpoint,
+      model: aiTestResult.model || current.model,
+    }));
+  };
+
   const create = async () => {
     const res = await fetch('/api/admin/ai-channels', {
       method: 'POST',
@@ -885,6 +952,7 @@ export default function AdminPage() {
     });
     if (res.ok) {
       setForm({ ...form, name: '', apiKey: '' });
+      setAiTestResult(null);
       load();
     }
   };
@@ -1400,22 +1468,62 @@ export default function AdminPage() {
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Bot className="h-4 w-4" />{t('aiChannels')}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2 md:grid-cols-6">
+              <div className="grid gap-2 md:grid-cols-8">
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('name')} />
                 <Input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} placeholder={t('provider')} />
-                <Input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder={t('baseUrl')} />
+                <Input className="md:col-span-2" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder={t('baseUrl')} />
                 <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={t('model')} />
+                <select
+                  value={form.openAIEndpoint}
+                  onChange={(event) => setForm({ ...form, openAIEndpoint: event.target.value })}
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                  aria-label="OpenAI endpoint"
+                >
+                  <option value="chat">chat</option>
+                  <option value="responses">responses</option>
+                </select>
                 <Input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder={t('apiKey')} type="password" />
-                <Button onClick={create} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Plus className="h-4 w-4" />{t('add')}</Button>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => testAIChannel()} disabled={testingChannelId === 'new'} className="cursor-pointer gap-2">
+                    <TestTube2 className="h-4 w-4" />测试
+                  </Button>
+                  <Button onClick={create} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Plus className="h-4 w-4" />{t('add')}</Button>
+                </div>
               </div>
+              {aiTestResult && (
+                <div className={`rounded-lg border px-3 py-2 text-sm ${aiTestResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 font-medium">
+                      {aiTestResult.ok ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                      {aiTestResult.message}
+                    </div>
+                    <Button type="button" size="sm" variant="outline" onClick={applyAIChannelRecommendation} className="h-7 cursor-pointer">
+                      采用推荐配置
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-xs opacity-80">推荐：{aiTestResult.recommendedBaseUrl} · {aiTestResult.recommendedEndpoint}</p>
+                  {aiTestResult.attempts?.length > 0 && (
+                    <div className="mt-2 space-y-1 text-xs opacity-90">
+                      {aiTestResult.attempts.map((attempt) => (
+                        <div key={`${attempt.endpoint}-${attempt.elapsedMs}`}>{attempt.ok ? '✅' : '❌'} {attempt.endpoint} · {attempt.elapsedMs}ms · {attempt.message}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 {channels.map((channel) => (
                   <div key={channel.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2"><span className="font-medium">{channel.name}</span><Badge variant="secondary">{channel.provider}</Badge><Badge variant="outline">w{channel.weight}</Badge></div>
+                      <div className="flex items-center gap-2"><span className="font-medium">{channel.name}</span><Badge variant="secondary">{channel.provider}</Badge><Badge variant="outline">{channel.openAIEndpoint || 'chat'}</Badge><Badge variant="outline">w{channel.weight}</Badge></div>
                       <p className="truncate text-xs text-zinc-500">{channel.model} · {channel.baseUrl}</p>
                     </div>
-                    <Switch checked={channel.enabled} onCheckedChange={() => toggle(channel)} />
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => testAIChannel(channel)} disabled={testingChannelId === channel.id} className="h-8 cursor-pointer gap-1.5">
+                        <TestTube2 className="h-3.5 w-3.5" />测试
+                      </Button>
+                      <Switch checked={channel.enabled} onCheckedChange={() => toggle(channel)} />
+                    </div>
                   </div>
                 ))}
                 <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
