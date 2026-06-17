@@ -57,7 +57,7 @@ services:
       - -lc
       - |
         while true; do
-          wget -qO- --timeout=300 \
+          wget -qO- --timeout=300 --post-data='' \
             --header="x-worker-id: $${RESUME_ANALYSIS_WORKER_ID}" \
             --header="x-worker-token: $${RESUME_ANALYSIS_WORKER_TOKEN}" \
             http://jadeai:3000/api/internal/resume-analysis/tick >/dev/null || true
