@@ -3,6 +3,7 @@ import { AIConfigError, extractAIConfig } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
 import { resumeAnalysisJobRepository } from '@/lib/db/repositories/resume-analysis-job.repository';
+import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import {
   ACCEPTED_RESUME_ANALYSIS_TYPES,
   MAX_RESUME_ANALYSIS_FILE_SIZE,
@@ -14,6 +15,25 @@ import {
 } from '@/lib/commercial/feature-gate-service';
 
 const MAX_ACTIVE_JOBS_PER_USER = 3;
+
+function titleFromFileName(fileName: string) {
+  const cleaned = fileName.replace(/\.[^.]+$/, '').trim();
+  return cleaned || '解析中的简历';
+}
+
+function analysisThemeConfig(jobId: string, status = 'queued') {
+  return {
+    analysisJob: {
+      id: jobId,
+      status,
+      progress: 0,
+      position: 0,
+      attempts: 0,
+      maxAttempts: 3,
+      message: '简历已上传，正在排队解析。',
+    },
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,8 +80,27 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const job = await resumeAnalysisJobRepository.create({
+    const jobId = crypto.randomUUID();
+    const placeholder = await resumeRepository.create({
       userId: user.id,
+      title: `${titleFromFileName(file.name || 'resume-upload')}（解析中）`,
+      template,
+      language,
+      themeConfig: analysisThemeConfig(jobId),
+    });
+    if (!placeholder) throw new Error('Failed to create placeholder resume');
+    await resumeRepository.createSection({
+      resumeId: placeholder.id,
+      type: 'personal_info',
+      title: language === 'en' ? 'Personal Info' : '个人信息',
+      sortOrder: 0,
+      content: { fullName: '', jobTitle: '解析中', email: '', phone: '', location: '' },
+    });
+
+    const job = await resumeAnalysisJobRepository.create({
+      id: jobId,
+      userId: user.id,
+      resumeId: placeholder.id,
       fileName: file.name || 'resume-upload',
       fileType: file.type,
       fileSize: file.size,
@@ -74,8 +113,24 @@ export async function POST(request: NextRequest) {
     if (!job) throw new Error('Failed to create analysis job');
     const position = await resumeAnalysisJobRepository.getQueuePosition(job);
 
+    const publicJob = resumeAnalysisJobRepository.toPublicJob({ ...job, position });
     return NextResponse.json({
-      job: resumeAnalysisJobRepository.toPublicJob({ ...job, position }),
+      job: publicJob,
+      resume: {
+        ...placeholder,
+        themeConfig: {
+          ...(placeholder.themeConfig && typeof placeholder.themeConfig === 'object' ? placeholder.themeConfig : {}),
+          analysisJob: {
+            id: job.id,
+            status: job.status,
+            progress: job.progress,
+            position,
+            attempts: job.attempts,
+            maxAttempts: job.maxAttempts,
+            message: position > 1 ? `当前排队第 ${position} 位。` : '即将开始分析。',
+          },
+        },
+      },
       message: position > 1
         ? `简历已上传，当前排队第 ${position} 位。后台将按顺序自动分析。`
         : '简历已上传，后台将开始分析。',

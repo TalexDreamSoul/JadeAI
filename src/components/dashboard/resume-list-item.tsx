@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Copy, Trash2, MoreVertical, Pencil } from 'lucide-react';
+import { Copy, Loader2, Trash2, MoreVertical, Pencil } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { getTemplateLabel } from '@/lib/template-labels';
 import type { Resume } from '@/types/resume';
+import { getResumeAnalysisState } from '@/lib/resume-analysis/status';
 
 interface ResumeListItemProps {
   resume: Resume;
@@ -77,11 +78,13 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: Resu
   }, []);
 
   const templateLabel = getTemplateLabel(resume.template, t);
+  const analysis = getResumeAnalysisState(resume);
+  const isAnalysisActive = !!analysis && ['queued', 'running', 'retrying'].includes(analysis.status);
 
   return (
     <div
-      className={`group flex items-center gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 transition-all duration-200 dark:border-zinc-700/60 dark:bg-card ${isRenaming ? '' : 'cursor-pointer hover:shadow-md hover:-translate-y-0.5'}`}
-      onClick={() => { if (!renamingRef.current) router.push(`/editor/${resume.id}`); }}
+      className={`group flex items-center gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 transition-all duration-200 dark:border-zinc-700/60 dark:bg-card ${isRenaming || isAnalysisActive ? '' : 'cursor-pointer hover:shadow-md hover:-translate-y-0.5'}`}
+      onClick={() => { if (!renamingRef.current && !isAnalysisActive) router.push(`/editor/${resume.id}`); }}
     >
       {/* Title */}
       <div className="min-w-0 flex-1">
@@ -106,10 +109,19 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: Resu
         )}
       </div>
 
-      {/* Template badge */}
-      <Badge variant="secondary" className="shrink-0 text-[11px] px-1.5 py-0">
-        {templateLabel}
+      {/* Template / analysis badge */}
+      <Badge variant={analysis?.status === 'failed' ? 'destructive' : isAnalysisActive ? 'outline' : 'secondary'} className="shrink-0 text-[11px] px-1.5 py-0">
+        {analysis ? (analysis.status === 'failed' ? '解析失败' : '解析中') : templateLabel}
       </Badge>
+      {isAnalysisActive && (
+        <span className="flex shrink-0 items-center gap-1 text-xs text-zinc-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
+          {analysis.progress}% · {analysis.status === 'retrying' ? '等待重试' : '分析中'}
+        </span>
+      )}
+      {analysis?.errorMessage && (
+        <span className="hidden max-w-xs truncate text-xs text-red-500 md:inline">{analysis.errorMessage}</span>
+      )}
 
       {/* Last edited */}
       <span className="hidden shrink-0 text-[12px] text-zinc-400 sm:inline dark:text-zinc-500">
@@ -139,16 +151,18 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename }: Resu
             <Pencil className="mr-2 h-4 w-4" />
             {t('common.rename')}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDuplicate();
-            }}
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            {t('common.duplicate')}
-          </DropdownMenuItem>
+          {!analysis && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate();
+              }}
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              {t('common.duplicate')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="cursor-pointer text-red-600"
             onClick={(e) => {

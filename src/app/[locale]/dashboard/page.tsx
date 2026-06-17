@@ -26,6 +26,7 @@ import { ShareDialog } from '@/components/editor/share-dialog';
 import { TourOverlay, type TourStepConfig } from '@/components/tour/tour-overlay';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { cn } from '@/lib/utils';
+import { isResumeAnalysisActive } from '@/lib/resume-analysis/status';
 import { useRouter } from '@/i18n/routing';
 import type { Resume } from '@/types/resume';
 
@@ -121,6 +122,15 @@ export default function DashboardPage() {
 
   const hasResumes = resumes.length > 0;
   const hasResults = filteredResumes.length > 0;
+  const hasActiveAnalysis = useMemo(() => resumes.some(isResumeAnalysisActive), [resumes]);
+
+  useEffect(() => {
+    if (!hasActiveAnalysis) return;
+    const timer = window.setInterval(() => {
+      void fetchResumes();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [fetchResumes, hasActiveAnalysis]);
 
   return (
     <div>
@@ -281,6 +291,7 @@ export default function DashboardPage() {
         open={activeModal === 'create-resume'}
         onClose={closeModal}
         onCreate={createResume}
+        onUploaded={fetchResumes}
       />
       <GenerateResumeDialog
         open={activeModal === 'generate-resume'}

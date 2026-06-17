@@ -77,6 +77,22 @@ export const resumeRepository = {
     return rows[0] ?? null;
   },
 
+  async replaceSections(resumeId: string, sections: { type: string; title: string; sortOrder: number; visible?: boolean; content?: unknown }[]) {
+    await db.delete(resumeSections).where(eq(resumeSections.resumeId, resumeId));
+    for (const section of sections) {
+      await this.createSection({
+        resumeId,
+        type: section.type,
+        title: section.title,
+        sortOrder: section.sortOrder,
+        visible: section.visible,
+        content: section.content,
+      });
+    }
+    await db.update(resumes).set({ updatedAt: new Date() }).where(eq(resumes.id, resumeId));
+    return this.findById(resumeId);
+  },
+
   async create(data: ResumeCreateData) {
     const id = crypto.randomUUID();
     await db.insert(resumes).values({

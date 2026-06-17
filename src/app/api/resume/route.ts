@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { resumeAnalysisJobRepository } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { DEFAULT_SECTIONS, DEFAULT_TEMPLATE } from '@/lib/constants';
 import {
@@ -18,7 +19,41 @@ export async function GET(request: NextRequest) {
     await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const resumes = await resumeRepository.findAllByUserId(user.id);
-    return NextResponse.json(resumes);
+    const jobs = await resumeAnalysisJobRepository.listForUser(user.id, 100);
+    type AnalysisJob = Awaited<ReturnType<typeof resumeAnalysisJobRepository.listForUser>>[number];
+    type UserResume = Awaited<ReturnType<typeof resumeRepository.findAllByUserId>>[number];
+    const jobsByResumeId = new Map<string, AnalysisJob>();
+    for (const job of jobs) {
+      if (job.resumeId) jobsByResumeId.set(job.resumeId, job);
+    }
+    const enriched = await Promise.all(resumes.map(async (resume: UserResume) => {
+      const job = jobsByResumeId.get(resume.id);
+      if (!job) return resume;
+      const position = await resumeAnalysisJobRepository.getQueuePosition(job);
+      const themeConfig = resume.themeConfig && typeof resume.themeConfig === 'object' && !Array.isArray(resume.themeConfig)
+        ? resume.themeConfig as Record<string, unknown>
+        : {};
+      return {
+        ...resume,
+        themeConfig: {
+          ...themeConfig,
+          analysisJob: {
+            id: job.id,
+            status: job.status,
+            progress: job.progress,
+            position,
+            attempts: job.attempts,
+            maxAttempts: job.maxAttempts,
+            errorCode: job.errorCode,
+            errorMessage: job.errorMessage,
+            workerId: job.workerId,
+            updatedAt: job.updatedAt,
+            finishedAt: job.finishedAt,
+          },
+        },
+      };
+    }));
+    return NextResponse.json(enriched);
   } catch (error) {
     console.error('GET /api/resume error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

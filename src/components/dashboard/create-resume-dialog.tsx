@@ -17,7 +17,8 @@ import type { LocalResumeInput } from '@/lib/local-resumes';
 import type { Resume } from '@/types/resume';
 import { cn } from '@/lib/utils';
 import { getAIHeaders } from '@/stores/settings-store';
-import { Upload, FileText, Image, X, Loader2, Check, Clock, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Image, X, Loader2, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { TemplateThumbnail } from './template-thumbnail';
 import { getTemplateLabel } from '@/lib/template-labels';
 
@@ -25,43 +26,13 @@ interface CreateResumeDialogProps {
   open: boolean;
   onClose: () => void;
   onCreate: (data: LocalResumeInput) => Promise<Resume | null>;
+  onUploaded?: () => void;
 }
 
 type Tab = 'template' | 'upload';
-type AnalysisJobStatus = 'queued' | 'running' | 'retrying' | 'succeeded' | 'failed';
-type AnalysisJob = {
-  id: string;
-  status: AnalysisJobStatus;
-  progress: number;
-  position: number;
-  attempts: number;
-  maxAttempts: number;
-  resumeId?: string | null;
-  errorMessage?: string | null;
-};
-
 const ACCEPTED_EXTENSIONS = '.pdf,.png,.jpg,.jpeg,.webp';
 
-function buildJobMessage(job: AnalysisJob) {
-  if (job.status === 'queued') return job.position > 1 ? `任务排队中，当前第 ${job.position} 位。` : '任务排队中，即将开始分析。';
-  if (job.status === 'running') return `正在分析简历，第 ${job.attempts}/${job.maxAttempts} 次尝试。`;
-  if (job.status === 'retrying') return `分析失败后等待自动重试（${job.attempts}/${job.maxAttempts}）：${job.errorMessage || '请稍候'}`;
-  if (job.status === 'succeeded') return '简历分析成功，正在打开编辑器。';
-  return `简历分析失败：${job.errorMessage || '请检查文件后重新上传。'}`;
-}
-
-function jobStatusLabel(status: AnalysisJobStatus) {
-  const labels: Record<AnalysisJobStatus, string> = {
-    queued: '排队中',
-    running: '分析中',
-    retrying: '等待重试',
-    succeeded: '已成功',
-    failed: '失败',
-  };
-  return labels[status];
-}
-
-export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDialogProps) {
+export function CreateResumeDialog({ open, onClose, onCreate, onUploaded }: CreateResumeDialogProps) {
   const t = useTranslations();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('template');
@@ -73,8 +44,6 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
   const [file, setFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState('');
-  const [job, setJob] = useState<AnalysisJob | null>(null);
-  const [jobMessage, setJobMessage] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,40 +97,15 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
       }
 
       const data = await res.json();
-      const createdJob = data.job as AnalysisJob | undefined;
-      if (!createdJob?.id) throw new Error(data.error || 'Failed to create analysis job');
-      setJob(createdJob);
-      setJobMessage(data.message || '简历已上传，后台正在分析。');
-      await pollAnalysisJob(createdJob.id);
+      if (!data.resume?.id) throw new Error(data.error || 'Failed to create analysis job');
+      toast.success('简历已上传', { description: data.message || '你可以在工作台查看解析进度。' });
+      resetAndClose();
+      onUploaded?.();
     } catch (err: unknown) {
       setParseError(err instanceof Error ? err.message : t('dashboard.upload.parseFailed'));
     } finally {
       setIsParsing(false);
     }
-  };
-
-  const pollAnalysisJob = async (jobId: string) => {
-    const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
-    for (let i = 0; i < 240; i++) {
-      await new Promise((resolve) => setTimeout(resolve, i === 0 ? 800 : 2000));
-      const res = await fetch(`/api/resume/analysis-jobs/${jobId}`, {
-        headers: { ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}) },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch analysis job');
-      const nextJob = data.job as AnalysisJob;
-      setJob(nextJob);
-      setJobMessage(data.message || buildJobMessage(nextJob));
-      if (nextJob.status === 'succeeded' && nextJob.resumeId) {
-        resetAndClose();
-        router.push(`/editor/${nextJob.resumeId}`);
-        return;
-      }
-      if (nextJob.status === 'failed') {
-        throw new Error(nextJob.errorMessage || '简历分析失败，请稍后重试。');
-      }
-    }
-    throw new Error('简历仍在后台分析中，请稍后在任务状态中查看结果。');
   };
 
   const resetAndClose = () => {
@@ -171,8 +115,6 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
     setTab('template');
     setFile(null);
     setParseError('');
-    setJob(null);
-    setJobMessage('');
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -354,25 +296,6 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
                 />
               </div>
 
-              {job && (
-                <div className={cn(
-                  'rounded-lg border p-3 text-sm',
-                  job.status === 'failed'
-                    ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-300'
-                    : 'border-brand/20 bg-brand-muted/50 text-zinc-700 dark:text-zinc-200'
-                )}>
-                  <div className="flex items-center gap-2 font-medium">
-                    {job.status === 'failed' ? <AlertCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
-                    <span>{jobStatusLabel(job.status)}</span>
-                    <span className="text-xs text-zinc-500">#{job.id.slice(0, 8)}</span>
-                  </div>
-                  <p className="mt-1">{jobMessage || buildJobMessage(job)}</p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    进度 {job.progress}% · 尝试 {job.attempts}/{job.maxAttempts}{job.position > 0 ? ` · 排队第 ${job.position} 位` : ''}
-                  </p>
-                </div>
-              )}
-
               {parseError && (
                 <p className="text-sm text-red-500">{parseError}</p>
               )}
@@ -454,7 +377,7 @@ export function CreateResumeDialog({ open, onClose, onCreate }: CreateResumeDial
               {isParsing ? (
                 <>
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  {job ? '后台分析中' : t('dashboard.upload.parsing')}
+                  {t('dashboard.upload.parsing')}
                 </>
               ) : (
                 t('dashboard.upload.uploadAndParse')

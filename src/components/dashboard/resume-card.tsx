@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Copy, Trash2, MoreVertical, Share2, Pencil } from 'lucide-react';
+import { Copy, Loader2, Trash2, MoreVertical, Share2, Pencil } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { TemplateThumbnail } from './template-thumbnail';
 import { getTemplateLabel } from '@/lib/template-labels';
 import type { Resume } from '@/types/resume';
+import { getResumeAnalysisState } from '@/lib/resume-analysis/status';
 
 interface ResumeCardProps {
   resume: Resume;
@@ -80,11 +81,13 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
   }, []);
 
   const templateLabel = getTemplateLabel(resume.template, t);
+  const analysis = getResumeAnalysisState(resume);
+  const isAnalysisActive = !!analysis && ['queued', 'running', 'retrying'].includes(analysis.status);
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-xl border border-zinc-200 bg-white transition-all duration-200 dark:border-zinc-700/60 dark:bg-card ${isRenaming ? '' : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'}`}
-      onClick={() => { if (!renamingRef.current) router.push(`/editor/${resume.id}`); }}
+      className={`group relative overflow-hidden rounded-xl border border-zinc-200 bg-white transition-all duration-200 dark:border-zinc-700/60 dark:bg-card ${isRenaming || isAnalysisActive ? '' : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'}`}
+      onClick={() => { if (!renamingRef.current && !isAnalysisActive) router.push(`/editor/${resume.id}`); }}
     >
       {/* Template preview thumbnail */}
       <div className="relative border-b border-zinc-100 bg-zinc-50 p-2.5 dark:border-zinc-700/40 dark:bg-zinc-800/50">
@@ -94,6 +97,12 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
         />
         {/* Hover overlay with actions */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-all duration-200 group-hover:bg-black/5 dark:group-hover:bg-white/5" />
+        {isAnalysisActive && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/85 text-xs font-medium text-zinc-700 backdrop-blur-sm dark:bg-zinc-900/80 dark:text-zinc-200">
+            <Loader2 className="mb-1 h-5 w-5 animate-spin text-brand" />
+            <span>{analysis?.status === 'retrying' ? '等待重试' : '解析中'} {analysis?.progress || 0}%</span>
+          </div>
+        )}
       </div>
 
       {/* Info section */}
@@ -120,8 +129,8 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
               </h3>
             )}
             <div className="mt-1.5 flex items-center gap-1.5">
-              <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
-                {templateLabel}
+              <Badge variant={analysis?.status === 'failed' ? 'destructive' : isAnalysisActive ? 'outline' : 'secondary'} className="text-[11px] px-1.5 py-0">
+                {analysis ? (analysis.status === 'failed' ? '解析失败' : '解析中') : templateLabel}
               </Badge>
               <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
                 {resume.updatedAt
@@ -150,7 +159,7 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
                 <Pencil className="mr-2 h-4 w-4" />
                 {t('common.rename')}
               </DropdownMenuItem>
-              <DropdownMenuItem
+              {!analysis && <DropdownMenuItem
                 className="cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -159,8 +168,8 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
               >
                 <Copy className="mr-2 h-4 w-4" />
                 {t('common.duplicate')}
-              </DropdownMenuItem>
-              {onShare && (
+              </DropdownMenuItem>}
+              {onShare && !analysis && (
                 <DropdownMenuItem
                   className="cursor-pointer"
                   onClick={(e) => {
@@ -184,6 +193,9 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onShare }:
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {analysis?.errorMessage && (
+            <p className="mt-1 line-clamp-2 text-[11px] text-red-500">{analysis.errorMessage}</p>
+          )}
         </div>
       </div>
     </div>

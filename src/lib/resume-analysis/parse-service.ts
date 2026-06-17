@@ -40,6 +40,7 @@ export type ResumeAnalysisInput = {
   };
   template: string;
   language: string;
+  resumeId?: string | null;
   onProgress?: (message: string, metadata?: Record<string, unknown>) => Promise<void> | void;
 };
 
@@ -81,29 +82,39 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
       }
 
       const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
-      const resume = await resumeRepository.create({
-        userId: input.userId,
-        title: resumeData.personalInfo?.fullName || '未命名简历',
-        template: input.template,
-        language: input.language,
-      });
+      const title = resumeData.personalInfo?.fullName || '未命名简历';
+      let resume = input.resumeId ? await resumeRepository.findById(input.resumeId) : null;
+
+      if (resume) {
+        await resumeRepository.update(resume.id, {
+          title,
+          template: input.template,
+          language: input.language,
+          themeConfig: clearAnalysisThemeConfig(resume.themeConfig),
+        });
+      } else {
+        resume = await resumeRepository.create({
+          userId: input.userId,
+          title,
+          template: input.template,
+          language: input.language,
+        });
+      }
 
       if (!resume) {
         throw new Error('保存简历失败');
       }
 
       const sections = buildSections(resumeData, input.language);
-      for (let i = 0; i < sections.length; i++) {
-        await resumeRepository.createSection({
-          resumeId: resume.id,
-          type: sections[i].type,
-          title: sections[i].title,
-          sortOrder: i,
-          content: sections[i].content,
-        });
-      }
-
-      const parsedResume = await resumeRepository.findById(resume.id);
+      const parsedResume = await resumeRepository.replaceSections(
+        resume.id,
+        sections.map((section, index) => ({
+          type: section.type,
+          title: section.title,
+          sortOrder: index,
+          content: section.content,
+        })),
+      );
       await log('简历保存完成', { resumeId: resume.id, sectionCount: sections.length });
       return {
         value: parsedResume,
@@ -325,6 +336,13 @@ function mapToResumeSchema(raw: Record<string, unknown>): ParsedResume {
     ...(certifications.length ? { certifications } : {}),
     ...(languages.length ? { languages } : {}),
   };
+}
+
+function clearAnalysisThemeConfig(themeConfig: unknown) {
+  if (!themeConfig || typeof themeConfig !== 'object' || Array.isArray(themeConfig)) return {};
+  const next = { ...(themeConfig as Record<string, unknown>) };
+  delete next.analysisJob;
+  return next;
 }
 
 function str(value: unknown): string {

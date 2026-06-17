@@ -268,6 +268,20 @@ export interface ThemeConfig {
   layout?: TemplateLayoutConfig;
   advanced?: TemplateAdvancedConfig;
   editorPanel?: TemplateEditorPanelState;
+  analysisJob?: {
+    id: string;
+    status: 'queued' | 'running' | 'retrying' | 'succeeded' | 'failed' | string;
+    progress?: number;
+    position?: number;
+    attempts?: number;
+    maxAttempts?: number;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    message?: string | null;
+    workerId?: string | null;
+    updatedAt?: string | number | Date | null;
+    finishedAt?: string | number | Date | null;
+  };
 }
 
 export interface Resume {

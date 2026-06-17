@@ -1,5 +1,6 @@
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
+import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resumeAnalysisJobRepository, type ResumeAnalysisJobRecord } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { AIConfigError, resolveServerAIConfigForUser } from '@/lib/ai/provider';
 import { AIUsageInsufficientCreditsError } from '@/lib/commercial/ai-route-metering';
@@ -38,6 +39,27 @@ function userFacingFailure(error: unknown) {
   if (error instanceof AIConfigError) return `${error.message} 请检查 AI 服务配置或账户权益后重试。`;
   if (error instanceof AIUsageInsufficientCreditsError) return `${error.message} 请充值或升级会员后重新上传。`;
   return `${errorMessage(error)}。请确认文件清晰可读，稍后可重新上传。`;
+}
+
+async function updateResumeAnalysisState(job: ResumeAnalysisJobRecord, patch: Record<string, unknown>) {
+  if (!job.resumeId) return;
+  const resume = await resumeRepository.findById(job.resumeId);
+  if (!resume) return;
+  const themeConfig = resume.themeConfig && typeof resume.themeConfig === 'object' && !Array.isArray(resume.themeConfig)
+    ? resume.themeConfig as Record<string, unknown>
+    : {};
+  await resumeRepository.update(resume.id, {
+    themeConfig: {
+      ...themeConfig,
+      analysisJob: {
+        ...(themeConfig.analysisJob && typeof themeConfig.analysisJob === 'object' && !Array.isArray(themeConfig.analysisJob) ? themeConfig.analysisJob : {}),
+        id: job.id,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
+        ...patch,
+      },
+    },
+  });
 }
 
 export class ResumeAnalysisWorker {
@@ -91,6 +113,7 @@ export class ResumeAnalysisWorker {
   private async process(job: ResumeAnalysisJobRecord) {
     try {
       await resumeAnalysisJobRepository.updateStatus(job.id, { progress: 20 });
+      await updateResumeAnalysisState(job, { status: 'running', progress: 20, message: '正在分析简历。' });
       const user = await userRepository.findById(job.userId);
       if (!user) throw new Error('用户不存在，无法继续分析');
 
@@ -108,6 +131,7 @@ export class ResumeAnalysisWorker {
         },
         template: job.template,
         language: job.language,
+        resumeId: job.resumeId,
         onProgress: async (message, metadata) => {
           await resumeAnalysisJobRepository.heartbeat(job.id, this.workerId);
           await resumeAnalysisJobRepository.appendLog(job.id, {
@@ -162,6 +186,15 @@ export class ResumeAnalysisWorker {
       finishedAt: retryable ? null : new Date(),
       errorCode: code,
       errorMessage: message,
+    });
+
+    await updateResumeAnalysisState(job, {
+      status: retryable ? 'retrying' : 'failed',
+      progress: retryable ? Math.max(latest?.progress || 0, 20) : 100,
+      attempts,
+      errorCode: code,
+      errorMessage: message,
+      message: retryable ? `分析失败，稍后自动重试（${attempts}/${maxAttempts}）。` : `分析失败：${message}`,
     });
 
     await resumeAnalysisJobRepository.appendLog(job.id, {

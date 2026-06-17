@@ -17,7 +17,9 @@ export type ResumeAnalysisJobLog = {
 export type ResumeAnalysisJobRecord = typeof resumeAnalysisJobs.$inferSelect;
 
 type CreateJobInput = {
+  id?: string;
   userId: string;
+  resumeId?: string | null;
   fileName: string;
   fileType: string;
   fileSize: number;
@@ -68,7 +70,7 @@ export const resumeAnalysisJobRepository = {
   },
 
   async create(data: CreateJobInput) {
-    const id = crypto.randomUUID();
+    const id = data.id || crypto.randomUUID();
     const activeCount = await this.countActiveByUserId(data.userId);
     const initialLog: ResumeAnalysisJobLog = {
       at: new Date().toISOString(),
@@ -80,6 +82,7 @@ export const resumeAnalysisJobRepository = {
     await db.insert(resumeAnalysisJobs).values({
       id,
       userId: data.userId,
+      resumeId: data.resumeId || null,
       fileName: data.fileName,
       fileType: data.fileType,
       fileSize: data.fileSize,
