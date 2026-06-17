@@ -193,6 +193,35 @@ export const resumeAiReviews = sqliteTable('resume_ai_reviews', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
+export const resumeAnalysisJobs = sqliteTable('resume_analysis_jobs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  resumeId: text('resume_id').references(() => resumes.id, { onDelete: 'set null' }),
+  fileName: text('file_name').notNull(),
+  fileType: text('file_type').notNull(),
+  fileSize: integer('file_size').notNull().default(0),
+  fileData: text('file_data').notNull(),
+  template: text('template').notNull().default('touch-pure'),
+  language: text('language').notNull().default('zh'),
+  status: text('status', { enum: ['queued', 'running', 'retrying', 'succeeded', 'failed'] }).notNull().default('queued'),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(3),
+  progress: integer('progress').notNull().default(0),
+  position: integer('position').notNull().default(0),
+  workerId: text('worker_id'),
+  lockedAt: integer('locked_at', { mode: 'timestamp' }),
+  lastHeartbeatAt: integer('last_heartbeat_at', { mode: 'timestamp' }),
+  nextRunAt: integer('next_run_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  startedAt: integer('started_at', { mode: 'timestamp' }),
+  finishedAt: integer('finished_at', { mode: 'timestamp' }),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  logs: text('logs', { mode: 'json' }).notNull().default('[]'),
+  metadata: text('metadata', { mode: 'json' }).default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
 export const templateMarketItems = sqliteTable('template_market_items', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   ownerUserId: text('owner_user_id').notNull().references(() => users.id),

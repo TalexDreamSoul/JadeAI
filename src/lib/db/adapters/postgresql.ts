@@ -70,6 +70,37 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       )`);
       await this.db.execute(sql`ALTER TABLE resume_ai_reviews ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
       await this.db.execute(sql`ALTER TABLE resume_ai_reviews ADD COLUMN IF NOT EXISTS error text`);
+      await this.db.execute(sql`CREATE TABLE IF NOT EXISTS resume_analysis_jobs (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        resume_id text REFERENCES resumes(id) ON DELETE SET NULL,
+        file_name text NOT NULL,
+        file_type text NOT NULL,
+        file_size integer NOT NULL DEFAULT 0,
+        file_data text NOT NULL,
+        template text NOT NULL DEFAULT 'touch-pure',
+        language text NOT NULL DEFAULT 'zh',
+        status text NOT NULL DEFAULT 'queued',
+        attempts integer NOT NULL DEFAULT 0,
+        max_attempts integer NOT NULL DEFAULT 3,
+        progress integer NOT NULL DEFAULT 0,
+        position integer NOT NULL DEFAULT 0,
+        worker_id text,
+        locked_at integer,
+        last_heartbeat_at integer,
+        next_run_at integer NOT NULL DEFAULT extract(epoch from now())::integer,
+        started_at integer,
+        finished_at integer,
+        error_code text,
+        error_message text,
+        logs text NOT NULL DEFAULT '[]',
+        metadata text DEFAULT '{}',
+        created_at integer NOT NULL DEFAULT extract(epoch from now())::integer,
+        updated_at integer NOT NULL DEFAULT extract(epoch from now())::integer
+      )`);
+      await this.db.execute(sql`CREATE INDEX IF NOT EXISTS resume_analysis_jobs_user_status_idx ON resume_analysis_jobs(user_id, status)`);
+      await this.db.execute(sql`CREATE INDEX IF NOT EXISTS resume_analysis_jobs_status_next_run_idx ON resume_analysis_jobs(status, next_run_at)`);
+      await this.db.execute(sql`CREATE INDEX IF NOT EXISTS resume_analysis_jobs_worker_idx ON resume_analysis_jobs(worker_id)`);
       await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
       await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS error text`);
       await this.db.execute(sql`CREATE TABLE IF NOT EXISTS interview_question_favorites (

@@ -43,6 +43,10 @@ export async function extractAIConfig(request: NextRequest): Promise<AIConfig> {
   if (!user) {
     throw new AIConfigError('Please log in to use the cloud AI service.');
   }
+  return resolveServerAIConfigForUser(user);
+}
+
+export async function resolveServerAIConfigForUser(user: { id: string; role?: string | null; aiCredits?: unknown }): Promise<AIConfig> {
   if (user.role !== 'admin' && !await hasAICredits(user.id, Number(user.aiCredits || 0))) {
     throw new AIConfigError('AI credits exhausted. Please contact an administrator or upgrade your plan.');
   }

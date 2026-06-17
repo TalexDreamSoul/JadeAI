@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "mcp:resume": "tsx scripts/jadeai-resume-mcp.ts",
+    "resume-analysis:worker": "tsx scripts/resume-analysis-worker.ts",
     "check:mcp:resume": "tsx scripts/check-jadeai-resume-mcp.ts",
     "mcp:resume:install": "tsx scripts/install-jadeai-resume-mcp.ts",
     "smoke:mcp:resume": "tsx scripts/smoke-jadeai-resume-mcp.ts",

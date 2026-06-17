@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, ClipboardCheck, Coins, Copy, FileSliders, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, ClipboardCheck, Coins, Copy, FileClock, FileSliders, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -251,6 +251,36 @@ interface AdminJobTemplate {
   sortOrder: number;
 }
 
+interface AdminResumeAnalysisJob {
+  id: string;
+  userId: string;
+  resumeId?: string | null;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  status: string;
+  attempts: number;
+  maxAttempts: number;
+  progress: number;
+  position: number;
+  workerId?: string | null;
+  lockedAt?: string | number | Date | null;
+  lastHeartbeatAt?: string | number | Date | null;
+  startedAt?: string | number | Date | null;
+  finishedAt?: string | number | Date | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  logs?: Array<{ at: string; level: string; message: string; workerId?: string | null; attempt?: number; metadata?: Record<string, unknown> }> | string | null;
+  createdAt?: string | number | Date;
+  updatedAt?: string | number | Date;
+  user?: {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    role?: string | null;
+  } | null;
+}
+
 interface AdminProduct {
   id: string;
   sku: string;
@@ -357,6 +387,7 @@ const EMPTY_REDEEM_FORM = {
 
 const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
 const AI_USAGE_STATUS_OPTIONS = ['all', 'success', 'reserved', 'failed_refunded', 'insufficient_credits'];
+const RESUME_ANALYSIS_STATUS_OPTIONS = ['all', 'queued', 'running', 'retrying', 'succeeded', 'failed'];
 const WALLET_TRANSACTION_DIRECTION_OPTIONS = ['all', 'credit', 'debit'];
 const REVIEW_COMMENT_STATUS_OPTIONS: ReviewCommentStatusFilter[] = ['all', 'open', 'resolved'];
 const CHANGE_PROPOSAL_STATUS_OPTIONS: ChangeProposalStatusFilter[] = ['all', 'pending', 'applied', 'rejected'];
@@ -375,7 +406,7 @@ function formatDate(value?: string | number | Date) {
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString() : '-';
 }
 
-function formatDateTime(value?: string | number | Date) {
+function formatDateTime(value?: string | number | Date | null) {
   if (!value) return '-';
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : '-';
@@ -404,6 +435,9 @@ export default function AdminPage() {
   const [aiUsage, setAiUsage] = useState<AdminAIUsageLog[]>([]);
   const [aiUsageStatusFilter, setAiUsageStatusFilter] = useState('all');
   const [aiUsageQuery, setAiUsageQuery] = useState('');
+  const [resumeAnalysisJobs, setResumeAnalysisJobs] = useState<AdminResumeAnalysisJob[]>([]);
+  const [resumeAnalysisStatusFilter, setResumeAnalysisStatusFilter] = useState('all');
+  const [resumeAnalysisQuery, setResumeAnalysisQuery] = useState('');
   const [walletTransactions, setWalletTransactions] = useState<AdminWalletTransaction[]>([]);
   const [walletDirectionFilter, setWalletDirectionFilter] = useState('all');
   const [walletTransactionQuery, setWalletTransactionQuery] = useState('');
@@ -531,6 +565,34 @@ export default function AdminPage() {
     });
   }, [aiUsage, aiUsageQuery, aiUsageStatusFilter]);
 
+  const resumeAnalysisStats = useMemo(() => ({
+    total: resumeAnalysisJobs.length,
+    active: resumeAnalysisJobs.filter((job) => ['queued', 'running', 'retrying'].includes(job.status)).length,
+    succeeded: resumeAnalysisJobs.filter((job) => job.status === 'succeeded').length,
+    failed: resumeAnalysisJobs.filter((job) => job.status === 'failed').length,
+  }), [resumeAnalysisJobs]);
+
+  const filteredResumeAnalysisJobs = useMemo(() => {
+    const query = resumeAnalysisQuery.trim().toLowerCase();
+    return resumeAnalysisJobs.filter((job) => {
+      if (resumeAnalysisStatusFilter !== 'all' && job.status !== resumeAnalysisStatusFilter) return false;
+      if (!query) return true;
+      return [
+        job.id,
+        job.userId,
+        job.resumeId,
+        job.fileName,
+        job.fileType,
+        job.status,
+        job.workerId,
+        job.errorCode,
+        job.errorMessage,
+        job.user?.email,
+        job.user?.name,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+    });
+  }, [resumeAnalysisJobs, resumeAnalysisQuery, resumeAnalysisStatusFilter]);
+
   const walletTransactionStats = useMemo(() => ({
     total: walletTransactions.length,
     credited: walletTransactions
@@ -653,7 +715,7 @@ export default function AdminPage() {
   }, [changeProposalQuery, changeProposals, changeProposalStatusFilter]);
 
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
+    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, resumeAnalysisRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
@@ -662,6 +724,7 @@ export default function AdminPage() {
       fetch('/api/admin/products?activeOnly=0', { headers: getHeaders() }),
       fetch(`/api/admin/orders?limit=50&status=${orderStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/ai-usage?limit=100&status=${aiUsageStatusFilter}`, { headers: getHeaders() }),
+      fetch(`/api/admin/resume-analysis-jobs?limit=100&status=${resumeAnalysisStatusFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/wallet-transactions?limit=100&direction=${walletDirectionFilter}`, { headers: getHeaders() }),
       fetch(`/api/admin/review-comments?limit=100&status=${reviewCommentStatusFilter}`, { headers: getHeaders() }),
       fetch('/api/admin/review-presence?limit=100&minutes=30', { headers: getHeaders() }),
@@ -670,8 +733,8 @@ export default function AdminPage() {
       fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !walletTransactionsRes.ok || !reviewCommentsRes.ok || !reviewPresenceRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
-      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
+    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !resumeAnalysisRes.ok || !walletTransactionsRes.ok || !reviewCommentsRes.ok || !reviewPresenceRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, resumeAnalysisRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
       setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
@@ -684,6 +747,7 @@ export default function AdminPage() {
     const loadedProducts = await productsRes.json();
     const loadedOrders = await ordersRes.json();
     const loadedAiUsage = await aiUsageRes.json();
+    const loadedResumeAnalysis = await resumeAnalysisRes.json();
     const loadedWalletTransactions = await walletTransactionsRes.json();
     const loadedReviewComments = await reviewCommentsRes.json();
     const loadedReviewPresence = await reviewPresenceRes.json();
@@ -693,6 +757,7 @@ export default function AdminPage() {
     setProducts(Array.isArray(loadedProducts.products) ? loadedProducts.products : []);
     setOrders(Array.isArray(loadedOrders.orders) ? loadedOrders.orders : []);
     setAiUsage(Array.isArray(loadedAiUsage.usage) ? loadedAiUsage.usage : []);
+    setResumeAnalysisJobs(Array.isArray(loadedResumeAnalysis.jobs) ? loadedResumeAnalysis.jobs : []);
     setWalletTransactions(Array.isArray(loadedWalletTransactions.transactions) ? loadedWalletTransactions.transactions : []);
     setReviewComments(Array.isArray(loadedReviewComments.comments) ? loadedReviewComments.comments : []);
     setReviewPresence(Array.isArray(loadedReviewPresence.presence) ? loadedReviewPresence.presence : []);
@@ -734,7 +799,7 @@ export default function AdminPage() {
     if (!isLoggedIn) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, walletDirectionFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
+  }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, resumeAnalysisStatusFilter, walletDirectionFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
 
   const create = async () => {
     const res = await fetch('/api/admin/ai-channels', {
@@ -1051,6 +1116,7 @@ export default function AdminPage() {
           <TabsTrigger value="auth" className="gap-2"><KeyRound className="h-4 w-4" />{t('authSettings')}</TabsTrigger>
 	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
 	          <TabsTrigger value="aiUsage" className="gap-2"><Activity className="h-4 w-4" />{t('aiUsage')}</TabsTrigger>
+	          <TabsTrigger value="resumeAnalysis" className="gap-2"><FileClock className="h-4 w-4" />简历分析任务</TabsTrigger>
 	          <TabsTrigger value="walletTransactions" className="gap-2"><Coins className="h-4 w-4" />{t('walletTransactions')}</TabsTrigger>
 	          <TabsTrigger value="reviewComments" className="gap-2"><MessageSquareText className="h-4 w-4" />{t('reviewComments')}</TabsTrigger>
 	          <TabsTrigger value="reviewPresence" className="gap-2"><Radio className="h-4 w-4" />{t('reviewPresence')}</TabsTrigger>
@@ -1271,6 +1337,82 @@ export default function AdminPage() {
                   <span className="text-xs text-zinc-500">{formatDate(item.createdAt)}</span>
                 </div>
               ))}
+              <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="resumeAnalysis">
+          <Card>
+            <CardHeader className="space-y-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base"><FileClock className="h-4 w-4" />简历分析任务</CardTitle>
+                <p className="mt-1 text-xs text-zinc-500">查看后台队列、调度、worker、重试日志和失败原因。</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-4">
+                {[
+                  { label: '总任务', value: resumeAnalysisStats.total },
+                  { label: '活跃任务', value: resumeAnalysisStats.active },
+                  { label: '成功', value: resumeAnalysisStats.succeeded },
+                  { label: '失败', value: resumeAnalysisStats.failed },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border bg-zinc-50 px-3 py-2 dark:bg-zinc-900/60">
+                    <div className="text-xs text-zinc-500">{item.label}</div>
+                    <div className="mt-1 text-lg font-semibold text-zinc-950 dark:text-zinc-50">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_220px]">
+                <Input
+                  value={resumeAnalysisQuery}
+                  onChange={(event) => setResumeAnalysisQuery(event.target.value)}
+                  placeholder="搜索用户、文件、worker、错误信息"
+                />
+                <select
+                  value={resumeAnalysisStatusFilter}
+                  onChange={(event) => setResumeAnalysisStatusFilter(event.target.value)}
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  {RESUME_ANALYSIS_STATUS_OPTIONS.map((statusOption) => (
+                    <option key={statusOption} value={statusOption}>{statusOption === 'all' ? '全部状态' : statusOption}</option>
+                  ))}
+                </select>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {resumeAnalysisJobs.length === 0 ? <p className="text-sm text-zinc-400">暂无简历分析任务</p> : filteredResumeAnalysisJobs.length === 0 ? <p className="text-sm text-zinc-400">没有匹配的任务</p> : filteredResumeAnalysisJobs.map((job) => {
+                const logs = Array.isArray(job.logs) ? job.logs : [];
+                const latestLog = logs[logs.length - 1];
+                return (
+                  <div key={job.id} className="grid gap-3 rounded-lg border px-3 py-2 text-sm xl:grid-cols-[1.2fr_1fr_1fr_140px] xl:items-start">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate font-medium">{job.fileName}</span>
+                        <Badge variant={job.status === 'succeeded' ? 'secondary' : job.status === 'failed' ? 'destructive' : 'outline'}>{job.status}</Badge>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-zinc-500">任务 {job.id} · 用户 {job.user?.email || job.user?.name || job.userId}</p>
+                      {job.resumeId && <p className="mt-1 truncate text-xs text-zinc-500">生成简历 {job.resumeId}</p>}
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      <div className="font-medium text-zinc-950 dark:text-zinc-50">进度 {job.progress}% · 尝试 {job.attempts}/{job.maxAttempts}</div>
+                      <div>排队位置 {job.position || '-'} · 文件 {(Number(job.fileSize || 0) / 1024).toFixed(0)} KB</div>
+                      <div>创建 {formatDateTime(job.createdAt)}</div>
+                    </div>
+                    <div className="min-w-0 text-xs text-zinc-500">
+                      <div className="truncate font-medium text-zinc-950 dark:text-zinc-50">worker {job.workerId || '-'}</div>
+                      <div>开始 {formatDateTime(job.startedAt)}</div>
+                      <div>心跳 {formatDateTime(job.lastHeartbeatAt)}</div>
+                      {latestLog && <div className="mt-1 line-clamp-2">最近日志：{latestLog.message}</div>}
+                      {job.errorMessage && <div className="mt-1 line-clamp-2 text-red-600 dark:text-red-400">{job.errorCode || 'error'}：{job.errorMessage}</div>}
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      <div>完成 {formatDateTime(job.finishedAt)}</div>
+                      <div>日志 {logs.length} 条</div>
+                      <div className="mt-1 line-clamp-3">{logs.slice(-3).map((log) => `${log.level}:${log.message}`).join(' / ') || '-'}</div>
+                    </div>
+                  </div>
+                );
+              })}
               <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
             </CardContent>
           </Card>

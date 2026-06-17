@@ -80,6 +80,38 @@ export class SQLiteAdapter implements DatabaseAdapter {
         this.sqlite.prepare('ALTER TABLE resume_ai_reviews ADD COLUMN error text').run();
       }
 
+      this.sqlite.prepare(`CREATE TABLE IF NOT EXISTS resume_analysis_jobs (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        resume_id text REFERENCES resumes(id) ON DELETE SET NULL,
+        file_name text NOT NULL,
+        file_type text NOT NULL,
+        file_size integer NOT NULL DEFAULT 0,
+        file_data text NOT NULL,
+        template text NOT NULL DEFAULT 'touch-pure',
+        language text NOT NULL DEFAULT 'zh',
+        status text NOT NULL DEFAULT 'queued',
+        attempts integer NOT NULL DEFAULT 0,
+        max_attempts integer NOT NULL DEFAULT 3,
+        progress integer NOT NULL DEFAULT 0,
+        position integer NOT NULL DEFAULT 0,
+        worker_id text,
+        locked_at integer,
+        last_heartbeat_at integer,
+        next_run_at integer NOT NULL DEFAULT (unixepoch()),
+        started_at integer,
+        finished_at integer,
+        error_code text,
+        error_message text,
+        logs text NOT NULL DEFAULT '[]',
+        metadata text DEFAULT '{}',
+        created_at integer NOT NULL DEFAULT (unixepoch()),
+        updated_at integer NOT NULL DEFAULT (unixepoch())
+      )`).run();
+      this.sqlite.prepare('CREATE INDEX IF NOT EXISTS resume_analysis_jobs_user_status_idx ON resume_analysis_jobs(user_id, status)').run();
+      this.sqlite.prepare('CREATE INDEX IF NOT EXISTS resume_analysis_jobs_status_next_run_idx ON resume_analysis_jobs(status, next_run_at)').run();
+      this.sqlite.prepare('CREATE INDEX IF NOT EXISTS resume_analysis_jobs_worker_idx ON resume_analysis_jobs(worker_id)').run();
+
       const grammarColumns = this.sqlite.prepare('PRAGMA table_info(grammar_checks)').all() as Array<{ name?: string }>;
       if (grammarColumns.length > 0 && !grammarColumns.some((column) => column.name === 'status')) {
         this.sqlite.prepare("ALTER TABLE grammar_checks ADD COLUMN status text NOT NULL DEFAULT 'success'").run();
