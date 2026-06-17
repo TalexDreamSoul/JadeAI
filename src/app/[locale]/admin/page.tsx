@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, CheckCircle2, ClipboardCheck, Coins, Copy, FileClock, FileSliders, HardDrive, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, TestTube2, Users, XCircle } from 'lucide-react';
+import { Activity, Bot, Briefcase, CheckCircle2, ClipboardCheck, Coins, Copy, FileClock, FileSliders, HardDrive, KeyRound, MessageSquareText, Pencil, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, TestTube2, Users, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -556,6 +556,7 @@ export default function AdminPage() {
   const [aiTestResult, setAiTestResult] = useState<AIChannelTestResult | null>(null);
   const [testingChannelId, setTestingChannelId] = useState<string | null>(null);
   const [aiTestTargetChannelId, setAiTestTargetChannelId] = useState<string | null>(null);
+  const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [authSettings, setAuthSettings] = useState<AuthSettings>({
     authMode: 'local',
     passwordLoginEnabled: true,
@@ -901,14 +902,14 @@ export default function AdminPage() {
   }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, resumeAnalysisStatusFilter, walletDirectionFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
 
   const testAIChannel = async (channel?: AIChannel) => {
-    const targetId = channel?.id || 'new';
+    const targetId = channel?.id || editingChannelId || 'new';
     setTestingChannelId(targetId);
-    setAiTestTargetChannelId(channel?.id || null);
+    setAiTestTargetChannelId(channel?.id || editingChannelId || null);
     setAiTestResult(null);
     try {
       const payload = channel
         ? { id: channel.id, apiKey: channel.apiKey, provider: channel.provider, baseUrl: channel.baseUrl, model: channel.model, openAIEndpoint: channel.openAIEndpoint }
-        : form;
+        : { ...(editingChannelId ? { id: editingChannelId } : {}), ...form };
       const res = await fetch('/api/admin/ai-channels/test', {
         method: 'POST',
         headers: getHeaders(),
@@ -944,15 +945,49 @@ export default function AdminPage() {
     }));
   };
 
-  const create = async () => {
-    const res = await fetch('/api/admin/ai-channels', {
-      method: 'POST',
+  const resetAIChannelForm = () => {
+    setEditingChannelId(null);
+    setAiTestResult(null);
+    setAiTestTargetChannelId(null);
+    setForm({
+      name: '',
+      provider: 'openai',
+      apiKey: '',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      openAIEndpoint: 'chat',
+      weight: 1,
+    });
+  };
+
+  const editAIChannel = (channel: AIChannel) => {
+    setEditingChannelId(channel.id);
+    setAiTestResult(null);
+    setAiTestTargetChannelId(channel.id);
+    setForm({
+      name: channel.name,
+      provider: channel.provider || 'openai',
+      apiKey: '',
+      baseUrl: channel.baseUrl,
+      model: channel.model,
+      openAIEndpoint: channel.openAIEndpoint || 'chat',
+      weight: Number(channel.weight || 1),
+    });
+  };
+
+  const saveAIChannel = async () => {
+    const { apiKey, ...rest } = form;
+    const payload = {
+      ...rest,
+      ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+    };
+    const res = await fetch(editingChannelId ? `/api/admin/ai-channels/${editingChannelId}` : '/api/admin/ai-channels', {
+      method: editingChannelId ? 'PATCH' : 'POST',
       headers: getHeaders(),
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
-      setForm({ ...form, name: '', apiKey: '' });
-      setAiTestResult(null);
+      resetAIChannelForm();
       load();
     }
   };
@@ -1482,14 +1517,19 @@ export default function AdminPage() {
                   <option value="chat">chat</option>
                   <option value="responses">responses</option>
                 </select>
-                <Input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder={t('apiKey')} type="password" />
+                <Input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder={editingChannelId ? 'API Key（留空保留原值）' : t('apiKey')} type="password" />
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={() => testAIChannel()} disabled={testingChannelId === 'new'} className="cursor-pointer gap-2">
+                  <Button type="button" variant="outline" onClick={() => testAIChannel()} disabled={testingChannelId === 'new' || testingChannelId === editingChannelId} className="cursor-pointer gap-2">
                     <TestTube2 className="h-4 w-4" />测试
                   </Button>
-                  <Button onClick={create} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Plus className="h-4 w-4" />{t('add')}</Button>
+                  {editingChannelId && <Button type="button" variant="outline" onClick={resetAIChannelForm} className="cursor-pointer">取消</Button>}
+                  <Button onClick={saveAIChannel} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover">
+                    {editingChannelId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {editingChannelId ? '保存' : t('add')}
+                  </Button>
                 </div>
               </div>
+              {editingChannelId && <p className="text-xs text-zinc-500">正在编辑已有 AI 渠道；API Key 留空会保留原密钥。</p>}
               {aiTestResult && (
                 <div className={`rounded-lg border px-3 py-2 text-sm ${aiTestResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'}`}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1519,6 +1559,9 @@ export default function AdminPage() {
                       <p className="truncate text-xs text-zinc-500">{channel.model} · {channel.baseUrl}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => editAIChannel(channel)} className="h-8 cursor-pointer gap-1.5">
+                        <Pencil className="h-3.5 w-3.5" />编辑
+                      </Button>
                       <Button type="button" size="sm" variant="outline" onClick={() => testAIChannel(channel)} disabled={testingChannelId === channel.id} className="h-8 cursor-pointer gap-1.5">
                         <TestTube2 className="h-3.5 w-3.5" />测试
                       </Button>
