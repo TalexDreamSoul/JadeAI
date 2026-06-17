@@ -4,7 +4,7 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resumeAnalysisJobRepository, type ResumeAnalysisJobRecord } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { AIConfigError, resolveServerAIConfigForUser } from '@/lib/ai/provider';
 import { AIUsageInsufficientCreditsError } from '@/lib/commercial/ai-route-metering';
-import { analyzeResumeFile } from './parse-service';
+import { analyzeResumeFile, describeResumeAnalysisError } from './parse-service';
 import { readStoredObject } from '@/lib/storage/object-storage';
 
 export type ResumeAnalysisWorkerOptions = {
@@ -25,12 +25,6 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error || '未知错误');
 }
 
-function errorCode(error: unknown) {
-  if (error instanceof AIConfigError) return 'ai_config_error';
-  if (error instanceof AIUsageInsufficientCreditsError) return 'insufficient_credits';
-  return 'analysis_error';
-}
-
 function nextRetryAt(attempts: number) {
   const delaySeconds = Math.min(60, Math.max(5, attempts * 10));
   return new Date(Date.now() + delaySeconds * 1000);
@@ -39,7 +33,7 @@ function nextRetryAt(attempts: number) {
 function userFacingFailure(error: unknown) {
   if (error instanceof AIConfigError) return `${error.message} 请检查 AI 服务配置或账户权益后重试。`;
   if (error instanceof AIUsageInsufficientCreditsError) return `${error.message} 请充值或升级会员后重新上传。`;
-  return `${errorMessage(error)}。请确认文件清晰可读，稍后可重新上传。`;
+  return describeResumeAnalysisError(error).message;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -190,7 +184,12 @@ export class ResumeAnalysisWorker {
     const attempts = latest?.attempts || job.attempts;
     const maxAttempts = latest?.maxAttempts || job.maxAttempts || 3;
     const retryable = attempts < maxAttempts;
-    const code = errorCode(error);
+    const parsedError = describeResumeAnalysisError(error);
+    const code = error instanceof AIConfigError
+      ? 'ai_config_error'
+      : error instanceof AIUsageInsufficientCreditsError
+        ? 'insufficient_credits'
+        : parsedError.code;
     const message = userFacingFailure(error);
 
     await resumeAnalysisJobRepository.updateStatus(job.id, {
@@ -221,7 +220,7 @@ export class ResumeAnalysisWorker {
         : `已达到最大重试次数，任务失败：${message}`,
       workerId: this.workerId,
       attempt: attempts,
-      metadata: { errorCode: code, rawError: errorMessage(error), retryable, maxAttempts },
+      metadata: { errorCode: code, rawError: errorMessage(error), details: parsedError.details, retryable, maxAttempts },
     });
   }
 }

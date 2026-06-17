@@ -1,4 +1,4 @@
-import { generateText, Output } from 'ai';
+import { generateText } from 'ai';
 import type { ModelMessage } from 'ai';
 import { getModel, getProviderOptions, type AIConfig } from '@/lib/ai/provider';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
@@ -44,6 +44,69 @@ export type ResumeAnalysisInput = {
   onProgress?: (message: string, metadata?: Record<string, unknown>) => Promise<void> | void;
 };
 
+type AIAPICallErrorLike = {
+  name?: string;
+  message?: string;
+  statusCode?: number;
+  responseBody?: string;
+  isRetryable?: boolean;
+};
+
+function isAIAPICallErrorLike(error: unknown): error is AIAPICallErrorLike {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as AIAPICallErrorLike;
+  return candidate.name === 'AI_APICallError' || 'statusCode' in candidate || 'responseBody' in candidate;
+}
+
+export function describeResumeAnalysisError(error: unknown): {
+  code: string;
+  message: string;
+  retryable?: boolean;
+  details?: Record<string, unknown>;
+} {
+  if (isAIAPICallErrorLike(error)) {
+    const status = error.statusCode;
+    const raw = (error.responseBody || error.message || '').slice(0, 1000);
+    const lower = raw.toLowerCase();
+    let message = 'AI 服务调用失败，请稍后重试或检查后台 AI 渠道配置。';
+    if (status === 401 || status === 403 || lower.includes('invalid api key') || lower.includes('unauthorized')) {
+      message = 'AI 渠道认证失败，请检查后台 API Key、Base URL 和模型配置。';
+    } else if (status === 429 || lower.includes('rate limit') || lower.includes('quota')) {
+      message = 'AI 渠道限流或额度不足，请稍后重试或检查服务商额度。';
+    } else if (status === 400 && (lower.includes('image') || lower.includes('vision') || lower.includes('content'))) {
+      message = '当前 AI 模型或网关不支持图片/多模态解析，请切换到支持视觉输入的模型后重试。';
+    } else if (status === 400 && (lower.includes('json') || lower.includes('response_format') || lower.includes('schema'))) {
+      message = '当前 AI 网关不兼容结构化 JSON 输出，请更新模型/网关配置后重试。';
+    } else if (status && status >= 500) {
+      message = 'AI 服务商暂时异常，请稍后自动重试。';
+    }
+    return {
+      code: 'ai_provider_error',
+      message,
+      retryable: error.isRetryable,
+      details: {
+        statusCode: status,
+        isRetryable: error.isRetryable,
+        raw,
+      },
+    };
+  }
+
+  const rawMessage = error instanceof Error ? error.message : String(error || '未知错误');
+  if (/No image|unsupported|multi.?modal|vision/i.test(rawMessage)) {
+    return {
+      code: 'ai_model_vision_unsupported',
+      message: '当前 AI 模型不支持图片解析，请切换到支持视觉输入的模型后重试。',
+      details: { raw: rawMessage.slice(0, 1000) },
+    };
+  }
+  return {
+    code: 'analysis_error',
+    message: `${rawMessage}。请确认文件清晰可读，稍后可重新上传。`,
+    details: { raw: rawMessage.slice(0, 1000) },
+  };
+}
+
 export async function analyzeResumeFile(input: ResumeAnalysisInput) {
   const log = async (message: string, metadata?: Record<string, unknown>) => {
     await input.onProgress?.(message, metadata);
@@ -72,7 +135,6 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
         system: SYSTEM_PROMPT,
         messages,
         providerOptions: getProviderOptions(input.aiConfig),
-        output: Output.json(),
       });
 
       await log('AI 解析完成，开始保存简历', { finishReason: result.finishReason, outputLength: result.text.length });
