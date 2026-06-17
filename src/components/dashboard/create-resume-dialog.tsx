@@ -93,6 +93,7 @@ export function CreateResumeDialog({ open, onClose, onCreate, onUploaded }: Crea
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.code || data.details) console.error('Resume parse enqueue failed:', data);
         throw new Error(data.error || 'Parse failed');
       }
 

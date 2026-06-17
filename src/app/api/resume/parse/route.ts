@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AIConfigError, extractAIConfig } from '@/lib/ai/provider';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
+import { dbReady } from '@/lib/db';
 import { resumeAnalysisJobRepository } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { databaseStoredObject, storeObject, type StoredObject } from '@/lib/storage/object-storage';
@@ -41,6 +42,62 @@ function extensionFromFileName(fileName: string) {
   return match ? `.${match[1].toLowerCase()}` : '';
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || '未知错误');
+}
+
+function describeEnqueueError(error: unknown) {
+  const message = errorMessage(error);
+  const lower = message.toLowerCase();
+  if (lower.includes('formdata') || lower.includes('multipart') || lower.includes('failed to parse body')) {
+    return {
+      status: 400,
+      code: 'resume_upload_parse_failed',
+      error: '文件上传请求解析失败，请重新选择 PDF/图片文件后再试。',
+      details: { raw: message.slice(0, 500) },
+    };
+  }
+  if (lower.includes('payload too large') || lower.includes('request entity too large') || lower.includes('body exceeded')) {
+    return {
+      status: 413,
+      code: 'resume_upload_too_large',
+      error: '文件过大，请上传 10MB 以内的 PDF/图片文件。',
+      details: { raw: message.slice(0, 500) },
+    };
+  }
+  if (
+    lower.includes('resume_analysis_jobs') ||
+    lower.includes('no such table') ||
+    lower.includes('does not exist') ||
+    lower.includes('sqlite') ||
+    lower.includes('postgres') ||
+    lower.includes('drizzle')
+  ) {
+    return {
+      status: 503,
+      code: 'resume_analysis_storage_unavailable',
+      error: '解析任务存储暂不可用，请稍后重试或联系管理员检查数据库迁移。',
+      details: { raw: message.slice(0, 500) },
+    };
+  }
+  return {
+    status: 500,
+    code: 'resume_analysis_enqueue_failed',
+    error: '简历解析任务创建失败，请稍后重试或联系管理员。',
+    details: { raw: message.slice(0, 500) },
+  };
+}
+
+async function cleanupFailedEnqueue(input: { userId: string | null; resumeId: string | null }) {
+  if (!input.userId || !input.resumeId) return;
+  try {
+    await resumeAnalysisJobRepository.deleteByResumeIdForUser(input.resumeId, input.userId);
+    await resumeRepository.delete(input.resumeId);
+  } catch (cleanupError) {
+    console.warn('Failed to cleanup placeholder resume after enqueue error:', cleanupError);
+  }
+}
+
 async function tryStoreUploadInQiniu(input: {
   jobId: string;
   userId: string;
@@ -70,12 +127,16 @@ async function tryStoreUploadInQiniu(input: {
 }
 
 export async function POST(request: NextRequest) {
+  let userId: string | null = null;
+  let placeholderResumeId: string | null = null;
   try {
+    await dbReady;
     const fingerprint = getUserIdFromRequest(request);
     const user = await resolveUser(fingerprint);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    userId = user.id;
 
     await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
     await extractAIConfig(request);
@@ -123,6 +184,7 @@ export async function POST(request: NextRequest) {
       themeConfig: analysisThemeConfig(jobId),
     });
     if (!placeholder) throw new Error('Failed to create placeholder resume');
+    placeholderResumeId = placeholder.id;
     await resumeRepository.createSection({
       resumeId: placeholder.id,
       type: 'personal_info',
@@ -189,7 +251,9 @@ export async function POST(request: NextRequest) {
     if (error instanceof CommercialFeatureLockedError) {
       return commercialFeatureLockedResponse(error);
     }
-    console.error('POST /api/resume/parse error:', error);
-    return NextResponse.json({ error: 'Failed to enqueue resume analysis' }, { status: 500 });
+    await cleanupFailedEnqueue({ userId, resumeId: placeholderResumeId });
+    const described = describeEnqueueError(error);
+    console.error('POST /api/resume/parse error:', { code: described.code, error });
+    return NextResponse.json(described, { status: described.status });
   }
 }
