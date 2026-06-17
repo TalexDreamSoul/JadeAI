@@ -42,6 +42,30 @@ services:
       retries: 12
       start_period: 20s
 
+  jadeai-worker:
+    image: ${JADEAI_IMAGE:?JADEAI_IMAGE is required}
+    container_name: ${CONTAINER_NAME:?CONTAINER_NAME is required}-worker
+    restart: unless-stopped
+    depends_on:
+      jadeai:
+        condition: service_healthy
+    environment:
+      RESUME_ANALYSIS_WORKER_ID: ${CONTAINER_NAME:?CONTAINER_NAME is required}-worker
+      RESUME_ANALYSIS_WORKER_TOKEN: ${RESUME_ANALYSIS_WORKER_TOKEN:-}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        while true; do
+          wget -qO- --timeout=300 \
+            --header="x-worker-id: $${RESUME_ANALYSIS_WORKER_ID}" \
+            --header="x-worker-token: $${RESUME_ANALYSIS_WORKER_TOKEN}" \
+            http://jadeai:3000/api/internal/resume-analysis/tick >/dev/null || true
+          sleep "$${RESUME_ANALYSIS_POLL_INTERVAL_SECONDS:-3}"
+        done
+    networks:
+      - app-net
+
 networks:
   app-net:
     external: true
