@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, ClipboardCheck, Coins, Copy, FileClock, FileSliders, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, Briefcase, ClipboardCheck, Coins, Copy, FileClock, FileSliders, HardDrive, KeyRound, MessageSquareText, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -49,6 +49,27 @@ interface AuthSettings {
   loginFooterLinkText: string;
   loginFooterLinkUrl: string;
   providers: Record<string, OAuthProviderForm>;
+}
+
+interface QiniuStorageSettings {
+  enabled: boolean;
+  configured: boolean;
+  accessKey: string;
+  secretKey: string;
+  secretKeySet: boolean;
+  bucket: string;
+  region: string;
+  domain: string;
+  protocol: 'https' | 'http';
+  keyPrefix: string;
+  publicRead: boolean;
+  source: string;
+  uploadBaseUrl: string;
+}
+
+interface StorageSettings {
+  provider: 'qiniu';
+  qiniu: QiniuStorageSettings;
 }
 
 interface AdminUser {
@@ -385,6 +406,27 @@ const EMPTY_REDEEM_FORM = {
   benefitJson: '{\n  "items": [\n    { "type": "wallet", "currency": "AI_CREDIT", "amount": 20, "description": "运营兑换码" }\n  ]\n}',
 };
 
+const DEFAULT_STORAGE_SETTINGS: StorageSettings = {
+  provider: 'qiniu',
+  qiniu: {
+    enabled: false,
+    configured: false,
+    accessKey: '',
+    secretKey: '',
+    secretKeySet: false,
+    bucket: '',
+    region: 'z0',
+    domain: '',
+    protocol: 'https',
+    keyPrefix: '',
+    publicRead: true,
+    source: 'none',
+    uploadBaseUrl: '',
+  },
+};
+
+const QINIU_REGION_OPTIONS = ['z0', 'z1', 'z2', 'na0', 'as0', 'cn-east-2'];
+
 const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
 const AI_USAGE_STATUS_OPTIONS = ['all', 'success', 'reserved', 'failed_refunded', 'insufficient_credits'];
 const RESUME_ANALYSIS_STATUS_OPTIONS = ['all', 'queued', 'running', 'retrying', 'succeeded', 'failed'];
@@ -418,6 +460,37 @@ function money(cents: number, currency = 'CNY') {
     currency,
     currencyDisplay: 'narrowSymbol',
   }).format(Number(cents || 0) / 100);
+}
+
+function normalizeQiniuStorageSettings(raw: unknown): QiniuStorageSettings {
+  const qiniu = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  return {
+    enabled: Boolean(qiniu.enabled),
+    configured: Boolean(qiniu.configured),
+    accessKey: String(qiniu.accessKey || ''),
+    secretKey: '',
+    secretKeySet: Boolean(qiniu.secretKeySet),
+    bucket: String(qiniu.bucket || ''),
+    region: String(qiniu.region || 'z0'),
+    domain: String(qiniu.domain || ''),
+    protocol: qiniu.protocol === 'http' ? 'http' : 'https',
+    keyPrefix: String(qiniu.keyPrefix || ''),
+    publicRead: qiniu.publicRead !== false,
+    source: String(qiniu.source || 'none'),
+    uploadBaseUrl: String(qiniu.uploadBaseUrl || ''),
+  };
+}
+
+function normalizeStorageSettings(raw: unknown): StorageSettings {
+  const storage = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  return {
+    provider: 'qiniu',
+    qiniu: normalizeQiniuStorageSettings(storage.qiniu),
+  };
 }
 
 export default function AdminPage() {
@@ -471,6 +544,7 @@ export default function AdminPage() {
     loginFooterLinkUrl: '',
     providers: {},
   });
+  const [storageSettings, setStorageSettings] = useState<StorageSettings>(DEFAULT_STORAGE_SETTINGS);
   const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
   const [templateQuery, setTemplateQuery] = useState('');
   const [templateStatusFilter, setTemplateStatusFilter] = useState<TemplateStatusFilter>('all');
@@ -715,9 +789,10 @@ export default function AdminPage() {
   }, [changeProposalQuery, changeProposals, changeProposalStatusFilter]);
 
   const load = async () => {
-    const [channelsRes, authRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, resumeAnalysisRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
+    const [channelsRes, authRes, storageRes, usersRes, templatesRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, resumeAnalysisRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes] = await Promise.all([
       fetch('/api/admin/ai-channels', { headers: getHeaders() }),
       fetch('/api/admin/auth-settings', { headers: getHeaders() }),
+      fetch('/api/admin/storage-settings', { headers: getHeaders() }),
       fetch('/api/admin/users', { headers: getHeaders() }),
       fetch('/api/templates', { headers: getHeaders() }),
       fetch('/api/admin/job-templates', { headers: getHeaders() }),
@@ -733,8 +808,8 @@ export default function AdminPage() {
       fetch('/api/admin/growth?limit=50', { headers: getHeaders() }),
     ]);
 
-    if (!channelsRes.ok || !authRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !resumeAnalysisRes.ok || !walletTransactionsRes.ok || !reviewCommentsRes.ok || !reviewPresenceRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
-      const forbidden = [channelsRes, authRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, resumeAnalysisRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
+    if (!channelsRes.ok || !authRes.ok || !storageRes.ok || !usersRes.ok || !templatesRes.ok || !jobTemplatesRes.ok || !productsRes.ok || !ordersRes.ok || !aiUsageRes.ok || !resumeAnalysisRes.ok || !walletTransactionsRes.ok || !reviewCommentsRes.ok || !reviewPresenceRes.ok || !changeProposalsRes.ok || !redeemRes.ok || !growthRes.ok) {
+      const forbidden = [channelsRes, authRes, storageRes, usersRes, jobTemplatesRes, productsRes, ordersRes, aiUsageRes, resumeAnalysisRes, walletTransactionsRes, reviewCommentsRes, reviewPresenceRes, changeProposalsRes, redeemRes, growthRes].some((res) => res.status === 403);
       setError(forbidden ? t('forbidden') : t('loadFailed'));
       return;
     }
@@ -742,6 +817,7 @@ export default function AdminPage() {
     setChannels(await channelsRes.json());
     setUsers(await usersRes.json());
     setTemplates(await templatesRes.json());
+    setStorageSettings(normalizeStorageSettings(await storageRes.json()));
     const loadedJobTemplates = await jobTemplatesRes.json();
     setJobTemplates([...(loadedJobTemplates.builtin || []), ...(loadedJobTemplates.custom || [])]);
     const loadedProducts = await productsRes.json();
@@ -883,6 +959,20 @@ export default function AdminPage() {
       loginFooterLinkUrl: String(updated.loginFooterLinkUrl || ''),
       providers: updatedProviders,
     });
+    setError('');
+  };
+
+  const saveStorageSettings = async () => {
+    const res = await fetch('/api/admin/storage-settings', {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ qiniu: storageSettings.qiniu }),
+    });
+    if (!res.ok) {
+      setError(t('loadFailed'));
+      return;
+    }
+    setStorageSettings(normalizeStorageSettings(await res.json()));
     setError('');
   };
 
@@ -1114,6 +1204,7 @@ export default function AdminPage() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="users" className="gap-2"><Users className="h-4 w-4" />{t('users')}</TabsTrigger>
           <TabsTrigger value="auth" className="gap-2"><KeyRound className="h-4 w-4" />{t('authSettings')}</TabsTrigger>
+          <TabsTrigger value="storage" className="gap-2"><HardDrive className="h-4 w-4" />{t('storageSettings')}</TabsTrigger>
 	          <TabsTrigger value="ai" className="gap-2"><Bot className="h-4 w-4" />{t('aiChannels')}</TabsTrigger>
 	          <TabsTrigger value="aiUsage" className="gap-2"><Activity className="h-4 w-4" />{t('aiUsage')}</TabsTrigger>
 	          <TabsTrigger value="resumeAnalysis" className="gap-2"><FileClock className="h-4 w-4" />简历分析任务</TabsTrigger>
@@ -1244,6 +1335,63 @@ export default function AdminPage() {
               </div>
 
               <Button onClick={saveAuthSettings} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Save className="h-4 w-4" />{t('save')}</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="storage">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base"><HardDrive className="h-4 w-4" />{t('storageSettings')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-zinc-500">{t('storageSettingsHint')}</p>
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-zinc-50 p-3 text-sm dark:bg-zinc-900/60">
+                <Badge variant="secondary">Qiniu Cloud</Badge>
+                <Badge variant={storageSettings.qiniu.configured ? 'secondary' : 'outline'}>
+                  {storageSettings.qiniu.configured ? t('configured') : t('notConfigured')}
+                </Badge>
+                <Badge variant="outline">{t('storageSource')}: {storageSettings.qiniu.source || 'none'}</Badge>
+                {storageSettings.qiniu.uploadBaseUrl && (
+                  <code className="break-all text-xs text-zinc-500">{storageSettings.qiniu.uploadBaseUrl}</code>
+                )}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm">
+                  <span>{t('storageEnabled')}</span>
+                  <Switch checked={storageSettings.qiniu.enabled} onCheckedChange={(checked) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, enabled: checked } }))} />
+                </label>
+                <label className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm">
+                  <span>{t('qiniuPublicRead')}</span>
+                  <Switch checked={storageSettings.qiniu.publicRead} onCheckedChange={(checked) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, publicRead: checked } }))} />
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Input value={storageSettings.qiniu.accessKey} onChange={(e) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, accessKey: e.target.value } }))} placeholder={t('qiniuAccessKey')} />
+                <Input value={storageSettings.qiniu.secretKey} onChange={(e) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, secretKey: e.target.value } }))} placeholder={storageSettings.qiniu.secretKeySet ? t('qiniuSecretKeySet') : t('qiniuSecretKey')} type="password" />
+                <Input value={storageSettings.qiniu.bucket} onChange={(e) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, bucket: e.target.value } }))} placeholder={t('qiniuBucket')} />
+                <select
+                  value={storageSettings.qiniu.region}
+                  onChange={(event) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, region: event.target.value } }))}
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                  aria-label={t('qiniuRegion')}
+                >
+                  {QINIU_REGION_OPTIONS.map((region) => <option key={region} value={region}>{region}</option>)}
+                </select>
+                <Input value={storageSettings.qiniu.domain} onChange={(e) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, domain: e.target.value } }))} placeholder={t('qiniuDomain')} />
+                <select
+                  value={storageSettings.qiniu.protocol}
+                  onChange={(event) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, protocol: event.target.value === 'http' ? 'http' : 'https' } }))}
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                  aria-label={t('qiniuProtocol')}
+                >
+                  <option value="https">https</option>
+                  <option value="http">http</option>
+                </select>
+                <Input value={storageSettings.qiniu.keyPrefix} onChange={(e) => setStorageSettings((s) => ({ ...s, qiniu: { ...s.qiniu, keyPrefix: e.target.value } }))} placeholder={t('qiniuKeyPrefix')} />
+              </div>
+              <p className="text-xs text-zinc-500">{t('qiniuSecretHint')}</p>
+              <Button onClick={saveStorageSettings} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover"><Save className="h-4 w-4" />{t('save')}</Button>
             </CardContent>
           </Card>
         </TabsContent>

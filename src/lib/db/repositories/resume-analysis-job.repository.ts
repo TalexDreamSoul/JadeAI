@@ -49,11 +49,30 @@ function normalizeLogs(value: unknown): ResumeAnalysisJobLog[] {
   return [];
 }
 
+function sanitizePublicMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  const raw = metadata as Record<string, unknown>;
+  const storage = raw.storage && typeof raw.storage === 'object' && !Array.isArray(raw.storage)
+    ? raw.storage as Record<string, unknown>
+    : null;
+  if (!storage) return raw;
+  return {
+    ...raw,
+    storage: {
+      provider: typeof storage.provider === 'string' ? storage.provider : 'unknown',
+      size: typeof storage.size === 'number' ? storage.size : undefined,
+      mimeType: typeof storage.mimeType === 'string' ? storage.mimeType : undefined,
+      uploadedAt: typeof storage.uploadedAt === 'string' ? storage.uploadedAt : undefined,
+    },
+  };
+}
+
 function toPublicJob(job: ResumeAnalysisJobRecord | null) {
   if (!job) return null;
-  return Object.fromEntries(
-    Object.entries(job).filter(([key]) => key !== 'fileData'),
-  ) as Omit<ResumeAnalysisJobRecord, 'fileData'>;
+  return {
+    ...Object.fromEntries(Object.entries(job).filter(([key]) => key !== 'fileData')),
+    metadata: sanitizePublicMetadata(job.metadata),
+  } as Omit<ResumeAnalysisJobRecord, 'fileData'>;
 }
 
 export const resumeAnalysisJobRepository = {

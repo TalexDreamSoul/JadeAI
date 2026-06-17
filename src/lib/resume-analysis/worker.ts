@@ -5,6 +5,7 @@ import { resumeAnalysisJobRepository, type ResumeAnalysisJobRecord } from '@/lib
 import { AIConfigError, resolveServerAIConfigForUser } from '@/lib/ai/provider';
 import { AIUsageInsufficientCreditsError } from '@/lib/commercial/ai-route-metering';
 import { analyzeResumeFile } from './parse-service';
+import { readStoredObject } from '@/lib/storage/object-storage';
 
 export type ResumeAnalysisWorkerOptions = {
   workerId?: string;
@@ -39,6 +40,21 @@ function userFacingFailure(error: unknown) {
   if (error instanceof AIConfigError) return `${error.message} 请检查 AI 服务配置或账户权益后重试。`;
   if (error instanceof AIUsageInsufficientCreditsError) return `${error.message} 请充值或升级会员后重新上传。`;
   return `${errorMessage(error)}。请确认文件清晰可读，稍后可重新上传。`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+async function getAnalysisFileBuffer(job: ResumeAnalysisJobRecord): Promise<Buffer> {
+  const metadata = asRecord(job.metadata);
+  const storage = asRecord(metadata.storage);
+  const storedBuffer = await readStoredObject(storage);
+  if (storedBuffer) return storedBuffer;
+  if (!job.fileData) {
+    throw new Error('简历源文件不存在或存储配置不可用');
+  }
+  return Buffer.from(job.fileData, 'base64');
 }
 
 async function updateResumeAnalysisState(job: ResumeAnalysisJobRecord, patch: Record<string, unknown>) {
@@ -119,6 +135,7 @@ export class ResumeAnalysisWorker {
 
       const aiConfig = await resolveServerAIConfigForUser(user);
       await resumeAnalysisJobRepository.heartbeat(job.id, this.workerId);
+      const fileBuffer = await getAnalysisFileBuffer(job);
 
       const resume = await analyzeResumeFile({
         userId: job.userId,
@@ -127,7 +144,7 @@ export class ResumeAnalysisWorker {
           name: job.fileName,
           type: job.fileType,
           size: job.fileSize,
-          buffer: Buffer.from(job.fileData, 'base64'),
+          buffer: fileBuffer,
         },
         template: job.template,
         language: job.language,

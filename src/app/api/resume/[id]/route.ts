@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
+import { storeDataUrlObject } from '@/lib/storage/object-storage';
 
 type ResumeSectionInput = {
   id: string;
@@ -10,6 +11,40 @@ type ResumeSectionInput = {
   visible?: boolean;
   content?: unknown;
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+async function storeSectionAvatarIfNeeded(input: {
+  userId: string;
+  resumeId: string;
+  section: ResumeSectionInput;
+}): Promise<ResumeSectionInput> {
+  if (input.section.type !== 'personal_info') return input.section;
+  const content = asRecord(input.section.content);
+  const avatar = content.avatar;
+  if (typeof avatar !== 'string' || !avatar.startsWith('data:image/')) return input.section;
+
+  try {
+    const storedAvatar = await storeDataUrlObject({
+      key: `resume-avatar/${input.userId}/${input.resumeId}/${crypto.randomUUID()}`,
+      dataUrl: avatar,
+      fileNameBase: 'resume-avatar',
+    });
+    if (!storedAvatar?.url || storedAvatar.publicRead === false) return input.section;
+    return {
+      ...input.section,
+      content: {
+        ...content,
+        avatar: storedAvatar.url,
+      },
+    };
+  } catch (error) {
+    console.warn('Qiniu upload failed for resume avatar; keeping data URL:', error);
+    return input.section;
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -126,7 +161,11 @@ export async function PUT(
     // Sync sections: create new, update existing, delete removed
     if (sections && Array.isArray(sections)) {
       const existingSections = (resume.sections || []) as ResumeSectionInput[];
-      const typedSections = sections as ResumeSectionInput[];
+      const typedSections = await Promise.all((sections as ResumeSectionInput[]).map((section) => storeSectionAvatarIfNeeded({
+        userId: user.id,
+        resumeId: id,
+        section,
+      })));
       const existingIds = new Set(existingSections.map((s) => s.id));
       const incomingIds = new Set(typedSections.map((s) => s.id));
 

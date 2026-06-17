@@ -4,6 +4,7 @@ import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { DEFAULT_TEMPLATE } from '@/lib/constants';
 import { resumeAnalysisJobRepository } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
+import { databaseStoredObject, storeObject, type StoredObject } from '@/lib/storage/object-storage';
 import {
   ACCEPTED_RESUME_ANALYSIS_TYPES,
   MAX_RESUME_ANALYSIS_FILE_SIZE,
@@ -33,6 +34,39 @@ function analysisThemeConfig(jobId: string, status = 'queued') {
       message: '简历已上传，正在排队解析。',
     },
   };
+}
+
+function extensionFromFileName(fileName: string) {
+  const match = fileName.match(/\.([a-z0-9]+)$/i);
+  return match ? `.${match[1].toLowerCase()}` : '';
+}
+
+async function tryStoreUploadInQiniu(input: {
+  jobId: string;
+  userId: string;
+  resumeId: string;
+  fileName: string;
+  fileType: string;
+  buffer: Buffer;
+}): Promise<StoredObject | null> {
+  const objectKey = [
+    'resume-analysis',
+    input.userId,
+    input.resumeId,
+    `${input.jobId}${extensionFromFileName(input.fileName)}`,
+  ].join('/');
+
+  try {
+    return await storeObject({
+      key: objectKey,
+      buffer: input.buffer,
+      fileName: input.fileName,
+      mimeType: input.fileType,
+    });
+  } catch (error) {
+    console.warn('Qiniu upload failed; falling back to database fileData:', error);
+    return null;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -97,6 +131,14 @@ export async function POST(request: NextRequest) {
       content: { fullName: '', jobTitle: '解析中', email: '', phone: '', location: '' },
     });
 
+    const storedObject = await tryStoreUploadInQiniu({
+      jobId,
+      userId: user.id,
+      resumeId: placeholder.id,
+      fileName: file.name || 'resume-upload',
+      fileType: file.type,
+      buffer,
+    });
     const job = await resumeAnalysisJobRepository.create({
       id: jobId,
       userId: user.id,
@@ -104,10 +146,13 @@ export async function POST(request: NextRequest) {
       fileName: file.name || 'resume-upload',
       fileType: file.type,
       fileSize: file.size,
-      fileData: buffer.toString('base64'),
+      fileData: storedObject ? '' : buffer.toString('base64'),
       template,
       language,
-      metadata: { source: 'upload' },
+      metadata: {
+        source: 'upload',
+        storage: storedObject || databaseStoredObject(),
+      },
     });
 
     if (!job) throw new Error('Failed to create analysis job');

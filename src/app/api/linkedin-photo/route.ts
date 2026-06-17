@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerImageAIConfig } from '@/lib/ai/server-config';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
+import { storeDataUrlObject } from '@/lib/storage/object-storage';
 
 export const maxDuration = 60;
 
@@ -12,6 +13,22 @@ class LinkedInPhotoError extends Error {
   ) {
     super(String(payload.error || 'generate_failed'));
     this.name = 'LinkedInPhotoError';
+  }
+}
+
+async function tryStoreGeneratedImage(input: {
+  userId: string;
+  image: string;
+}) {
+  try {
+    return await storeDataUrlObject({
+      key: `linkedin-photo/${input.userId}/${crypto.randomUUID()}`,
+      dataUrl: input.image,
+      fileNameBase: 'linkedin-photo',
+    });
+  } catch (error) {
+    console.warn('Qiniu upload failed for LinkedIn photo; returning data URL only:', error);
+    return null;
   }
 }
 
@@ -135,10 +152,26 @@ export async function POST(request: NextRequest) {
           throw new LinkedInPhotoError({ error: 'generate_failed', detail: 'No image in response' }, 500);
         }
 
+        const storedImage = await tryStoreGeneratedImage({
+          userId: user.id,
+          image: resultImage,
+        });
+
         return {
-          value: { image: resultImage, text: resultText },
+          value: {
+            image: resultImage,
+            imageUrl: storedImage?.publicRead === false ? null : storedImage?.url || null,
+            storage: storedImage ? {
+              provider: storedImage.provider,
+              size: storedImage.size,
+              mimeType: storedImage.mimeType,
+              uploadedAt: storedImage.uploadedAt,
+            } : null,
+            text: resultText,
+          },
           metadata: {
             outputMimeType: resultImage.match(/^data:([^;]+);/)?.[1] || null,
+            storedIn: storedImage?.provider || 'response',
           },
         };
       },
