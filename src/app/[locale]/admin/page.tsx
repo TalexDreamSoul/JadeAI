@@ -30,12 +30,54 @@ interface AIChannel {
   enabled: boolean;
 }
 
+type AIChannelHTTPRequestReport = {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  bodyJson: unknown;
+  timeoutMs: number;
+};
+
+type AIChannelHTTPResponseReport = {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  bodyText: string;
+  bodyJson?: unknown;
+  bodyJsonParseError?: string;
+  bodyLength: number;
+  bodyTruncated: boolean;
+};
+
+type AIChannelHTTPErrorReport = {
+  name: string;
+  message: string;
+  cause?: string;
+};
+
+type AIChannelTestDiagnostics = {
+  provider: string;
+  inputBaseUrl: string;
+  normalizedBaseUrl: string;
+  preferredEndpoint: string;
+  endpointOrder: string[];
+  timeoutMs: number;
+  bodyLimitChars: number;
+  redaction: string;
+};
+
 type AIChannelTestAttempt = {
   endpoint: string;
   baseUrl: string;
   ok: boolean;
   message: string;
   elapsedMs: number;
+  startedAt?: string;
+  completedAt?: string;
+  request?: AIChannelHTTPRequestReport;
+  response?: AIChannelHTTPResponseReport;
+  error?: AIChannelHTTPErrorReport;
   rawError?: string;
 };
 
@@ -46,6 +88,7 @@ type AIChannelTestResult = {
   recommendedEndpoint: string;
   model: string;
   message: string;
+  diagnostics?: AIChannelTestDiagnostics;
   attempts: AIChannelTestAttempt[];
 };
 
@@ -491,6 +534,15 @@ function money(cents: number, currency = 'CNY') {
     currency,
     currencyDisplay: 'narrowSymbol',
   }).format(Number(cents || 0) / 100);
+}
+
+function stringifyReport(value: unknown) {
+  return JSON.stringify(value, null, 2);
+}
+
+function responseStatusLabel(response?: AIChannelHTTPResponseReport) {
+  if (!response) return 'no response';
+  return `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
 }
 
 function normalizeQiniuStorageSettings(raw: unknown): QiniuStorageSettings {
@@ -966,6 +1018,11 @@ export default function AdminPage() {
     } finally {
       setTestingChannelId(null);
     }
+  };
+
+  const copyAIChannelTestReport = async () => {
+    if (!aiTestResult || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(stringifyReport(aiTestResult));
   };
 
   const applyAIChannelRecommendation = async () => {
@@ -1649,28 +1706,80 @@ export default function AdminPage() {
           </Dialog>
 
           <Dialog open={aiTestResultOpen} onOpenChange={setAiTestResultOpen}>
-            <DialogContent className="sm:max-w-2xl">
+            <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-5xl">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   {aiTestResult?.ok ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
-                  AI 渠道测试结果
+                  AI 渠道测试 HTTP 报告
                 </DialogTitle>
-                <DialogDescription>{aiTestResult?.message || 'AI 渠道测试失败，请检查配置。'}</DialogDescription>
+                <DialogDescription className="break-words">{aiTestResult?.message || 'AI 渠道测试失败，请检查配置。'}</DialogDescription>
               </DialogHeader>
               {aiTestResult && (
-                <div className={`rounded-lg border px-3 py-2 text-sm ${aiTestResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'}`}>
-                  <p className="text-xs opacity-80">推荐：{aiTestResult.recommendedBaseUrl || '-'} · {aiTestResult.recommendedEndpoint || '-'}</p>
-                  {aiTestResult.attempts?.length > 0 && (
-                    <div className="mt-2 space-y-1 text-xs opacity-90">
-                      {aiTestResult.attempts.map((attempt) => (
-                        <div key={`${attempt.endpoint}-${attempt.elapsedMs}`}>{attempt.ok ? '✅' : '❌'} {attempt.endpoint} · {attempt.elapsedMs}ms · {attempt.message}</div>
-                      ))}
+                <div className="space-y-3 text-sm">
+                  <div className={`rounded-lg border px-3 py-2 ${aiTestResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'}`}>
+                    <div className="grid gap-2 text-xs md:grid-cols-2">
+                      <div><span className="opacity-70">provider：</span><span className="font-medium">{aiTestResult.provider}</span></div>
+                      <div><span className="opacity-70">model：</span><span className="font-medium break-all">{aiTestResult.model || '-'}</span></div>
+                      <div><span className="opacity-70">recommendedBaseUrl：</span><span className="font-medium break-all">{aiTestResult.recommendedBaseUrl || '-'}</span></div>
+                      <div><span className="opacity-70">recommendedEndpoint：</span><span className="font-medium">{aiTestResult.recommendedEndpoint || '-'}</span></div>
                     </div>
+                  </div>
+
+                  {aiTestResult.diagnostics && (
+                    <details open className="rounded-lg border bg-muted/20 p-3">
+                      <summary className="cursor-pointer text-sm font-medium">Diagnostics / 测试计划</summary>
+                      <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(aiTestResult.diagnostics)}</pre>
+                    </details>
                   )}
+
+                  <div className="space-y-3">
+                    {aiTestResult.attempts?.map((attempt, index) => (
+                      <details key={`${attempt.endpoint}-${attempt.startedAt || attempt.elapsedMs}-${index}`} open className={`rounded-lg border p-3 ${attempt.ok ? 'border-emerald-200 dark:border-emerald-900/60' : 'border-red-200 dark:border-red-900/60'}`}>
+                        <summary className="cursor-pointer text-sm font-semibold">
+                          {attempt.ok ? '✅' : '❌'} Attempt {index + 1}: {attempt.endpoint} · {attempt.elapsedMs}ms · {responseStatusLabel(attempt.response)}
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                          <div className="rounded-md bg-muted/30 p-2 text-xs">
+                            <div className="break-words font-medium">message: {attempt.message}</div>
+                            <div className="mt-1 grid gap-1 text-zinc-500 md:grid-cols-2">
+                              <div>baseUrl: <span className="break-all">{attempt.baseUrl}</span></div>
+                              <div>startedAt: {attempt.startedAt || '-'}</div>
+                              <div>completedAt: {attempt.completedAt || '-'}</div>
+                              <div>rawError: <span className="break-all">{attempt.rawError || '-'}</span></div>
+                            </div>
+                          </div>
+                          {attempt.request && (
+                            <details open>
+                              <summary className="cursor-pointer text-xs font-medium">Request JSON</summary>
+                              <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(attempt.request)}</pre>
+                            </details>
+                          )}
+                          {attempt.response && (
+                            <details open>
+                              <summary className="cursor-pointer text-xs font-medium">Response JSON / Headers / Body</summary>
+                              <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(attempt.response)}</pre>
+                            </details>
+                          )}
+                          {attempt.error && (
+                            <details open>
+                              <summary className="cursor-pointer text-xs font-medium">Transport Error</summary>
+                              <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(attempt.error)}</pre>
+                            </details>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+
+                  <details className="rounded-lg border bg-muted/20 p-3">
+                    <summary className="cursor-pointer text-sm font-medium">完整脱敏报告 JSON</summary>
+                    <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(aiTestResult)}</pre>
+                  </details>
                 </div>
               )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setAiTestResultOpen(false)}>关闭</Button>
+                {aiTestResult && <Button type="button" variant="outline" onClick={copyAIChannelTestReport} className="cursor-pointer gap-2"><Copy className="h-4 w-4" />复制完整报告</Button>}
                 {aiTestResult && <Button type="button" variant="outline" onClick={applyAIChannelRecommendation} className="cursor-pointer">采用推荐配置</Button>}
               </DialogFooter>
             </DialogContent>
