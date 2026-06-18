@@ -45,3 +45,23 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const admin = await requireAdmin(request);
+    if (admin.error) return admin.error;
+
+    const { id } = await params;
+    const channel = await aiChannelRepository.findById(id);
+    if (!channel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    await aiChannelRepository.delete(id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('DELETE /api/admin/ai-channels/[id] error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

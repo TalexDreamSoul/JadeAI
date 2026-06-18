@@ -74,6 +74,10 @@ export const aiChannelRepository = {
     return this.findById(id);
   },
 
+  async delete(id: string) {
+    await db.delete(aiChannels).where(eq(aiChannels.id, id));
+  },
+
   async selectForRequest() {
     const channels = await this.listEnabled();
     if (channels.length === 0) return null;

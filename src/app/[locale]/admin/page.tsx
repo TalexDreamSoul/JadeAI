@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, CheckCircle2, ClipboardCheck, Coins, Copy, FileClock, FileSliders, HardDrive, KeyRound, MessageSquareText, Pencil, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, TestTube2, Users, XCircle } from 'lucide-react';
+import { Activity, Bot, Briefcase, CheckCircle2, ClipboardCheck, Coins, Copy, FileClock, FileSliders, HardDrive, KeyRound, MessageSquareText, Pencil, Plus, Radio, ReceiptText, RefreshCw, Save, ShieldCheck, TestTube2, Trash2, Users, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useFingerprint } from '@/hooks/use-fingerprint';
 import { TEMPLATES } from '@/lib/constants';
 import { getTemplateLabel } from '@/lib/template-labels';
@@ -425,6 +427,16 @@ const EMPTY_REDEEM_FORM = {
   benefitJson: '{\n  "items": [\n    { "type": "wallet", "currency": "AI_CREDIT", "amount": 20, "description": "运营兑换码" }\n  ]\n}',
 };
 
+const EMPTY_AI_CHANNEL_FORM = {
+  name: '',
+  provider: 'openai',
+  apiKey: '',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'gpt-4o',
+  openAIEndpoint: 'chat',
+  weight: 1,
+};
+
 const DEFAULT_STORAGE_SETTINGS: StorageSettings = {
   provider: 'qiniu',
   qiniu: {
@@ -544,15 +556,15 @@ export default function AdminPage() {
   const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
   const [growth, setGrowth] = useState<AdminGrowthState | null>(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({
-    name: '',
-    provider: 'openai',
-    apiKey: '',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4o',
-    openAIEndpoint: 'chat',
-    weight: 1,
-  });
+  const [form, setForm] = useState(EMPTY_AI_CHANNEL_FORM);
+  const [aiChannelDialogOpen, setAiChannelDialogOpen] = useState(false);
+  const [aiTestResultOpen, setAiTestResultOpen] = useState(false);
+  const [viewingAIChannel, setViewingAIChannel] = useState<AIChannel | null>(null);
+  const [aiActionChannel, setAiActionChannel] = useState<AIChannel | null>(null);
+  const [aiActionType, setAiActionType] = useState<'toggle' | 'delete' | null>(null);
+  const [savingAIChannel, setSavingAIChannel] = useState(false);
+  const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null);
+  const [togglingChannelId, setTogglingChannelId] = useState<string | null>(null);
   const [aiTestResult, setAiTestResult] = useState<AIChannelTestResult | null>(null);
   const [testingChannelId, setTestingChannelId] = useState<string | null>(null);
   const [aiTestTargetChannelId, setAiTestTargetChannelId] = useState<string | null>(null);
@@ -901,11 +913,44 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, status, isLoggedIn, orderStatusFilter, aiUsageStatusFilter, resumeAnalysisStatusFilter, walletDirectionFilter, reviewCommentStatusFilter, changeProposalStatusFilter]);
 
+  const openCreateAIChannelDialog = () => {
+    setEditingChannelId(null);
+    setForm(EMPTY_AI_CHANNEL_FORM);
+    setAiTestResult(null);
+    setAiTestTargetChannelId(null);
+    setAiChannelDialogOpen(true);
+  };
+
+  const openEditAIChannelDialog = (channel: AIChannel) => {
+    setEditingChannelId(channel.id);
+    setAiTestResult(null);
+    setAiTestTargetChannelId(channel.id);
+    setForm({
+      name: channel.name,
+      provider: channel.provider || 'openai',
+      apiKey: '',
+      baseUrl: channel.baseUrl,
+      model: channel.model,
+      openAIEndpoint: channel.openAIEndpoint || 'chat',
+      weight: Number(channel.weight || 1),
+    });
+    setAiChannelDialogOpen(true);
+  };
+
+  const closeAIChannelDialog = () => {
+    if (savingAIChannel || testingChannelId === (editingChannelId || 'new')) return;
+    setAiChannelDialogOpen(false);
+    setEditingChannelId(null);
+    setForm(EMPTY_AI_CHANNEL_FORM);
+    setAiTestTargetChannelId(null);
+  };
+
   const testAIChannel = async (channel?: AIChannel) => {
     const targetId = channel?.id || editingChannelId || 'new';
     setTestingChannelId(targetId);
     setAiTestTargetChannelId(channel?.id || editingChannelId || null);
     setAiTestResult(null);
+    setAiTestResultOpen(false);
     try {
       const payload = channel
         ? { id: channel.id, apiKey: channel.apiKey, provider: channel.provider, baseUrl: channel.baseUrl, model: channel.model, openAIEndpoint: channel.openAIEndpoint }
@@ -917,6 +962,7 @@ export default function AdminPage() {
       });
       const result = await res.json().catch(() => ({}));
       setAiTestResult(result as AIChannelTestResult);
+      setAiTestResultOpen(true);
     } finally {
       setTestingChannelId(null);
     }
@@ -934,6 +980,7 @@ export default function AdminPage() {
           model: aiTestResult.model,
         }),
       });
+      setAiTestResultOpen(false);
       await load();
       return;
     }
@@ -943,39 +990,11 @@ export default function AdminPage() {
       openAIEndpoint: aiTestResult.recommendedEndpoint || current.openAIEndpoint,
       model: aiTestResult.model || current.model,
     }));
-  };
-
-  const resetAIChannelForm = () => {
-    setEditingChannelId(null);
-    setAiTestResult(null);
-    setAiTestTargetChannelId(null);
-    setForm({
-      name: '',
-      provider: 'openai',
-      apiKey: '',
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o',
-      openAIEndpoint: 'chat',
-      weight: 1,
-    });
-  };
-
-  const editAIChannel = (channel: AIChannel) => {
-    setEditingChannelId(channel.id);
-    setAiTestResult(null);
-    setAiTestTargetChannelId(channel.id);
-    setForm({
-      name: channel.name,
-      provider: channel.provider || 'openai',
-      apiKey: '',
-      baseUrl: channel.baseUrl,
-      model: channel.model,
-      openAIEndpoint: channel.openAIEndpoint || 'chat',
-      weight: Number(channel.weight || 1),
-    });
+    setAiTestResultOpen(false);
   };
 
   const saveAIChannel = async () => {
+    setSavingAIChannel(true);
     const { apiKey, ...rest } = form;
     const payload = {
       ...rest,
@@ -986,19 +1005,58 @@ export default function AdminPage() {
       headers: getHeaders(),
       body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      resetAIChannelForm();
-      load();
+    setSavingAIChannel(false);
+    if (!res.ok) {
+      setError(t('loadFailed'));
+      return;
     }
+    setAiChannelDialogOpen(false);
+    setEditingChannelId(null);
+    setForm(EMPTY_AI_CHANNEL_FORM);
+    setError('');
+    await load();
   };
 
-  const toggle = async (channel: AIChannel) => {
-    await fetch(`/api/admin/ai-channels/${channel.id}`, {
-      method: 'PATCH',
-      headers: getHeaders(),
-      body: JSON.stringify({ enabled: !channel.enabled }),
-    });
-    load();
+  const openAIChannelActionDialog = (channel: AIChannel, action: 'toggle' | 'delete') => {
+    setAiActionChannel(channel);
+    setAiActionType(action);
+  };
+
+  const closeAIChannelActionDialog = () => {
+    if (deletingChannelId || togglingChannelId) return;
+    setAiActionChannel(null);
+    setAiActionType(null);
+  };
+
+  const confirmAIChannelAction = async () => {
+    if (!aiActionChannel || !aiActionType) return;
+    if (aiActionType === 'delete') {
+      setDeletingChannelId(aiActionChannel.id);
+      const res = await fetch(`/api/admin/ai-channels/${aiActionChannel.id}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      setDeletingChannelId(null);
+      if (!res.ok) {
+        setError(t('loadFailed'));
+        return;
+      }
+    } else {
+      setTogglingChannelId(aiActionChannel.id);
+      const res = await fetch(`/api/admin/ai-channels/${aiActionChannel.id}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ enabled: !aiActionChannel.enabled }),
+      });
+      setTogglingChannelId(null);
+      if (!res.ok) {
+        setError(t('loadFailed'));
+        return;
+      }
+    }
+    closeAIChannelActionDialog();
+    setError('');
+    await load();
   };
 
   const updateUser = async (userId: string, patch: Partial<{ role: string; aiCreditBalance: number }>) => {
@@ -1501,9 +1559,46 @@ export default function AdminPage() {
 
         <TabsContent value="ai">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Bot className="h-4 w-4" />{t('aiChannels')}</CardTitle></CardHeader>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="flex items-center gap-2 text-base"><Bot className="h-4 w-4" />{t('aiChannels')}</CardTitle>
+              <Button type="button" onClick={openCreateAIChannelDialog} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover">
+                <Plus className="h-4 w-4" />{t('add')}
+              </Button>
+            </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2 md:grid-cols-8">
+              <div className="space-y-2">
+                {channels.length === 0 ? <p className="text-sm text-zinc-400">暂无 AI 渠道。</p> : channels.map((channel) => (
+                  <div key={channel.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                    <button type="button" onClick={() => setViewingAIChannel(channel)} className="min-w-0 text-left">
+                      <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{channel.name}</span><Badge variant="secondary">{channel.provider}</Badge><Badge variant="outline">{channel.openAIEndpoint || 'chat'}</Badge><Badge variant="outline">w{channel.weight}</Badge>{!channel.enabled && <Badge variant="destructive">停用</Badge>}</div>
+                      <p className="truncate text-xs text-zinc-500">{channel.model} · {channel.baseUrl}</p>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => openEditAIChannelDialog(channel)} className="h-8 cursor-pointer gap-1.5">
+                        <Pencil className="h-3.5 w-3.5" />编辑
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => testAIChannel(channel)} disabled={testingChannelId === channel.id} className="h-8 cursor-pointer gap-1.5">
+                        <TestTube2 className="h-3.5 w-3.5" />{testingChannelId === channel.id ? '测试中' : '测试'}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => openAIChannelActionDialog(channel, 'delete')} disabled={deletingChannelId === channel.id} className="h-8 cursor-pointer gap-1.5 text-red-600 hover:text-red-700">
+                        <Trash2 className="h-3.5 w-3.5" />删除
+                      </Button>
+                      <Switch checked={channel.enabled} disabled={togglingChannelId === channel.id} onCheckedChange={() => openAIChannelActionDialog(channel, 'toggle')} />
+                    </div>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Dialog open={aiChannelDialogOpen} onOpenChange={(open) => { if (open) setAiChannelDialogOpen(true); else closeAIChannelDialog(); }}>
+            <DialogContent className="sm:max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>{editingChannelId ? '编辑 AI 渠道' : '新增 AI 渠道'}</DialogTitle>
+                <DialogDescription>{editingChannelId ? 'API Key 留空会保留原密钥。' : '配置供应商、模型、端点和密钥后保存。'}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-3 md:grid-cols-2">
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('name')} />
                 <Input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} placeholder={t('provider')} />
                 <Input className="md:col-span-2" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder={t('baseUrl')} />
@@ -1518,30 +1613,53 @@ export default function AdminPage() {
                   <option value="responses">responses</option>
                 </select>
                 <Input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder={editingChannelId ? 'API Key（留空保留原值）' : t('apiKey')} type="password" />
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={() => testAIChannel()} disabled={testingChannelId === 'new' || testingChannelId === editingChannelId} className="cursor-pointer gap-2">
-                    <TestTube2 className="h-4 w-4" />测试
-                  </Button>
-                  {editingChannelId && <Button type="button" variant="outline" onClick={resetAIChannelForm} className="cursor-pointer">取消</Button>}
-                  <Button onClick={saveAIChannel} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover">
-                    {editingChannelId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    {editingChannelId ? '保存' : t('add')}
-                  </Button>
-                </div>
+                <Input value={String(form.weight)} onChange={(e) => setForm({ ...form, weight: Number(e.target.value) || 1 })} placeholder="权重" type="number" min={1} />
               </div>
-              {editingChannelId && <p className="text-xs text-zinc-500">正在编辑已有 AI 渠道；API Key 留空会保留原密钥。</p>}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeAIChannelDialog} disabled={savingAIChannel || testingChannelId === 'new' || testingChannelId === editingChannelId}>取消</Button>
+                <Button type="button" variant="outline" onClick={() => testAIChannel()} disabled={savingAIChannel || testingChannelId === 'new' || testingChannelId === editingChannelId} className="cursor-pointer gap-2">
+                  <TestTube2 className="h-4 w-4" />{testingChannelId === 'new' || testingChannelId === editingChannelId ? '测试中' : '测试'}
+                </Button>
+                <Button type="button" onClick={saveAIChannel} disabled={savingAIChannel} className="cursor-pointer gap-2 bg-brand hover:bg-brand-hover">
+                  {editingChannelId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {savingAIChannel ? '保存中' : editingChannelId ? '保存' : t('add')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={!!viewingAIChannel} onOpenChange={(open) => { if (!open) setViewingAIChannel(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{viewingAIChannel?.name || 'AI 渠道详情'}</DialogTitle>
+                <DialogDescription>查看当前 AI 渠道配置摘要。</DialogDescription>
+              </DialogHeader>
+              {viewingAIChannel && (
+                <div className="space-y-3 text-sm">
+                  <div className="flex flex-wrap gap-2"><Badge variant="secondary">{viewingAIChannel.provider}</Badge><Badge variant="outline">{viewingAIChannel.openAIEndpoint || 'chat'}</Badge><Badge variant="outline">w{viewingAIChannel.weight}</Badge><Badge variant={viewingAIChannel.enabled ? 'secondary' : 'destructive'}>{viewingAIChannel.enabled ? '启用' : '停用'}</Badge></div>
+                  <div><div className="text-xs text-zinc-500">模型</div><div className="break-all font-medium">{viewingAIChannel.model}</div></div>
+                  <div><div className="text-xs text-zinc-500">Base URL</div><div className="break-all font-medium">{viewingAIChannel.baseUrl}</div></div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setViewingAIChannel(null)}>关闭</Button>
+                {viewingAIChannel && <Button type="button" onClick={() => { const channel = viewingAIChannel; setViewingAIChannel(null); openEditAIChannelDialog(channel); }} className="gap-2"><Pencil className="h-4 w-4" />编辑</Button>}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={aiTestResultOpen} onOpenChange={setAiTestResultOpen}>
+            <DialogContent className="sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {aiTestResult?.ok ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
+                  AI 渠道测试结果
+                </DialogTitle>
+                <DialogDescription>{aiTestResult?.message || 'AI 渠道测试失败，请检查配置。'}</DialogDescription>
+              </DialogHeader>
               {aiTestResult && (
                 <div className={`rounded-lg border px-3 py-2 text-sm ${aiTestResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 font-medium">
-                      {aiTestResult.ok ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                      {aiTestResult.message}
-                    </div>
-                    <Button type="button" size="sm" variant="outline" onClick={applyAIChannelRecommendation} className="h-7 cursor-pointer">
-                      采用推荐配置
-                    </Button>
-                  </div>
-                  <p className="mt-1 text-xs opacity-80">推荐：{aiTestResult.recommendedBaseUrl} · {aiTestResult.recommendedEndpoint}</p>
+                  <p className="text-xs opacity-80">推荐：{aiTestResult.recommendedBaseUrl || '-'} · {aiTestResult.recommendedEndpoint || '-'}</p>
                   {aiTestResult.attempts?.length > 0 && (
                     <div className="mt-2 space-y-1 text-xs opacity-90">
                       {aiTestResult.attempts.map((attempt) => (
@@ -1551,28 +1669,38 @@ export default function AdminPage() {
                   )}
                 </div>
               )}
-              <div className="space-y-2">
-                {channels.map((channel) => (
-                  <div key={channel.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2"><span className="font-medium">{channel.name}</span><Badge variant="secondary">{channel.provider}</Badge><Badge variant="outline">{channel.openAIEndpoint || 'chat'}</Badge><Badge variant="outline">w{channel.weight}</Badge></div>
-                      <p className="truncate text-xs text-zinc-500">{channel.model} · {channel.baseUrl}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Button type="button" size="sm" variant="outline" onClick={() => editAIChannel(channel)} className="h-8 cursor-pointer gap-1.5">
-                        <Pencil className="h-3.5 w-3.5" />编辑
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => testAIChannel(channel)} disabled={testingChannelId === channel.id} className="h-8 cursor-pointer gap-1.5">
-                        <TestTube2 className="h-3.5 w-3.5" />测试
-                      </Button>
-                      <Switch checked={channel.enabled} onCheckedChange={() => toggle(channel)} />
-                    </div>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" onClick={load} className="cursor-pointer gap-2"><RefreshCw className="h-4 w-4" />{t('refresh')}</Button>
-              </div>
-            </CardContent>
-          </Card>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setAiTestResultOpen(false)}>关闭</Button>
+                {aiTestResult && <Button type="button" variant="outline" onClick={applyAIChannelRecommendation} className="cursor-pointer">采用推荐配置</Button>}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <AlertDialog open={!!aiActionChannel && !!aiActionType} onOpenChange={(open) => { if (!open) closeAIChannelActionDialog(); }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{aiActionType === 'delete' ? '删除 AI 渠道？' : `${aiActionChannel?.enabled ? '停用' : '启用'} AI 渠道？`}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {aiActionType === 'delete'
+                    ? `将删除「${aiActionChannel?.name || ''}」，此操作不可撤销。`
+                    : `将${aiActionChannel?.enabled ? '停用' : '启用'}「${aiActionChannel?.name || ''}」。`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={!!deletingChannelId || !!togglingChannelId}>取消</AlertDialogCancel>
+                <AlertDialogAction
+                  variant={aiActionType === 'delete' ? 'destructive' : 'default'}
+                  disabled={!!deletingChannelId || !!togglingChannelId}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void confirmAIChannelAction();
+                  }}
+                >
+                  {deletingChannelId || togglingChannelId ? '处理中' : aiActionType === 'delete' ? '确认删除' : '确认'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
 
         <TabsContent value="aiUsage">
