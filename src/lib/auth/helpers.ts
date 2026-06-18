@@ -1,43 +1,29 @@
 import { auth } from './config';
-import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 
 export async function getCurrentUserId(): Promise<string | null> {
-  if (config.auth.enabled) {
-    const session = await auth();
-    return session?.user?.id || null;
-  }
-  // In fingerprint mode, userId is resolved from the request header
-  return null;
+  const session = await auth();
+  return session?.user?.id || null;
 }
 
-export async function resolveUser(fingerprint?: string | null) {
-  // Ensure DB tables exist before any query
+export async function resolveUser(_fingerprint?: string | null) {
   await dbReady;
 
-  if (config.auth.enabled) {
-    const session = await auth();
-    if (session?.user?.id && session.user.email) {
-      // User was created during sign-in (jwt callback), just look up
-      let user = await userRepository.findById(session.user.id);
+  const session = await auth();
+  if (session?.user?.id && session.user.email) {
+    let user = await userRepository.findById(session.user.id);
 
-      // Fallback: ID may differ if token was issued before DB creation
-      if (!user) {
-        user = await userRepository.findByEmail(session.user.email);
-      }
-
-      return user;
+    if (!user) {
+      user = await userRepository.findByEmail(session.user.email);
     }
-  }
 
-  if (!config.auth.enabled && fingerprint) {
-    return userRepository.upsertByFingerprint(fingerprint);
+    return user;
   }
 
   return null;
 }
 
-export function getUserIdFromRequest(request: Request): string | null {
-  return request.headers.get('x-fingerprint') || null;
+export function getUserIdFromRequest(_request: Request): string | null {
+  return null;
 }

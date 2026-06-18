@@ -9,9 +9,7 @@ import { LoginDialog } from './login-dialog';
 export function LoginButton() {
   const t = useTranslations('auth');
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || (typeof window !== 'undefined'
-    ? `${window.location.pathname}${window.location.search}`
-    : '/dashboard');
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
   const [open, setOpen] = useState(false);
 
   return (

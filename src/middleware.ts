@@ -1,42 +1,68 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
 
 const intlMiddleware = createMiddleware(routing);
+const LOCALE_PATTERN = /^\/(zh|en)(?=\/|$)/;
 
-// Public paths that don't require authentication (relative to locale prefix)
-const PUBLIC_PATHS = [
-  '/',        // Landing page
-  '/login',   // Login page
-  '/share',   // Public share links
+const PUBLIC_PAGE_PATHS = ['/login'];
+const PUBLIC_API_PATHS = [
+  '/api/auth',
+  '/api/health',
+  '/api/ready',
 ];
 
-function isPublicPath(pathname: string): boolean {
-  // Strip locale prefix: /zh/dashboard -> /dashboard, /en/ -> /
-  const withoutLocale = pathname.replace(/^\/(zh|en)/, '') || '/';
-  return PUBLIC_PATHS.some((p) =>
-    p === '/' ? withoutLocale === '/' : withoutLocale.startsWith(p)
-  );
+function stripLocale(pathname: string): string {
+  return pathname.replace(LOCALE_PATTERN, '') || '/';
+}
+
+function resolveLocale(pathname: string): string {
+  return pathname.match(LOCALE_PATTERN)?.[1] || routing.defaultLocale;
+}
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return request.cookies.has('authjs.session-token') || request.cookies.has('__Secure-authjs.session-token');
+}
+
+function isPublicPage(pathname: string): boolean {
+  const withoutLocale = stripLocale(pathname);
+  return PUBLIC_PAGE_PATHS.some((path) => withoutLocale === path || withoutLocale.startsWith(`${path}/`));
+}
+
+function isPublicApi(pathname: string): boolean {
+  return PUBLIC_API_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
+function redirectToLogin(request: NextRequest) {
+  const locale = resolveLocale(request.nextUrl.pathname);
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = `/${locale}/login`;
+  loginUrl.search = '';
+  loginUrl.searchParams.set('callbackUrl', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  return NextResponse.redirect(loginUrl);
 }
 
 export default async function middleware(request: NextRequest) {
-  // Always run i18n middleware first
-  const response = intlMiddleware(request);
-
-  // Only check auth when OAuth is enabled
-  const authEnabled = process.env.AUTH_ENABLED === 'true';
-  if (!authEnabled) return response;
-
-  // Skip auth check for public paths and API routes
   const { pathname } = request.nextUrl;
-  if (pathname.startsWith('/api/')) return response;
-  if (isPublicPath(pathname)) return response;
 
-  // Logged-out users stay in Local Only mode; cloud APIs are disabled client-side.
-  // Keep pages accessible so users can edit local resumes and open the login dialog when needed.
-  return response;
+  if (pathname.startsWith('/api/')) {
+    if (isPublicApi(pathname) || hasSessionCookie(request)) {
+      return NextResponse.next();
+    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (isPublicPage(pathname)) {
+    return intlMiddleware(request);
+  }
+
+  if (!hasSessionCookie(request)) {
+    return redirectToLogin(request);
+  }
+
+  return intlMiddleware(request);
 }
 
 export const config = {
-  matcher: ['/', '/(zh|en)/:path*', '/share/:path*'],
+  matcher: ['/', '/(zh|en)/:path*', '/api/:path*'],
 };

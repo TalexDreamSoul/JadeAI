@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { RuntimeConfigProvider } from '@/components/providers/runtime-config-provider';
 import { BrandProvider } from '@/components/layout/brand-provider';
+import { RequireAuthRedirect } from '@/components/auth/require-auth-redirect';
 
 export default async function LocaleLayout({
   children,
@@ -16,7 +17,6 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const authEnabled = process.env.AUTH_ENABLED === 'true';
 
   if (!routing.locales.includes(locale as any)) {
     notFound();
@@ -26,7 +26,7 @@ export default async function LocaleLayout({
 
   return (
     <SessionProvider>
-      <RuntimeConfigProvider authEnabled={authEnabled}>
+      <RuntimeConfigProvider authEnabled>
       <NextIntlClientProvider locale={locale} messages={messages}>
         <ThemeProvider
           attribute="class"
@@ -36,6 +36,7 @@ export default async function LocaleLayout({
         >
           <BrandProvider>
             <TooltipProvider>
+              <RequireAuthRedirect />
               {children}
               <Toaster />
             </TooltipProvider>

@@ -1,6 +1,5 @@
 import type { Provider } from 'next-auth/providers';
 import Credentials from 'next-auth/providers/credentials';
-import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { createSampleResume } from '@/lib/db/sample-resume';
@@ -297,23 +296,6 @@ export async function createPasswordProvider(): Promise<Provider> {
   });
 }
 
-export function createFingerprintProvider(): Provider {
-  return Credentials({
-    name: 'Fingerprint',
-    credentials: {
-      fingerprint: { label: 'Fingerprint', type: 'text' },
-    },
-    async authorize(credentials) {
-      const fingerprint = credentials?.fingerprint as string;
-      if (!fingerprint) return null;
-      return {
-        id: `fp_${fingerprint}`,
-        name: 'Anonymous User',
-      };
-    },
-  });
-}
-
 export async function createRuntimeProviders(): Promise<Provider[]> {
   const settings = await getGlobalAuthSettings();
   const providers: Provider[] = [];
@@ -329,11 +311,6 @@ export async function createRuntimeProviders(): Promise<Provider[]> {
     if (factory) {
       providers.push(factory(providerConfig));
     }
-  }
-
-  // Keep fingerprint sign-in available only as a compatibility fallback for old no-auth deployments.
-  if (!config.auth.enabled) {
-    providers.push(createFingerprintProvider());
   }
 
   return providers;
