@@ -105,48 +105,49 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const result = await (async () => {
       try {
         return streamText({
-        model,
-        system: systemPrompt,
-        messages: modelMessages,
-        providerOptions: getProviderOptions(aiConfig),
-        onFinish: async ({ text, usage }) => {
-          if (!settledUsage) {
-            settledUsage = true;
-            await completeAIUsage(aiUsage.reservation, usage, { sessionId, roundId, interviewerType: round.interviewerType });
-          }
-          if (!text) return;
+          model,
+          system: systemPrompt,
+          messages: modelMessages,
+          providerOptions: getProviderOptions(aiConfig),
+          onFinish: async ({ text, usage }) => {
+            if (!settledUsage) {
+              settledUsage = true;
+              await completeAIUsage(aiUsage.reservation, usage, { sessionId, roundId, interviewerType: round.interviewerType });
+            }
+            if (!text) return;
 
-          await interviewRepository.addMessage({
-            roundId,
-            role: 'interviewer',
-            content: text,
-          });
-
-          await interviewRepository.incrementQuestionCount(roundId);
-
-          if (text.includes('[ROUND_COMPLETE]')) {
-            await interviewRepository.setRoundSummary(roundId, {
-              score: 0,
-              feedback: text.replace('[ROUND_COMPLETE]', '').trim(),
+            await interviewRepository.addMessage({
+              roundId,
+              role: 'interviewer',
+              content: text,
             });
 
-            const rounds = await interviewRepository.findRoundsBySessionId(sessionId);
-            const currentIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
-            const nextRound = rounds[currentIndex + 1];
+            await interviewRepository.incrementQuestionCount(roundId);
 
-            if (nextRound) {
-              await interviewRepository.updateSessionRound(sessionId, currentIndex + 1);
-            } else {
-              await interviewRepository.updateSessionStatus(sessionId, 'completed');
+            if (text.includes('[ROUND_COMPLETE]')) {
+              await interviewRepository.updateRoundStatus(roundId, 'completed');
+              await interviewRepository.setRoundSummary(roundId, {
+                score: 0,
+                feedback: text.replace('[ROUND_COMPLETE]', '').trim(),
+              });
+
+              const rounds = await interviewRepository.findRoundsBySessionId(sessionId);
+              const currentIndex = rounds.findIndex((r: { id: string }) => r.id === roundId);
+              const nextRound = rounds[currentIndex + 1];
+
+              if (nextRound) {
+                await interviewRepository.updateSessionRound(sessionId, currentIndex + 1);
+              } else {
+                await interviewRepository.updateSessionStatus(sessionId, 'completed');
+              }
             }
-          }
-        },
-        onError: async ({ error }) => {
-          await refundOnce(error);
-        },
-        onAbort: async () => {
-          await refundOnce(new Error('AI stream aborted'));
-        },
+          },
+          onError: async ({ error }) => {
+            await refundOnce(error);
+          },
+          onAbort: async () => {
+            await refundOnce(new Error('AI stream aborted'));
+          },
         });
       } catch (error) {
         await refundOnce(error);

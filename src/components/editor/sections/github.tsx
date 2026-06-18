@@ -33,7 +33,7 @@ interface Props {
 export function GitHubSection({ section, onUpdate }: Props) {
   const t = useTranslations('editor.fields');
   const content = section.content as GitHubContent;
-  const items = content.items || [];
+  const items = Array.isArray(content.items) ? content.items : [];
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [summaryIds, setSummaryIds] = useState<Set<string>>(new Set());
   const [importUrl, setImportUrl] = useState('');
