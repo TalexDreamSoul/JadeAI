@@ -281,6 +281,9 @@ export const CAREER_WORKBENCH_TABS: { value: CareerWorkbenchTab; icon: React.Ele
   { value: 'interview', icon: MessageSquareText, labelKey: 'interviewTab' },
 ];
 
+const PRIMARY_CAREER_WORKBENCH_TABS = CAREER_WORKBENCH_TABS.filter((item) => item.value === 'match' || item.value === 'memory');
+const PREPARE_CAREER_WORKBENCH_TABS = CAREER_WORKBENCH_TABS.filter((item) => item.value === 'knowledge' || item.value === 'interview');
+
 export function CareerWorkbenchNav({
   activeTab,
   onActiveTabChange,
@@ -300,7 +303,7 @@ export function CareerWorkbenchNav({
       </div>
       <div className="min-h-0 flex-1 space-y-3 px-2">
         <div className="space-y-0.5">
-          {CAREER_WORKBENCH_TABS.map((item) => {
+          {PRIMARY_CAREER_WORKBENCH_TABS.map((item) => {
             const Icon = item.icon;
             const active = activeTab === item.value;
             return (
@@ -319,6 +322,27 @@ export function CareerWorkbenchNav({
               </button>
             );
           })}
+        </div>
+        <div className="border-t pt-3 dark:border-zinc-800">
+          <p className="mb-1.5 px-2 text-xs text-zinc-400">{t('prepareGroup')}</p>
+          <Select value={activeTab === 'knowledge' || activeTab === 'interview' ? activeTab : ''} onValueChange={(value) => onActiveTabChange(value as CareerWorkbenchTab)}>
+            <SelectTrigger className={`h-9 w-full justify-start text-left ${activeTab === 'knowledge' || activeTab === 'interview' ? 'border-brand bg-brand-muted text-brand' : ''}`}>
+              <SelectValue placeholder={t('selectPrepareTool')} />
+            </SelectTrigger>
+            <SelectContent>
+              {PREPARE_CAREER_WORKBENCH_TABS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <SelectItem key={item.value} value={item.value}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {t(item.labelKey)}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         </div>
         {onOpenAiTool && (
           <div className="border-t pt-3 dark:border-zinc-800">
@@ -1349,8 +1373,8 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
 
         <main className="space-y-4">
           {!embedded && (
-            <div className="flex flex-wrap gap-2 rounded-lg border bg-white p-2 dark:bg-zinc-900">
-              {CAREER_WORKBENCH_TABS.map((item) => {
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-white p-2 dark:bg-zinc-900">
+              {PRIMARY_CAREER_WORKBENCH_TABS.map((item) => {
                 const Icon = item.icon;
                 const active = currentTab === item.value;
                 return (
@@ -1369,6 +1393,24 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
                   </button>
                 );
               })}
+              <Select value={currentTab === 'knowledge' || currentTab === 'interview' ? currentTab : ''} onValueChange={(value) => setCurrentTab(value as CareerWorkbenchTab)}>
+                <SelectTrigger className={`h-8 w-full sm:w-48 ${currentTab === 'knowledge' || currentTab === 'interview' ? 'border-brand bg-brand-muted text-brand' : ''}`}>
+                  <SelectValue placeholder={t('selectPrepareTool')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREPARE_CAREER_WORKBENCH_TABS.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <SelectItem key={item.value} value={item.value}>
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {t(item.labelKey)}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
