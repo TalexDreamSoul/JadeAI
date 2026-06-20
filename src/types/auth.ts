@@ -4,7 +4,8 @@ export interface AppUser {
   name?: string | null;
   avatarUrl?: string | null;
   fingerprint?: string | null;
-  authType: 'oauth' | 'fingerprint';
+  authType: 'oauth' | 'fingerprint' | 'password';
+  role: 'user' | 'admin';
 }
 
 export interface AuthState {

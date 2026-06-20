@@ -1,6 +1,6 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { notFound } from 'next/navigation';
-import { routing } from '@/i18n/routing';
+import { isLocale } from '@/i18n/config';
 import { SessionProvider } from 'next-auth/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
@@ -18,7 +18,7 @@ export default async function LocaleLayout({
   const { locale } = await params;
   const authEnabled = process.env.AUTH_ENABLED === 'true';
 
-  if (!routing.locales.includes(locale as any)) {
+  if (!isLocale(locale)) {
     notFound();
   }
 

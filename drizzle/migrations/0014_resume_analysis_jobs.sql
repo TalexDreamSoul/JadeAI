@@ -1,4 +1,4 @@
-CREATE TABLE `resume_analysis_jobs` (
+CREATE TABLE IF NOT EXISTS `resume_analysis_jobs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
 	`resume_id` text,
@@ -29,8 +29,8 @@ CREATE TABLE `resume_analysis_jobs` (
 	FOREIGN KEY (`resume_id`) REFERENCES `resumes`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE INDEX `resume_analysis_jobs_user_status_idx` ON `resume_analysis_jobs` (`user_id`,`status`);
+CREATE INDEX IF NOT EXISTS `resume_analysis_jobs_user_status_idx` ON `resume_analysis_jobs` (`user_id`,`status`);
 --> statement-breakpoint
-CREATE INDEX `resume_analysis_jobs_status_next_run_idx` ON `resume_analysis_jobs` (`status`,`next_run_at`);
+CREATE INDEX IF NOT EXISTS `resume_analysis_jobs_status_next_run_idx` ON `resume_analysis_jobs` (`status`,`next_run_at`);
 --> statement-breakpoint
-CREATE INDEX `resume_analysis_jobs_worker_idx` ON `resume_analysis_jobs` (`worker_id`);
+CREATE INDEX IF NOT EXISTS `resume_analysis_jobs_worker_idx` ON `resume_analysis_jobs` (`worker_id`);

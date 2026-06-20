@@ -96,13 +96,9 @@ export function TourOverlay({ tourId, steps }: TourOverlayProps) {
   const [rect, setRect] = useState<Rect | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [tooltipSize, setTooltipSize] = useState({ w: 320, h: 160 });
-  const [mounted, setMounted] = useState(false);
+  const mounted = typeof window !== 'undefined';
 
   const isMyTour = isActive && activeTourId === tourId;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const updateRect = useCallback(() => {
     if (!isMyTour) return;
@@ -120,10 +116,11 @@ export function TourOverlay({ tourId, steps }: TourOverlayProps) {
       nextStep();
       return;
     }
-    updateRect();
+    const frame = window.requestAnimationFrame(updateRect);
     window.addEventListener('resize', updateRect);
     window.addEventListener('scroll', updateRect, true);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', updateRect);
       window.removeEventListener('scroll', updateRect, true);
     };
@@ -140,9 +137,12 @@ export function TourOverlay({ tourId, steps }: TourOverlayProps) {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
-    check();
+    const frame = window.requestAnimationFrame(check);
     window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', check);
+    };
   }, []);
 
   if (!mounted || !isMyTour || isMobile) return null;

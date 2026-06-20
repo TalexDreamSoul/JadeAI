@@ -16,16 +16,17 @@ export class SQLiteAdapter implements DatabaseAdapter {
     this.sqlite.pragma('journal_mode = WAL');
     this.sqlite.pragma('foreign_keys = ON');
     this.db = drizzle(this.sqlite, { schema });
+  }
 
+  async initialize(): Promise<void> {
     // Auto-run migrations (synchronous for SQLite)
     try {
       migrate(this.db, { migrationsFolder: resolve(process.cwd(), 'drizzle/migrations') });
     } catch (e) {
       console.error('[DB] SQLite migration failed:', e);
+      throw e;
     }
-  }
 
-  async initialize(): Promise<void> {
     try {
       const columns = this.sqlite.prepare('PRAGMA table_info(users)').all() as Array<{ name?: string }>;
       if (columns.length > 0 && !columns.some((column) => column.name === 'ai_credits')) {
@@ -112,6 +113,22 @@ export class SQLiteAdapter implements DatabaseAdapter {
       this.sqlite.prepare('CREATE INDEX IF NOT EXISTS resume_analysis_jobs_status_next_run_idx ON resume_analysis_jobs(status, next_run_at)').run();
       this.sqlite.prepare('CREATE INDEX IF NOT EXISTS resume_analysis_jobs_worker_idx ON resume_analysis_jobs(worker_id)').run();
 
+      this.sqlite.prepare(`CREATE TABLE IF NOT EXISTS admin_audit_logs (
+        id text PRIMARY KEY,
+        admin_user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        target_user_id text REFERENCES users(id) ON DELETE SET NULL,
+        action text NOT NULL,
+        target_type text NOT NULL DEFAULT 'user',
+        before text DEFAULT '{}',
+        after text DEFAULT '{}',
+        reason text NOT NULL DEFAULT '',
+        ip_address text,
+        user_agent text,
+        created_at integer NOT NULL DEFAULT (unixepoch())
+      )`).run();
+      this.sqlite.prepare('CREATE INDEX IF NOT EXISTS admin_audit_logs_admin_created_idx ON admin_audit_logs(admin_user_id, created_at)').run();
+      this.sqlite.prepare('CREATE INDEX IF NOT EXISTS admin_audit_logs_target_created_idx ON admin_audit_logs(target_user_id, created_at)').run();
+
       const grammarColumns = this.sqlite.prepare('PRAGMA table_info(grammar_checks)').all() as Array<{ name?: string }>;
       if (grammarColumns.length > 0 && !grammarColumns.some((column) => column.name === 'status')) {
         this.sqlite.prepare("ALTER TABLE grammar_checks ADD COLUMN status text NOT NULL DEFAULT 'success'").run();
@@ -169,6 +186,7 @@ export class SQLiteAdapter implements DatabaseAdapter {
       await ensureAdminUser(this.db);
     } catch (e) {
       console.error('[DB] SQLite auto-seed failed:', e);
+      throw e;
     }
   }
 

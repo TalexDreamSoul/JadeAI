@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '../index';
 import {
+  adminAuditLogs,
   aiUsageLogs,
   interviewQuestionBanks,
   interviewQuestionFavorites,
@@ -831,6 +832,19 @@ export const walletRepository = {
     return Number(rows[0]?.total || 0);
   },
 
+  async sumDebits(userId: string, currency: WalletCurrency) {
+    const rows = await db
+      .select({ total: sql<number>`coalesce(sum(${walletTransactions.amount}), 0)` })
+      .from(walletTransactions)
+      .where(and(
+        eq(walletTransactions.userId, userId),
+        eq(walletTransactions.currency, currency),
+        eq(walletTransactions.direction, 'debit'),
+      ))
+      .limit(1);
+    return Number(rows[0]?.total || 0);
+  },
+
   async hasTransaction(userId: string, source: string, sourceId: string) {
     const rows = await db
       .select({ id: walletTransactions.id })
@@ -844,6 +858,70 @@ export const walletRepository = {
     return Boolean(rows[0]);
   },
 
+};
+
+export const adminAuditRepository = {
+  async record(data: {
+    adminUserId: string;
+    targetUserId?: string | null;
+    action: string;
+    targetType?: string;
+    before?: JsonRecord;
+    after?: JsonRecord;
+    reason?: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }) {
+    await db.insert(adminAuditLogs).values({
+      id: crypto.randomUUID(),
+      adminUserId: data.adminUserId,
+      targetUserId: data.targetUserId || null,
+      action: data.action,
+      targetType: data.targetType || 'user',
+      before: data.before || {},
+      after: data.after || {},
+      reason: data.reason || '',
+      ipAddress: data.ipAddress || null,
+      userAgent: data.userAgent || null,
+    });
+  },
+
+  async list(limit = 100, targetUserId?: string) {
+    const baseQuery = db
+      .select({
+        log: adminAuditLogs,
+        admin: {
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+        },
+      })
+      .from(adminAuditLogs)
+      .leftJoin(users, eq(adminAuditLogs.adminUserId, users.id));
+
+    const rows = targetUserId
+      ? await baseQuery
+        .where(eq(adminAuditLogs.targetUserId, targetUserId))
+        .orderBy(desc(adminAuditLogs.createdAt))
+        .limit(limit)
+      : await baseQuery
+        .orderBy(desc(adminAuditLogs.createdAt))
+        .limit(limit);
+
+    return rows.map((row: {
+      log: typeof adminAuditLogs.$inferSelect;
+      admin: {
+        id: string | null;
+        email: string | null;
+        name: string | null;
+        role: string | null;
+      } | null;
+    }) => ({
+      ...row.log,
+      admin: row.admin?.id ? row.admin : null,
+    }));
+  },
 };
 
 export const orderRepository = {

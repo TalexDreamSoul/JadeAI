@@ -101,6 +101,21 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       await this.db.execute(sql`CREATE INDEX IF NOT EXISTS resume_analysis_jobs_user_status_idx ON resume_analysis_jobs(user_id, status)`);
       await this.db.execute(sql`CREATE INDEX IF NOT EXISTS resume_analysis_jobs_status_next_run_idx ON resume_analysis_jobs(status, next_run_at)`);
       await this.db.execute(sql`CREATE INDEX IF NOT EXISTS resume_analysis_jobs_worker_idx ON resume_analysis_jobs(worker_id)`);
+      await this.db.execute(sql`CREATE TABLE IF NOT EXISTS admin_audit_logs (
+        id text PRIMARY KEY,
+        admin_user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        target_user_id text REFERENCES users(id) ON DELETE SET NULL,
+        action text NOT NULL,
+        target_type text NOT NULL DEFAULT 'user',
+        before text DEFAULT '{}',
+        after text DEFAULT '{}',
+        reason text NOT NULL DEFAULT '',
+        ip_address text,
+        user_agent text,
+        created_at integer NOT NULL DEFAULT extract(epoch from now())::integer
+      )`);
+      await this.db.execute(sql`CREATE INDEX IF NOT EXISTS admin_audit_logs_admin_created_idx ON admin_audit_logs(admin_user_id, created_at)`);
+      await this.db.execute(sql`CREATE INDEX IF NOT EXISTS admin_audit_logs_target_created_idx ON admin_audit_logs(target_user_id, created_at)`);
       await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success'`);
       await this.db.execute(sql`ALTER TABLE grammar_checks ADD COLUMN IF NOT EXISTS error text`);
       await this.db.execute(sql`CREATE TABLE IF NOT EXISTS interview_question_favorites (
@@ -145,6 +160,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       console.log('[DB] PostgreSQL migrations applied');
     } catch (e) {
       console.error('[DB] PostgreSQL migration failed:', e);
+      throw e;
     }
 
     // Auto-seed if empty
@@ -161,6 +177,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
       await ensureAdminUser(this.db);
     } catch (e) {
       console.error('[DB] PostgreSQL auto-seed failed:', e);
+      throw e;
     }
   }
 

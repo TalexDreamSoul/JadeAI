@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
 
 type NavItem = { href: string; i18nKey: string; match: string; tourId?: string };
 
@@ -26,13 +27,15 @@ const CAREER_NAV_ITEMS: NavItem[] = [
 ];
 const PRIMARY_NAV_ITEMS: NavItem[] = [
   { href: '/templates', i18nKey: 'templates.nav', match: '/templates', tourId: 'dash-templates' },
-  { href: '/account', i18nKey: 'account.nav', match: '/account' },
-  { href: '/admin', i18nKey: 'admin.nav', match: '/admin' },
 ];
+const ADMIN_NAV_ITEM: NavItem = { href: '/admin', i18nKey: 'admin.nav', match: '/admin' };
 export function Header() {
   const t = useTranslations();
   const pathname = usePathname();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const careerActive = CAREER_NAV_ITEMS.some((item) => pathname.startsWith(item.match));
+  const visiblePrimaryNavItems = isAdmin ? [...PRIMARY_NAV_ITEMS, ADMIN_NAV_ITEM] : PRIMARY_NAV_ITEMS;
 
   const renderDesktopLink = (item: NavItem) => {
     const isActive = pathname.startsWith(item.match);
@@ -110,7 +113,7 @@ export function Header() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {PRIMARY_NAV_ITEMS.map(renderDesktopLink)}
+            {visiblePrimaryNavItems.map(renderDesktopLink)}
           </nav>
         </div>
         <div className="flex items-center gap-3">
@@ -155,7 +158,7 @@ export function Header() {
                       })}
                     </div>
                   </div>
-                  {PRIMARY_NAV_ITEMS.map(renderMobileLink)}
+                  {visiblePrimaryNavItems.map(renderMobileLink)}
                 </nav>
               </SheetContent>
             </Sheet>

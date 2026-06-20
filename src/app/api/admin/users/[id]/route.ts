@@ -1,14 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
+import { requireAdmin } from '@/lib/auth/admin';
 import { userRepository } from '@/lib/db/repositories/user.repository';
-import { walletRepository } from '@/lib/db/repositories/commercial.repository';
-import { WALLET_CURRENCY_AI_CREDIT } from '@/lib/commercial/catalog';
+import { adminAuditRepository, membershipRepository, walletRepository } from '@/lib/db/repositories/commercial.repository';
+import { WALLET_CURRENCY_AI_CREDIT, WALLET_CURRENCY_POINT } from '@/lib/commercial/catalog';
 
-async function requireAdmin(request: NextRequest) {
-  const user = await resolveUser(getUserIdFromRequest(request));
-  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  if (user.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-  return { user };
+function clientIp(request: NextRequest) {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || request.headers.get('x-real-ip')
+    || null;
+}
+
+function pickChangedBeforeAfter(input: {
+  beforeRole: string;
+  afterRole: string;
+  beforeBalance: number;
+  afterBalance: number;
+}) {
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+  if (input.beforeRole !== input.afterRole) {
+    before.role = input.beforeRole;
+    after.role = input.afterRole;
+  }
+  if (input.beforeBalance !== input.afterBalance) {
+    before.aiCreditBalance = input.beforeBalance;
+    after.aiCreditBalance = input.afterBalance;
+  }
+  return { before, after };
 }
 
 export async function PATCH(
@@ -21,6 +39,20 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
+    if (body.confirmed !== true) {
+      return NextResponse.json({ error: 'Confirmation required' }, { status: 400 });
+    }
+
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (!reason) {
+      return NextResponse.json({ error: 'Change reason required' }, { status: 400 });
+    }
+
+    const existing = await userRepository.findById(id);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const beforeAccount = await walletRepository.findAccount(id, WALLET_CURRENCY_AI_CREDIT);
+    const beforeBalance = Number(beforeAccount?.balance ?? existing.aiCredits ?? 0);
     const patch: Partial<{ role: 'user' | 'admin'; aiCredits: number }> = {};
 
     if (body.role === 'user' || body.role === 'admin') {
@@ -37,8 +69,37 @@ export async function PATCH(
       aiCreditAccount = await userRepository.setAICredits(updated.id, targetBalance, 'admin_adjustment', {
         adminUserId: admin.user.id,
         targetBalance,
+        reason,
       });
     }
+
+    const afterBalance = Number(aiCreditAccount?.balance ?? updated.aiCredits ?? 0);
+    const { before, after } = pickChangedBeforeAfter({
+      beforeRole: existing.role,
+      afterRole: updated.role,
+      beforeBalance,
+      afterBalance,
+    });
+
+    if (Object.keys(after).length > 0) {
+      await adminAuditRepository.record({
+        adminUserId: admin.user.id,
+        targetUserId: updated.id,
+        action: 'user.update',
+        targetType: 'user',
+        before,
+        after,
+        reason,
+        ipAddress: clientIp(request),
+        userAgent: request.headers.get('user-agent'),
+      });
+    }
+
+    const [pointAccount, aiCreditsConsumed, activeMembership] = await Promise.all([
+      walletRepository.findAccount(updated.id, WALLET_CURRENCY_POINT),
+      walletRepository.sumDebits(updated.id, WALLET_CURRENCY_AI_CREDIT),
+      membershipRepository.getActiveMembership(updated.id),
+    ]);
 
     return NextResponse.json({
       id: updated.id,
@@ -49,6 +110,18 @@ export async function PATCH(
       role: updated.role,
       aiCredits: Number(aiCreditAccount?.balance ?? updated.aiCredits ?? 0),
       aiCreditBalance: Number(aiCreditAccount?.balance ?? updated.aiCredits ?? 0),
+      aiCreditsConsumed,
+      pointBalance: Number(pointAccount?.balance ?? 0),
+      membership: activeMembership ? {
+        status: activeMembership.membership.status,
+        planKey: activeMembership.plan.key,
+        planName: activeMembership.plan.name,
+        tier: Number(activeMembership.plan.tier || 0),
+        currentPeriodStart: activeMembership.membership.currentPeriodStart,
+        currentPeriodEnd: activeMembership.membership.currentPeriodEnd,
+        cancelAtPeriodEnd: Boolean(activeMembership.membership.cancelAtPeriodEnd),
+      } : null,
+      isVip: Number(activeMembership?.plan.tier || 0) > 0,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     });

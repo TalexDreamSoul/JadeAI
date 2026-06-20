@@ -11,7 +11,7 @@
     "mcp:resume:install": "tsx scripts/install-jadeai-resume-mcp.ts",
     "smoke:mcp:resume": "tsx scripts/smoke-jadeai-resume-mcp.ts",
     "smoke:mcp:remote": "tsx scripts/smoke-jadeai-remote-mcp.ts",
-    "build:export-css": "tsx scripts/build-export-css.ts",
+    "build:export-css": "node scripts/build-export-css.mjs",
     "prebuild": "pnpm build:export-css",
     "build": "next build",
     "start": "next start",

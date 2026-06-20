@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInterviewStore } from '@/stores/interview-store';
 import { getAIHeaders } from '@/stores/settings-store';
 import { useLocale } from 'next-intl';
@@ -16,19 +16,14 @@ interface UseInterviewChatOptions {
 export function useInterviewChat({ sessionId, roundId, selectedModel }: UseInterviewChatOptions) {
   const [input, setInput] = useState('');
   const locale = useLocale();
-  const modelRef = useRef(selectedModel);
-  modelRef.current = selectedModel;
-
-  const roundIdRef = useRef(roundId);
-  roundIdRef.current = roundId;
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: `/api/interview/${sessionId}/chat`,
         body: () => ({
-          roundId: roundIdRef.current,
-          model: modelRef.current,
+          roundId,
+          model: selectedModel,
           locale,
         }),
         headers: () => {
@@ -38,7 +33,7 @@ export function useInterviewChat({ sessionId, roundId, selectedModel }: UseInter
           return { ...(fp ? { 'x-fingerprint': fp } : {}), ...getAIHeaders() };
         },
       }),
-    [sessionId, locale]
+    [sessionId, roundId, selectedModel, locale]
   );
 
   const { messages, sendMessage, status, error, setMessages } = useChat({
@@ -53,12 +48,12 @@ export function useInterviewChat({ sessionId, roundId, selectedModel }: UseInter
     if (!lastAssistant) return;
 
     const textPart = lastAssistant.parts?.find((p: any) => p.type === 'text');
-    const text = (textPart as any)?.text || '';
-    if (text.includes('[ROUND_COMPLETE]') && !isLoading) {
-      const store = useInterviewStore.getState();
-      store.updateRound(roundIdRef.current, { status: 'completed' });
+      const text = (textPart as any)?.text || '';
+      if (text.includes('[ROUND_COMPLETE]') && !isLoading) {
+        const store = useInterviewStore.getState();
+      store.updateRound(roundId, { status: 'completed' });
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, roundId]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);

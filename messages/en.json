@@ -40,6 +40,8 @@
     "loading": "Loading...",
     "localUser": "Local User",
     "localOnlyHint": "Logged out, Local Only mode",
+    "profile": "Profile",
+    "admin": "Admin Console",
     "settings": "Settings",
     "or": "or"
   },
@@ -1426,7 +1428,7 @@
     "loginFooterLinkUrl": "Link URL (optional)"
   },
   "account": {
-    "nav": "Account"
+    "nav": "Profile"
   },
   "aiReview": {
     "title": "AI Review",

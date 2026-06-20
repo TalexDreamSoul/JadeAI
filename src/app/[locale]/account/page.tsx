@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
+  Brush,
   ExternalLink,
   Gift,
   Lock,
+  Palette,
   ReceiptText,
   Sparkles,
   Ticket,
@@ -13,6 +15,7 @@ import {
   Users,
   WalletCards,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { useLocale } from 'next-intl';
 import { Button } from '@/components/ui/button';
@@ -27,6 +30,9 @@ import {
 } from '@/components/ui/dialog';
 import { useFingerprint } from '@/hooks/use-fingerprint';
 import { payExistingOrderWithMockPayment, purchaseProductWithMockPayment } from '@/lib/commercial/client-payments';
+import { BRAND_OPTIONS } from '@/components/layout/brand-switcher';
+import { useBrand, type Brand } from '@/components/layout/brand-provider';
+import { cn } from '@/lib/utils';
 
 type Product = {
   id: string;
@@ -361,6 +367,29 @@ type AccountState = {
   notifications: NotificationItem[];
 };
 
+type AccountNavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+const ACCOUNT_NAV_ITEMS: AccountNavItem[] = [
+  { href: '#account-overview', label: '账户概览', icon: Sparkles },
+  { href: '#account-billing', label: '消费记录', icon: ReceiptText },
+  { href: '#account-practice', label: '面试资产', icon: Trophy },
+  { href: '#account-content', label: '内容与通知', icon: Bell },
+  { href: '#account-growth', label: '增长福利', icon: Gift },
+  { href: '#account-preferences', label: '偏好设置', icon: Brush },
+];
+
+const BRAND_LABELS: Record<Brand, string> = {
+  mint: '青绿',
+  blue: '蓝色',
+  pink: '粉色',
+  orange: '橙色',
+  purple: '紫色',
+};
+
 function headers(fingerprint: string | null): HeadersInit {
   return fingerprint ? { 'x-fingerprint': fingerprint } : {};
 }
@@ -448,6 +477,7 @@ function planValue(entitlements: Record<string, unknown> | undefined, key: strin
 
 export default function AccountPage() {
   const locale = useLocale();
+  const { brand, setBrand } = useBrand();
   const { fingerprint, isLoading: fpLoading } = useFingerprint();
   const [state, setState] = useState<AccountState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -490,7 +520,7 @@ export default function AccountPage() {
       ]);
 
       if (!membershipRes.ok || !entitlementRes.ok || !walletRes.ok || !aiUsageRes.ok || !ordersRes.ok || !productsRes.ok || !pointsExchangeRes.ok || !banksRes.ok || !interviewRes.ok || !practiceRes.ok || !growthRes.ok || !notificationsRes.ok) {
-        throw new Error('商业中心数据加载失败');
+        throw new Error('个人主页数据加载失败');
       }
 
       const [membership, entitlementProfile, wallet, aiUsage, orders, products, pointsExchange, banks, interview, practice, growth, notifications] = await Promise.all([
@@ -534,7 +564,7 @@ export default function AccountPage() {
         notifications: Array.isArray(notifications.notifications) ? notifications.notifications : [],
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '商业中心数据加载失败');
+      setError(err instanceof Error ? err.message : '个人主页数据加载失败');
     } finally {
       setLoading(false);
     }
@@ -925,10 +955,10 @@ export default function AccountPage() {
   const growth = state?.growth;
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6">
       <section className="flex flex-col gap-4 border-b border-zinc-200 pb-6 dark:border-zinc-800 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">商业中心</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">个人主页</h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
             查看会员、AI 点数、订单、题库权限和通知状态。
           </p>
@@ -949,15 +979,35 @@ export default function AccountPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-        </div>
-      ) : (
-        <>
-          <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+          <nav className="flex w-full max-w-full gap-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:flex-col lg:overflow-visible">
+            {ACCOUNT_NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="flex h-9 flex-none items-center gap-2 rounded-md px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50 lg:w-full"
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">{item.label}</span>
+                </a>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <div className="min-w-0 max-w-full space-y-8">
+          {loading ? (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Skeleton className="h-40" />
+              <Skeleton className="h-40" />
+              <Skeleton className="h-40" />
+            </div>
+          ) : (
+            <>
+          <section id="account-overview" className="scroll-mt-24 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -1067,7 +1117,7 @@ export default function AccountPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+          <section id="account-billing" className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
             <div className="mb-4 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-brand" />
               <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">AI 消耗记录</h2>
@@ -1194,7 +1244,7 @@ export default function AccountPage() {
             </div>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <section id="account-practice" className="scroll-mt-24 grid gap-4 xl:grid-cols-[1fr_1fr]">
             <div id="question-bank-practice" className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
               <div className="mb-4 flex items-center gap-2">
                 <Lock className="h-4 w-4 text-brand" />
@@ -1343,7 +1393,7 @@ export default function AccountPage() {
             </div>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <section id="account-content" className="scroll-mt-24 grid gap-4 xl:grid-cols-[1fr_1fr]">
             <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -1485,7 +1535,7 @@ export default function AccountPage() {
             </div>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-3">
+          <section id="account-growth" className="scroll-mt-24 grid gap-4 xl:grid-cols-3">
             <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
               <div className="mb-4 flex items-center gap-2">
                 <Users className="h-4 w-4 text-brand" />
@@ -1615,6 +1665,43 @@ export default function AccountPage() {
             </div>
           </section>
 
+          <section id="account-preferences" className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <Palette className="h-4 w-4 text-brand" />
+                <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">主题色</h2>
+              </div>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                当前主题色：{BRAND_LABELS[brand]}
+              </p>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              {BRAND_OPTIONS.map((option) => {
+                const active = brand === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setBrand(option.id)}
+                    className={cn(
+                      'flex h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 text-sm font-medium transition-colors',
+                      active
+                        ? 'border-zinc-900 bg-zinc-950 text-white dark:border-zinc-100 dark:bg-zinc-50 dark:text-zinc-950'
+                        : 'border-zinc-200 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:bg-zinc-900'
+                    )}
+                    aria-pressed={active}
+                  >
+                    <span
+                      className="h-4 w-4 shrink-0 rounded-full"
+                      style={{ backgroundColor: option.swatch }}
+                    />
+                    <span>{BRAND_LABELS[option.id]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <Dialog open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
             <DialogContent className="sm:max-w-2xl">
               <DialogHeader>
@@ -1711,8 +1798,10 @@ export default function AccountPage() {
               ) : null}
             </DialogContent>
           </Dialog>
-        </>
-      )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

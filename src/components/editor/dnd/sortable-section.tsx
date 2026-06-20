@@ -1,12 +1,13 @@
 'use client';
 
 import { createContext, useContext } from 'react';
+import type { DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 interface DragHandleContext {
   attributes: Record<string, any>;
-  listeners: Record<string, Function> | undefined;
+  listeners: DraggableSyntheticListeners;
 }
 
 const DragHandleCtx = createContext<DragHandleContext>({

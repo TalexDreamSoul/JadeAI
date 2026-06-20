@@ -5,14 +5,12 @@ import { useTheme } from 'next-themes';
 import { CloudOff, Languages, LogIn, LogOut, Monitor, Moon, Paintbrush, Settings, Sun, User } from 'lucide-react';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { locales, localeNames } from '@/i18n/config';
-import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { LoginDialog } from '@/components/auth/login-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -173,11 +171,6 @@ export function SettingsLauncher({ variant = 'icon' }: SettingsLauncherProps) {
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="px-2 py-1 text-xs font-normal text-muted-foreground">
-            {t('brand.label')}
-          </DropdownMenuLabel>
-          <BrandSwitcher />
         </DropdownMenuContent>
       </DropdownMenu>
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} callbackUrl={callbackUrl} />

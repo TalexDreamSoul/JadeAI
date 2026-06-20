@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from 'next-intl';
 import { CloudOff, LogIn, LogOut, Settings, User } from 'lucide-react';
+import { Link } from '@/i18n/routing';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -12,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { LoginDialog } from '@/components/auth/login-dialog';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -67,8 +67,17 @@ export function UserMenu() {
               <DropdownMenuSeparator />
             </>
           )}
-          <BrandSwitcher />
-          <DropdownMenuSeparator />
+          {user && (
+            <>
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link href="/account">
+                  <User className="mr-2 h-4 w-4" />
+                  {t('profile')}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onClick={() => openModal('settings')} className="cursor-pointer">
             <Settings className="mr-2 h-4 w-4" />
             {t('settings')}

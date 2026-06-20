@@ -1,8 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { getClientCloudUser, setClientCloudUser } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/use-auth';
 
 interface RuntimeConfig {
   authEnabled: boolean;
@@ -18,16 +17,8 @@ export function RuntimeConfigProvider({
   children: React.ReactNode;
   authEnabled: boolean;
 }) {
-  const { status, data: session } = useSession();
-  const sessionUser = session?.user?.email ? {
-    id: session.user.id || '',
-    name: session.user.name,
-    email: session.user.email,
-    avatarUrl: session.user.image,
-  } : null;
-  if (sessionUser) setClientCloudUser(sessionUser);
-  const cachedUser = status === 'unauthenticated' ? null : getClientCloudUser();
-  const isCloudUser = authEnabled && (!!sessionUser || !!cachedUser?.email);
+  const { isAuthenticated } = useAuth();
+  const isCloudUser = authEnabled && isAuthenticated;
   const localOnly = authEnabled ? !isCloudUser : false;
 
   useEffect(() => {
