@@ -423,6 +423,57 @@ interface AdminResumeAnalysisJob {
   } | null;
 }
 
+type ResumeAnalysisAITrace = {
+  stage?: string;
+  provider?: string;
+  model?: string;
+  baseURL?: string;
+  openAIEndpoint?: string;
+  transportURL?: string;
+  file?: {
+    name?: string;
+    type?: string;
+    size?: number;
+  };
+  request?: {
+    outputJson?: boolean;
+    maxOutputTokens?: number;
+    messageCount?: number;
+    imageCount?: number;
+    textPartCount?: number;
+    textCharCount?: number;
+    pdfTextExtracted?: boolean;
+  };
+  error?: {
+    name?: string;
+    message?: string;
+    statusCode?: number;
+    responseBody?: string;
+    responseHeaders?: unknown;
+    isRetryable?: boolean;
+    cause?: unknown;
+    rawKeys?: string[];
+  };
+  diagnosticProbe?: {
+    ok?: boolean;
+    message?: string;
+    recommendedBaseUrl?: string;
+    recommendedEndpoint?: string;
+    attempts?: Array<{
+      endpoint?: string;
+      ok?: boolean;
+      message?: string;
+      response?: {
+        status?: number;
+        statusText?: string;
+        bodyText?: string;
+        bodyJson?: unknown;
+      };
+    }>;
+  };
+  hints?: string[];
+};
+
 type AdminResumeAnalysisJobDetail = {
   job: AdminResumeAnalysisJob;
   user: AdminResumeAnalysisJob['user'];
@@ -697,6 +748,24 @@ function normalizeJobLogs(logs: AdminResumeAnalysisJob['logs']) {
   } catch {
     return [];
   }
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function getResumeAnalysisTrace(job: AdminResumeAnalysisJob): ResumeAnalysisAITrace | null {
+  const logs = normalizeJobLogs(job.logs);
+  for (const log of logs.slice().reverse()) {
+    const metadata = asPlainRecord(log.metadata);
+    const trace = asPlainRecord(metadata?.aiTrace);
+    if (trace) return trace as ResumeAnalysisAITrace;
+  }
+  return null;
+}
+
+function firstProbeFailure(trace: ResumeAnalysisAITrace | null) {
+  return trace?.diagnosticProbe?.attempts?.find((attempt) => !attempt.ok) || null;
 }
 
 function valueLabel(value: unknown) {
@@ -2624,6 +2693,8 @@ export default function AdminPage() {
               {resumeAnalysisJobDetail && (() => {
                 const { job, user, resume } = resumeAnalysisJobDetail;
                 const logs = normalizeJobLogs(job.logs);
+                const aiTrace = getResumeAnalysisTrace(job);
+                const probeFailure = firstProbeFailure(aiTrace);
                 const defaultTab = resumeAnalysisDetailMode === 'preview' && resume ? 'result' : 'overview';
                 return (
                   <Tabs defaultValue={defaultTab} className="space-y-4">
@@ -2668,6 +2739,47 @@ export default function AdminPage() {
                           </div>
                         ))}
                       </div>
+
+                      {aiTrace && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="font-medium">AI 调用诊断 trace</div>
+                            <Badge variant="outline">{aiTrace.stage || 'unknown-stage'}</Badge>
+                            <Badge variant={aiTrace.diagnosticProbe?.ok ? 'secondary' : 'destructive'}>
+                              探针 {aiTrace.diagnosticProbe?.ok ? '通过' : '失败'}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            {[
+                              ['渠道', `${aiTrace.provider || '-'} · ${aiTrace.openAIEndpoint || '-'}`],
+                              ['模型', aiTrace.model || '-'],
+                              ['请求地址', aiTrace.transportURL || aiTrace.baseURL || '-'],
+                              ['文件输入', `${aiTrace.file?.type || '-'} · ${formatBytes(aiTrace.file?.size)}`],
+                              ['消息结构', `${aiTrace.request?.messageCount || 0} msg · ${aiTrace.request?.imageCount || 0} image · ${aiTrace.request?.textCharCount || 0} chars`],
+                              ['JSON 输出', aiTrace.request?.outputJson ? '开启' : '关闭'],
+                              ['错误', `${aiTrace.error?.name || '-'}：${aiTrace.error?.message || '-'}`],
+                              ['探针建议', `${aiTrace.diagnosticProbe?.recommendedEndpoint || '-'} · ${aiTrace.diagnosticProbe?.recommendedBaseUrl || '-'}`],
+                            ].map(([label, value]) => (
+                              <div key={label} className="rounded-md border border-amber-200/80 bg-white/70 px-3 py-2 dark:border-amber-900/60 dark:bg-zinc-950/40">
+                                <div className="text-xs text-amber-700 dark:text-amber-300">{label}</div>
+                                <div className="mt-1 break-all font-medium">{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {probeFailure && (
+                            <div className="mt-3 rounded-md border border-amber-200/80 bg-white/70 px-3 py-2 text-xs dark:border-amber-900/60 dark:bg-zinc-950/40">
+                              <div className="font-medium">首个失败探针</div>
+                              <div className="mt-1 break-words">{probeFailure.endpoint || '-'}：{probeFailure.message || '-'}</div>
+                              {probeFailure.response?.bodyText && <pre className="mt-2 max-h-32 overflow-auto rounded bg-zinc-950 p-2 text-zinc-100">{probeFailure.response.bodyText}</pre>}
+                            </div>
+                          )}
+                          {aiTrace.hints && aiTrace.hints.length > 0 && (
+                            <div className="mt-3 space-y-1 text-xs">
+                              {aiTrace.hints.map((hint) => <div key={hint}>- {hint}</div>)}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {job.metadata && (
                         <details open className="rounded-lg border p-3 dark:border-zinc-800">

@@ -4,7 +4,7 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resumeAnalysisJobRepository, type ResumeAnalysisJobRecord } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { AIConfigError, resolveServerAIConfigForUser } from '@/lib/ai/provider';
 import { AIUsageInsufficientCreditsError } from '@/lib/commercial/ai-route-metering';
-import { analyzeResumeFile, describeResumeAnalysisError } from './parse-service';
+import { analyzeResumeFile, describeResumeAnalysisError, ResumeAnalysisAITraceError } from './parse-service';
 import { readStoredObject } from '@/lib/storage/object-storage';
 
 export type ResumeAnalysisWorkerOptions = {
@@ -34,6 +34,11 @@ function userFacingFailure(error: unknown) {
   if (error instanceof AIConfigError) return `${error.message} 请检查 AI 服务配置或账户权益后重试。`;
   if (error instanceof AIUsageInsufficientCreditsError) return `${error.message} 请充值或升级会员后重新上传。`;
   return describeResumeAnalysisError(error).message;
+}
+
+function resumeAnalysisTrace(error: unknown) {
+  if (error instanceof ResumeAnalysisAITraceError) return error.trace;
+  return undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -235,7 +240,14 @@ export class ResumeAnalysisWorker {
         : `已达到最大重试次数，任务失败：${message}`,
       workerId: this.workerId,
       attempt: attempts,
-      metadata: { errorCode: code, rawError: errorMessage(error), details: parsedError.details, retryable, maxAttempts },
+      metadata: {
+        errorCode: code,
+        rawError: errorMessage(error),
+        details: parsedError.details,
+        aiTrace: resumeAnalysisTrace(error),
+        retryable,
+        maxAttempts,
+      },
     });
   }
 }
