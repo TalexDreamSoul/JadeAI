@@ -89,6 +89,8 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
       : analysis
         ? '解析中'
         : templateLabel;
+  const analysisProgress = Math.max(0, Math.min(100, analysis?.progress || 0));
+  const analysisMessage = analysis?.message || (analysis?.status === 'retrying' ? '等待系统自动重试' : '正在分析简历内容');
 
   return (
     <div
@@ -123,10 +125,18 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
         {analysisLabel}
       </Badge>
       {isAnalysisActive && (
-        <span className="flex shrink-0 items-center gap-1 text-xs text-zinc-500">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
-          {analysis.progress}% · {analysis.status === 'retrying' ? '等待重试' : '分析中'}
-        </span>
+        <div className="hidden min-w-[180px] max-w-[240px] shrink-0 sm:block">
+          <div className="flex items-center gap-1 text-xs text-zinc-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
+            <span className="truncate">{analysisProgress}% · {analysisMessage}</span>
+          </div>
+          <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div
+              className="h-full rounded-full bg-brand transition-all duration-500"
+              style={{ width: `${analysisProgress}%` }}
+            />
+          </div>
+        </div>
       )}
       {analysis?.errorMessage && (
         <span className="hidden max-w-xs truncate text-xs text-red-500 md:inline">{analysis.errorMessage}</span>

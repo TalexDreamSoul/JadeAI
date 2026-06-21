@@ -18,6 +18,7 @@ import { TEMPLATES } from '@/lib/constants';
 import { getTemplateLabel } from '@/lib/template-labels';
 import { EmailAuthForm } from '@/components/auth/email-auth-form';
 import { cn } from '@/lib/utils';
+import type { Resume } from '@/types/resume';
 
 interface AIChannel {
   id: string;
@@ -409,6 +410,9 @@ interface AdminResumeAnalysisJob {
   errorCode?: string | null;
   errorMessage?: string | null;
   logs?: Array<{ at: string; level: string; message: string; workerId?: string | null; attempt?: number; metadata?: Record<string, unknown> }> | string | null;
+  metadata?: Record<string, unknown> | null;
+  template?: string;
+  language?: string;
   createdAt?: string | number | Date;
   updatedAt?: string | number | Date;
   user?: {
@@ -418,6 +422,12 @@ interface AdminResumeAnalysisJob {
     role?: string | null;
   } | null;
 }
+
+type AdminResumeAnalysisJobDetail = {
+  job: AdminResumeAnalysisJob;
+  user: AdminResumeAnalysisJob['user'];
+  resume: Resume | null;
+};
 
 interface AdminProduct {
   id: string;
@@ -675,6 +685,35 @@ function stringifyReport(value: unknown) {
 function responseStatusLabel(response?: AIChannelHTTPResponseReport) {
   if (!response) return 'no response';
   return `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+}
+
+function normalizeJobLogs(logs: AdminResumeAnalysisJob['logs']) {
+  if (!logs) return [];
+  if (Array.isArray(logs)) return logs;
+  if (typeof logs !== 'string') return [];
+  try {
+    const parsed = JSON.parse(logs);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function valueLabel(value: unknown) {
+  if (value === undefined || value === null || value === '') return '-';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function summarizeSectionContent(content: unknown) {
+  if (!content || typeof content !== 'object') return '-';
+  const entries = Object.entries(content as Record<string, unknown>);
+  if (entries.length === 0) return '-';
+  return entries.slice(0, 5).map(([key, value]) => {
+    if (Array.isArray(value)) return `${key}: ${value.length} 项`;
+    if (value && typeof value === 'object') return `${key}: ${Object.keys(value).length} 字段`;
+    return `${key}: ${valueLabel(value)}`;
+  }).join(' · ');
 }
 
 function auditValue(value: unknown) {
@@ -955,6 +994,9 @@ export default function AdminPage() {
   const [resumeAnalysisStatusFilter, setResumeAnalysisStatusFilter] = useState('all');
   const [resumeAnalysisQuery, setResumeAnalysisQuery] = useState('');
   const [selectedResumeAnalysisJobIds, setSelectedResumeAnalysisJobIds] = useState<Set<string>>(new Set());
+  const [resumeAnalysisJobDetail, setResumeAnalysisJobDetail] = useState<AdminResumeAnalysisJobDetail | null>(null);
+  const [resumeAnalysisDetailMode, setResumeAnalysisDetailMode] = useState<'detail' | 'preview'>('detail');
+  const [loadingResumeAnalysisJobId, setLoadingResumeAnalysisJobId] = useState<string | null>(null);
   const [walletTransactions, setWalletTransactions] = useState<AdminWalletTransaction[]>([]);
   const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAuditLog[]>([]);
   const [adminAuditQuery, setAdminAuditQuery] = useState('');
@@ -1601,6 +1643,27 @@ export default function AdminPage() {
       model: aiTestResult.model || current.model,
     }));
     setAiTestResultOpen(false);
+  };
+
+  const openResumeAnalysisJobDetail = async (job: AdminResumeAnalysisJob, mode: 'detail' | 'preview') => {
+    if (mode === 'preview' && (job.status !== 'succeeded' || !job.resumeId)) return;
+    setLoadingResumeAnalysisJobId(`${mode}:${job.id}`);
+    try {
+      const res = await fetch(`/api/admin/resume-analysis-jobs/${job.id}`, { headers: getHeaders() });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(String(payload.error || '任务详情加载失败'));
+        return;
+      }
+      setResumeAnalysisJobDetail(payload as AdminResumeAnalysisJobDetail);
+      setResumeAnalysisDetailMode(mode);
+      setError('');
+    } catch (error) {
+      console.error('Load resume analysis job detail failed:', error);
+      setError('任务详情加载失败');
+    } finally {
+      setLoadingResumeAnalysisJobId(null);
+    }
   };
 
   const saveAIChannel = async () => {
@@ -2524,18 +2587,183 @@ export default function AdminPage() {
             ]}
             renderRowActions={(job) => (
               <>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="预览任务" onClick={() => setError(`任务 ${job.id} 详情预览后续接入。`)}>
+                <Button type="button" variant="ghost" size="icon-xs" aria-label="查看任务详情" onClick={() => openResumeAnalysisJobDetail(job, 'detail')} disabled={loadingResumeAnalysisJobId === `detail:${job.id}`}>
+                  <ListChecks className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="预览解析结果"
+                  title={job.status === 'succeeded' && job.resumeId ? '预览解析结果' : '任务未成功，不允许预览'}
+                  onClick={() => openResumeAnalysisJobDetail(job, 'preview')}
+                  disabled={loadingResumeAnalysisJobId === `preview:${job.id}` || job.status !== 'succeeded' || !job.resumeId}
+                >
                   <Eye className="h-3.5 w-3.5" />
-                </Button>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑任务" onClick={() => setError('任务编辑/重试操作后续接入。')}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="清理任务" onClick={() => markDangerousCleanupPending(`任务 ${job.id}`)} className="text-red-600 hover:text-red-700">
-                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </>
             )}
           />
+
+          <Dialog open={!!resumeAnalysisJobDetail} onOpenChange={(open) => { if (!open) setResumeAnalysisJobDetail(null); }}>
+            <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-6xl">
+              <DialogHeader>
+                <DialogTitle className="flex flex-wrap items-center gap-2">
+                  简历分析任务详情
+                  {resumeAnalysisJobDetail?.job && (
+                    <Badge variant={resumeAnalysisJobDetail.job.status === 'succeeded' ? 'secondary' : resumeAnalysisJobDetail.job.status === 'failed' ? 'destructive' : 'outline'}>
+                      {resumeAnalysisJobDetail.job.status}
+                    </Badge>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="break-words">
+                  {resumeAnalysisJobDetail?.job.fileName || '查看任务解析过程、结果和错误上下文。'}
+                </DialogDescription>
+              </DialogHeader>
+
+              {resumeAnalysisJobDetail && (() => {
+                const { job, user, resume } = resumeAnalysisJobDetail;
+                const logs = normalizeJobLogs(job.logs);
+                const defaultTab = resumeAnalysisDetailMode === 'preview' && resume ? 'result' : 'overview';
+                return (
+                  <Tabs defaultValue={defaultTab} className="space-y-4">
+                    <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-white p-1 dark:border-zinc-800 dark:bg-zinc-950">
+                      <TabsTrigger value="overview">概览</TabsTrigger>
+                      <TabsTrigger value="result" disabled={!resume}>解析结果</TabsTrigger>
+                      <TabsTrigger value="logs">过程日志</TabsTrigger>
+                      <TabsTrigger value="raw">原始数据</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="overview" className="mt-0 space-y-4">
+                      <div className={cn(
+                        'rounded-lg border px-3 py-2 text-sm',
+                        job.status === 'failed'
+                          ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'
+                          : 'bg-zinc-50 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200',
+                      )}>
+                        <div className="font-medium">{job.status === 'failed' ? '任务失败，不允许预览解析结果' : '任务状态'}</div>
+                        <div className="mt-1 break-words text-xs">
+                          {job.errorMessage ? `${job.errorCode || 'error'}：${job.errorMessage}` : `进度 ${job.progress}% · 尝试 ${job.attempts}/${job.maxAttempts}`}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {[
+                          ['任务 ID', job.id],
+                          ['用户', user?.email || user?.name || job.userId],
+                          ['文件', `${job.fileName} · ${job.fileType}`],
+                          ['大小', formatBytes(job.fileSize)],
+                          ['模板 / 语言', `${job.template || '-'} / ${job.language || '-'}`],
+                          ['Worker', job.workerId || '-'],
+                          ['生成简历', job.resumeId || '-'],
+                          ['队列位置', job.position || '-'],
+                          ['创建时间', formatDateTime(job.createdAt)],
+                          ['开始时间', formatDateTime(job.startedAt)],
+                          ['心跳时间', formatDateTime(job.lastHeartbeatAt)],
+                          ['完成时间', formatDateTime(job.finishedAt)],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-lg border bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+                            <div className="text-xs text-zinc-500">{label}</div>
+                            <div className="mt-1 break-all font-medium text-zinc-950 dark:text-zinc-50">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {job.metadata && (
+                        <details open className="rounded-lg border p-3 dark:border-zinc-800">
+                          <summary className="cursor-pointer text-sm font-medium">任务 metadata</summary>
+                          <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(job.metadata)}</pre>
+                        </details>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="result" className="mt-0 space-y-4">
+                      {resume ? (
+                        <>
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            {[
+                              ['简历标题', resume.title],
+                              ['简历 ID', resume.id],
+                              ['模板 / 语言', `${resume.template} / ${resume.language}`],
+                              ['章节数', resume.sections?.length || 0],
+                              ['创建时间', formatDateTime(resume.createdAt)],
+                              ['更新时间', formatDateTime(resume.updatedAt)],
+                            ].map(([label, value]) => (
+                              <div key={label} className="rounded-lg border bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+                                <div className="text-xs text-zinc-500">{label}</div>
+                                <div className="mt-1 break-all font-medium text-zinc-950 dark:text-zinc-50">{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="overflow-auto rounded-lg border dark:border-zinc-800">
+                            <table className="w-full min-w-[760px] text-left text-sm">
+                              <thead className="bg-zinc-50 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                                <tr>
+                                  <th className="px-3 py-2">章节</th>
+                                  <th className="px-3 py-2">类型</th>
+                                  <th className="px-3 py-2">可见</th>
+                                  <th className="px-3 py-2">解析摘要</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(resume.sections || []).map((section) => (
+                                  <tr key={section.id} className="border-t dark:border-zinc-800">
+                                    <td className="px-3 py-2 font-medium">{section.title}</td>
+                                    <td className="px-3 py-2 text-xs text-zinc-500">{section.type}</td>
+                                    <td className="px-3 py-2"><Badge variant={section.visible ? 'secondary' : 'outline'}>{section.visible ? '显示' : '隐藏'}</Badge></td>
+                                    <td className="px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">{summarizeSectionContent(section.content)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                          当前任务未成功生成简历，不能预览解析结果。请在“概览”和“过程日志”中查看失败原因。
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="logs" className="mt-0 space-y-3">
+                      {logs.length === 0 ? (
+                        <p className="text-sm text-zinc-400">暂无过程日志</p>
+                      ) : logs.map((log, index) => (
+                        <div key={`${log.at}-${index}`} className="rounded-lg border p-3 text-sm dark:border-zinc-800">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={log.level === 'error' ? 'destructive' : log.level === 'warn' ? 'outline' : 'secondary'}>{log.level}</Badge>
+                            <span className="font-medium">{log.message}</span>
+                            <span className="text-xs text-zinc-500">{formatDateTime(log.at)}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">worker {log.workerId || '-'} · attempt {log.attempt || '-'}</div>
+                          {log.metadata && (
+                            <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(log.metadata)}</pre>
+                          )}
+                        </div>
+                      ))}
+                    </TabsContent>
+
+                    <TabsContent value="raw" className="mt-0 space-y-3">
+                      <details open className="rounded-lg border p-3 dark:border-zinc-800">
+                        <summary className="cursor-pointer text-sm font-medium">任务 JSON</summary>
+                        <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(job)}</pre>
+                      </details>
+                      {resume && (
+                        <details className="rounded-lg border p-3 dark:border-zinc-800">
+                          <summary className="cursor-pointer text-sm font-medium">解析后简历 JSON</summary>
+                          <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-100">{stringifyReport(resume)}</pre>
+                        </details>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                );
+              })()}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setResumeAnalysisJobDetail(null)}>关闭</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="audit" className="mt-0">

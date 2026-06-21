@@ -1,4 +1,4 @@
-import { generateText } from 'ai';
+import { generateText, Output } from 'ai';
 import type { ModelMessage } from 'ai';
 import { getModel, getProviderOptions, type AIConfig } from '@/lib/ai/provider';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
@@ -21,8 +21,7 @@ REQUIRED JSON SCHEMA:
 
 RULES:
 - You MUST use the EXACT field names shown above (fullName, jobTitle, workExperience, etc.)
-- Output compact single-line JSON. No indentation, no newlines.
-- You are a JSON API. Your entire response must be a single valid JSON object starting with { and ending with }. Do NOT use markdown syntax. Do NOT wrap in code fences. Do NOT add any text before or after the JSON.
+- You are a JSON API. Your entire response must be a single valid JSON object. Do NOT use markdown syntax. Do NOT wrap in code fences. Do NOT add any text before or after the JSON.
 - Use YYYY-MM for dates. Empty string "" for missing fields.
 - For current jobs: current=true, endDate=null.
 - Omit empty arrays (e.g. if no projects, omit "projects" entirely).
@@ -112,11 +111,11 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
     await input.onProgress?.(message, metadata);
   };
 
-  await log('开始读取简历文件', { fileName: input.file.name, fileType: input.file.type, fileSize: input.file.size });
+  await log('开始读取简历文件', { progress: 25, fileName: input.file.name, fileType: input.file.type, fileSize: input.file.size });
   const model = getModel(input.aiConfig);
   const messages = await buildMessages(input.file.buffer, input.file.type, log);
 
-  await log('开始调用 AI 解析简历');
+  await log('开始调用 AI 解析简历', { progress: 55, provider: input.aiConfig.provider, model: input.aiConfig.model });
   return withMeteredAIUsage({
     userId: input.userId,
     aiConfig: input.aiConfig,
@@ -135,15 +134,27 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
         system: SYSTEM_PROMPT,
         messages,
         providerOptions: getProviderOptions(input.aiConfig),
+        output: Output.json(),
       });
 
-      await log('AI 解析完成，开始保存简历', { finishReason: result.finishReason, outputLength: result.text.length });
+      await log('AI 解析完成，开始整理结构化内容', { progress: 80, finishReason: result.finishReason, outputLength: result.text.length });
       const raw = parseJsonFromText(result.text);
       if (!raw || typeof raw !== 'object') {
         throw new Error('AI 返回内容无法解析为有效简历 JSON');
       }
 
       const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
+      await log('结构化内容整理完成，开始保存简历', {
+        progress: 88,
+        sections: {
+          workExperience: resumeData.workExperience?.length || 0,
+          education: resumeData.education?.length || 0,
+          skills: resumeData.skills?.length || 0,
+          projects: resumeData.projects?.length || 0,
+          certifications: resumeData.certifications?.length || 0,
+          languages: resumeData.languages?.length || 0,
+        },
+      });
       const title = resumeData.personalInfo?.fullName || '未命名简历';
       let resume = input.resumeId ? await resumeRepository.findById(input.resumeId) : null;
       if (input.resumeId && !resume) {
@@ -180,7 +191,7 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
           content: section.content,
         })),
       );
-      await log('简历保存完成', { resumeId: resume.id, sectionCount: sections.length });
+      await log('简历保存完成', { progress: 96, resumeId: resume.id, sectionCount: sections.length });
       return {
         value: parsedResume,
         usage: result.usage,
@@ -201,15 +212,15 @@ async function buildMessages(
     const pdfText = await extractPdfText(buffer);
 
     if (pdfText.length > 200) {
-      await log('PDF 文本提取成功', { textLength: pdfText.length });
+      await log('PDF 文本提取成功', { progress: 42, textLength: pdfText.length });
       messages.push({
         role: 'user',
         content: `Below is the full text extracted from a resume PDF. Extract all resume information using the EXACT JSON schema from the system prompt.\n\n---\n${pdfText}\n---`,
       });
     } else {
-      await log('PDF 文本较少，转换页面为图片识别', { textLength: pdfText.length });
+      await log('PDF 文本较少，转换页面为图片识别', { progress: 35, textLength: pdfText.length });
       const pageImages = await pdfPagesToImages(buffer);
-      await log('PDF 页面图片转换完成', { pageCount: pageImages.length });
+      await log('PDF 页面图片转换完成', { progress: 48, pageCount: pageImages.length });
       const contentParts: Array<{ type: 'image'; image: string } | { type: 'text'; text: string }> = [];
       for (const png of pageImages) {
         contentParts.push({ type: 'image', image: `data:image/png;base64,${Buffer.from(png).toString('base64')}` });
@@ -219,6 +230,7 @@ async function buildMessages(
     }
   } else {
     const base64 = buffer.toString('base64');
+    await log('图片文件读取完成，准备视觉识别', { progress: 45, fileType });
     messages.push({
       role: 'user',
       content: [

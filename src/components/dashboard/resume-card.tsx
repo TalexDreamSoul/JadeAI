@@ -92,6 +92,8 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAna
       : analysis
         ? '解析中'
         : templateLabel;
+  const analysisProgress = Math.max(0, Math.min(100, analysis?.progress || 0));
+  const analysisMessage = analysis?.message || (analysis?.status === 'retrying' ? '等待系统自动重试' : '正在分析简历内容');
 
   return (
     <div
@@ -109,7 +111,10 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAna
         {isAnalysisActive && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/85 text-xs font-medium text-zinc-700 backdrop-blur-sm dark:bg-zinc-900/80 dark:text-zinc-200">
             <Loader2 className="mb-1 h-5 w-5 animate-spin text-brand" />
-            <span>{analysis?.status === 'retrying' ? '等待重试' : '解析中'} {analysis?.progress || 0}%</span>
+            <span>{analysis?.status === 'retrying' ? '等待重试' : '解析中'} {analysisProgress}%</span>
+            <span className="mt-1 max-w-[140px] truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+              {analysisMessage}
+            </span>
           </div>
         )}
       </div>
@@ -149,6 +154,19 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAna
                   : ''}
               </span>
             </div>
+            {isAnalysisActive && (
+              <div className="mt-2">
+                <div className="h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-brand transition-all duration-500"
+                    style={{ width: `${analysisProgress}%` }}
+                  />
+                </div>
+                <p className="mt-1 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                  {analysisMessage}
+                </p>
+              </div>
+            )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger
