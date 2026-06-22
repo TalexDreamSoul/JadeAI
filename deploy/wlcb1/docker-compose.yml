@@ -41,6 +41,7 @@ services:
       APP_ENV: ${APP_ENV}
       APP_VERSION: ${APP_VERSION:-latest}
       GIT_SHA: ${GIT_SHA:-unknown}
+      RESUME_ANALYSIS_WORKER_TOKEN: ${RESUME_ANALYSIS_WORKER_TOKEN:-}
     networks:
       - app-net
     ports:
@@ -62,12 +63,13 @@ services:
     environment:
       RESUME_ANALYSIS_WORKER_ID: ${CONTAINER_NAME:?CONTAINER_NAME is required}-worker
       RESUME_ANALYSIS_WORKER_TOKEN: ${RESUME_ANALYSIS_WORKER_TOKEN:-}
+      RESUME_ANALYSIS_TICK_TIMEOUT_MS: ${RESUME_ANALYSIS_TICK_TIMEOUT_MS:-10000}
     command:
       - /bin/sh
       - -lc
       - |
         while true; do
-          node -e "fetch('http://jadeai:3000/api/internal/resume-analysis/tick',{method:'POST',headers:{'x-worker-id':process.env.RESUME_ANALYSIS_WORKER_ID||'','x-worker-token':process.env.RESUME_ANALYSIS_WORKER_TOKEN||''}}).catch(()=>process.exit(0))" || true
+          node -e "(async()=>{const timeout=Number(process.env.RESUME_ANALYSIS_TICK_TIMEOUT_MS||10000);try{const res=await fetch('http://jadeai:3000/api/internal/resume-analysis/tick',{method:'POST',signal:AbortSignal.timeout(timeout),headers:{'x-worker-id':process.env.RESUME_ANALYSIS_WORKER_ID||'','x-worker-token':process.env.RESUME_ANALYSIS_WORKER_TOKEN||''}});if(!res.ok){const body=await res.text().catch(()=>'');console.error('[resume-analysis-worker] tick failed status='+res.status+' body='+body.slice(0,500));}}catch(error){console.error('[resume-analysis-worker] tick request failed:',error?.message||error)}})()"
           sleep "$${RESUME_ANALYSIS_POLL_INTERVAL_SECONDS:-3}"
         done
     healthcheck:
