@@ -129,6 +129,7 @@
       "uploadAndParse": "上传并解析",
       "invalidType": "不支持的文件类型，仅支持 PDF、PNG、JPG、WebP",
       "fileTooLarge": "文件过大，最大支持 10MB",
+      "authRequired": "身份初始化失败，请刷新页面后重试",
       "parseFailed": "简历解析失败，请重试"
     },
     "templateTouchSimple": "TouchSimple",

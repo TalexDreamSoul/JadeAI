@@ -1,42 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import FingerprintJS from '@fingerprintjs/fingerprintjs';
-import { generateId } from '@/lib/utils';
+import { ensureClientFingerprint, getStoredFingerprint, FINGERPRINT_STORAGE_KEY } from '@/lib/client-fingerprint';
 
 export function useFingerprint() {
   const [fingerprint, setFingerprint] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function getFingerprint() {
-      try {
-        // Check localStorage first
-        const stored = localStorage.getItem('touchresume_fingerprint');
-        if (stored) {
-          localStorage.setItem('touchresume_fingerprint', stored);
-          setFingerprint(stored);
-          setIsLoading(false);
-          return;
-        }
-
-        const fp = await FingerprintJS.load();
-        const result = await fp.get();
-        const visitorId = result.visitorId;
-
-        localStorage.setItem('touchresume_fingerprint', visitorId);
-        setFingerprint(visitorId);
-      } catch {
-        // Fallback: generate a random ID
-        const fallbackId = generateId();
-        localStorage.setItem('touchresume_fingerprint', fallbackId);
-        setFingerprint(fallbackId);
-      } finally {
+      const fingerprint = await ensureClientFingerprint();
+      if (!cancelled) {
+        setFingerprint(fingerprint);
         setIsLoading(false);
       }
     }
 
     getFingerprint();
+
+    const syncStoredFingerprint = () => {
+      if (!cancelled) setFingerprint(getStoredFingerprint());
+    };
+    window.addEventListener('storage', syncStoredFingerprint);
+    window.addEventListener(FINGERPRINT_STORAGE_KEY, syncStoredFingerprint);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('storage', syncStoredFingerprint);
+      window.removeEventListener(FINGERPRINT_STORAGE_KEY, syncStoredFingerprint);
+    };
   }, []);
 
   return { fingerprint, isLoading };

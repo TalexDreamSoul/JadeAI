@@ -1,6 +1,6 @@
 export const config = {
   auth: {
-    enabled: process.env.AUTH_ENABLED !== 'false',
+    enabled: process.env.AUTH_ENABLED === 'true',
   },
   db: {
     type: (process.env.DB_TYPE || 'sqlite') as 'postgresql' | 'sqlite',

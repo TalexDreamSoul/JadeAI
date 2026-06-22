@@ -129,6 +129,7 @@
       "uploadAndParse": "Upload & Parse",
       "invalidType": "Unsupported file type. Accepted: PDF, PNG, JPG, WebP",
       "fileTooLarge": "File too large. Maximum size: 10MB",
+      "authRequired": "Failed to initialize your identity. Please refresh and try again.",
       "parseFailed": "Failed to parse resume. Please try again."
     },
     "templateTouchSimple": "TouchSimple",

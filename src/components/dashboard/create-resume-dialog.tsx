@@ -17,6 +17,7 @@ import type { LocalResumeInput } from '@/lib/local-resumes';
 import type { Resume } from '@/types/resume';
 import { cn } from '@/lib/utils';
 import { getAIHeaders } from '@/stores/settings-store';
+import { ensureClientFingerprint } from '@/lib/client-fingerprint';
 import { Upload, FileText, Image, X, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { TemplateThumbnail } from './template-thumbnail';
@@ -80,14 +81,16 @@ export function CreateResumeDialog({ open, onClose, onCreate, onUploaded }: Crea
     setParseError('');
 
     try {
-      const fingerprint = typeof window !== 'undefined' ? localStorage.getItem('touchresume_fingerprint') : null;
+      const fingerprint = await ensureClientFingerprint();
+      if (!fingerprint) throw new Error(t('dashboard.upload.authRequired'));
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('template', template);
 
       const res = await fetch('/api/resume/parse', {
         method: 'POST',
-        headers: { ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}), ...getAIHeaders() },
+        headers: { 'x-fingerprint': fingerprint, ...getAIHeaders() },
         body: formData,
       });
 
