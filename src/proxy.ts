@@ -9,6 +9,7 @@ const PUBLIC_PAGE_PATHS = ['/', '/login', '/share'];
 const PUBLIC_API_PATHS = [
   '/api/auth',
   '/api/health',
+  '/api/internal/resume-analysis/tick',
   '/api/ready',
   '/api/share',
 ];
