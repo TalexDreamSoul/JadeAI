@@ -37,19 +37,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: '当前已有 3 个待分析任务，请等待完成后再重试' }, { status: 429 });
     }
 
-    const updated = await resumeAnalysisJobRepository.updateStatus(job.id, {
-      status: 'queued',
-      progress: 0,
-      attempts: 0,
-      workerId: null,
-      lockedAt: null,
-      lastHeartbeatAt: null,
-      nextRunAt: new Date(),
-      startedAt: null,
-      finishedAt: null,
-      errorCode: null,
-      errorMessage: null,
-    });
+    const updated = await resumeAnalysisJobRepository.requeue(job.id);
     if (!updated) throw new Error('Failed to retry analysis job');
 
     await resumeAnalysisJobRepository.appendLog(job.id, {

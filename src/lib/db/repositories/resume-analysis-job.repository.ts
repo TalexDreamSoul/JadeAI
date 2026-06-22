@@ -224,6 +224,22 @@ export const resumeAnalysisJobRepository = {
     return this.updateStatus(id, { workerId, lastHeartbeatAt: now() });
   },
 
+  async requeue(id: string) {
+    return this.updateStatus(id, {
+      status: 'queued',
+      progress: 0,
+      attempts: 0,
+      workerId: null,
+      lockedAt: null,
+      lastHeartbeatAt: null,
+      nextRunAt: now(),
+      startedAt: null,
+      finishedAt: null,
+      errorCode: null,
+      errorMessage: null,
+    });
+  },
+
   async delete(id: string) {
     await db.delete(resumeAnalysisJobs).where(eq(resumeAnalysisJobs.id, id));
   },

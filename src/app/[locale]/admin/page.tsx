@@ -3,7 +3,7 @@
 import { Suspense, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { Activity, Bot, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Coins, Copy, Eye, FileClock, FileSliders, HardDrive, KeyRound, LayoutDashboard, ListChecks, MessageSquareText, Pencil, Plus, Radio, ReceiptText, RefreshCw, Save, Search, Settings2, ShieldCheck, TestTube2, Trash2, Users, XCircle, type LucideIcon } from 'lucide-react';
+import { Activity, Bot, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Coins, Copy, Eye, FileClock, FileSliders, HardDrive, KeyRound, LayoutDashboard, ListChecks, MessageSquareText, Pencil, Plus, Radio, ReceiptText, RefreshCw, RotateCcw, Save, Search, Settings2, ShieldCheck, TestTube2, Trash2, Users, XCircle, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -1735,6 +1735,33 @@ export default function AdminPage() {
     }
   };
 
+  const retryResumeAnalysisJob = async (job: AdminResumeAnalysisJob) => {
+    if (job.status === 'succeeded') return;
+    setLoadingResumeAnalysisJobId(`retry:${job.id}`);
+    try {
+      const res = await fetch(`/api/admin/resume-analysis-jobs/${job.id}`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(String(payload.error || '任务重新入队失败'));
+        return;
+      }
+      const updatedJob = payload.job as AdminResumeAnalysisJob | null | undefined;
+      if (updatedJob) {
+        setResumeAnalysisJobs((jobs) => jobs.map((item) => (item.id === updatedJob.id ? updatedJob : item)));
+      }
+      setError('');
+      await load();
+    } catch (error) {
+      console.error('Retry resume analysis job failed:', error);
+      setError('任务重新入队失败');
+    } finally {
+      setLoadingResumeAnalysisJobId(null);
+    }
+  };
+
   const saveAIChannel = async () => {
     setSavingAIChannel(true);
     const { apiKey, ...rest } = form;
@@ -2658,6 +2685,17 @@ export default function AdminPage() {
               <>
                 <Button type="button" variant="ghost" size="icon-xs" aria-label="查看任务详情" onClick={() => openResumeAnalysisJobDetail(job, 'detail')} disabled={loadingResumeAnalysisJobId === `detail:${job.id}`}>
                   <ListChecks className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="重新入队"
+                  title={job.status === 'succeeded' ? '已成功任务不需要重试' : '重新入队'}
+                  onClick={() => retryResumeAnalysisJob(job)}
+                  disabled={loadingResumeAnalysisJobId === `retry:${job.id}` || job.status === 'succeeded'}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   type="button"
