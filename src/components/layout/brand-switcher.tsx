@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useBrand, type Brand } from './brand-provider';
 import { cn } from '@/lib/utils';
 
-const OPTIONS: { id: Brand; swatch: string }[] = [
+export const BRAND_OPTIONS: { id: Brand; swatch: string }[] = [
   { id: 'mint', swatch: '#00A77F' },
   { id: 'blue', swatch: '#2563eb' },
   { id: 'pink', swatch: '#ec4899' },
@@ -20,7 +20,7 @@ export function BrandSwitcher() {
     <div className="flex items-center justify-between gap-2 px-2 py-1.5">
       <span className="text-xs text-muted-foreground">{t('label')}</span>
       <div className="flex items-center gap-1">
-        {OPTIONS.map((opt) => {
+        {BRAND_OPTIONS.map((opt) => {
           const active = brand === opt.id;
           return (
             <button

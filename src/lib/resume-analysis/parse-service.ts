@@ -1,6 +1,7 @@
-import { generateText } from 'ai';
+import { generateText, Output } from 'ai';
 import type { ModelMessage } from 'ai';
 import { getModel, getProviderOptions, type AIConfig } from '@/lib/ai/provider';
+import { testAIChannelConfig } from '@/lib/ai/compatibility';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import type { ParsedResume } from '@/lib/ai/parse-schema';
 import { withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
@@ -21,8 +22,7 @@ REQUIRED JSON SCHEMA:
 
 RULES:
 - You MUST use the EXACT field names shown above (fullName, jobTitle, workExperience, etc.)
-- Output compact single-line JSON. No indentation, no newlines.
-- You are a JSON API. Your entire response must be a single valid JSON object starting with { and ending with }. Do NOT use markdown syntax. Do NOT wrap in code fences. Do NOT add any text before or after the JSON.
+- You are a JSON API. Your entire response must be a single valid JSON object. Do NOT use markdown syntax. Do NOT wrap in code fences. Do NOT add any text before or after the JSON.
 - Use YYYY-MM for dates. Empty string "" for missing fields.
 - For current jobs: current=true, endDate=null.
 - Omit empty arrays (e.g. if no projects, omit "projects" entirely).
@@ -48,7 +48,9 @@ type AIAPICallErrorLike = {
   name?: string;
   message?: string;
   statusCode?: number;
+  status?: number;
   responseBody?: string;
+  responseHeaders?: Record<string, unknown>;
   isRetryable?: boolean;
 };
 
@@ -58,15 +60,198 @@ function isAIAPICallErrorLike(error: unknown): error is AIAPICallErrorLike {
   return candidate.name === 'AI_APICallError' || 'statusCode' in candidate || 'responseBody' in candidate;
 }
 
+type ResumeAnalysisAITrace = {
+  stage: string;
+  provider: string;
+  model: string;
+  baseURL: string;
+  openAIEndpoint: string;
+  transportURL: string;
+  file: {
+    name: string;
+    type: string;
+    size: number;
+  };
+  request: {
+    outputJson: boolean;
+    maxOutputTokens: number;
+    messageCount: number;
+    imageCount: number;
+    textPartCount: number;
+    textCharCount: number;
+    pdfTextExtracted: boolean;
+  };
+  error?: Record<string, unknown>;
+  diagnosticProbe?: unknown;
+  hints?: string[];
+};
+
+export class ResumeAnalysisAITraceError extends Error {
+  readonly originalError: unknown;
+  readonly trace: ResumeAnalysisAITrace;
+
+  constructor(message: string, originalError: unknown, trace: ResumeAnalysisAITrace) {
+    super(message);
+    this.name = 'ResumeAnalysisAITraceError';
+    this.originalError = originalError;
+    this.trace = trace;
+  }
+}
+
+function transportURL(config: AIConfig) {
+  if (config.provider !== 'openai') return config.baseURL;
+  const base = config.baseURL.replace(/\/$/, '');
+  return config.openAIEndpoint === 'responses' ? `${base}/responses` : `${base}/chat/completions`;
+}
+
+function redactSensitiveText(value: string, config: AIConfig) {
+  let text = value;
+  for (const secret of [config.apiKey].filter(Boolean)) {
+    text = text.split(secret).join(`<redacted:${secret.length} chars>`);
+  }
+  return text;
+}
+
+function safeJson(value: unknown, config: AIConfig, depth = 0): unknown {
+  if (depth > 4) return '[MaxDepth]';
+  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return redactSensitiveText(value.slice(0, 4000), config);
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => safeJson(item, config, depth + 1));
+  if (typeof value !== 'object') return String(value);
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !/api.?key|authorization|token|secret|password/i.test(key))
+    .slice(0, 50)
+    .map(([key, item]) => [key, safeJson(item, config, depth + 1)]);
+  return Object.fromEntries(entries);
+}
+
+function errorSummary(error: unknown, config: AIConfig): Record<string, unknown> {
+  if (error instanceof ResumeAnalysisAITraceError) {
+    return {
+      name: error.name,
+      message: error.message,
+      originalError: errorSummary(error.originalError, config),
+    };
+  }
+
+  if (!error || typeof error !== 'object') {
+    return { name: typeof error, message: redactSensitiveText(String(error || '未知错误'), config) };
+  }
+
+  const record = error as Record<string, unknown>;
+  return {
+    name: typeof record.name === 'string' ? record.name : error instanceof Error ? error.name : 'UnknownError',
+    message: redactSensitiveText(error instanceof Error ? error.message : String(record.message || '未知错误'), config),
+    statusCode: record.statusCode ?? record.status,
+    responseBody: typeof record.responseBody === 'string' ? redactSensitiveText(record.responseBody.slice(0, 4000), config) : undefined,
+    responseHeaders: record.responseHeaders ? safeJson(record.responseHeaders, config) : undefined,
+    isRetryable: record.isRetryable,
+    cause: record.cause ? errorSummary(record.cause, config) : undefined,
+    rawKeys: Object.keys(record).sort(),
+  };
+}
+
+function messageStats(messages: ModelMessage[]) {
+  let imageCount = 0;
+  let textPartCount = 0;
+  let textCharCount = 0;
+
+  for (const message of messages) {
+    const content = message.content;
+    if (typeof content === 'string') {
+      textPartCount += 1;
+      textCharCount += content.length;
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      const typedPart = part as { type?: string; text?: string };
+      if (typedPart.type === 'image') imageCount += 1;
+      if (typedPart.type === 'text') {
+        textPartCount += 1;
+        textCharCount += typedPart.text?.length || 0;
+      }
+    }
+  }
+
+  return { imageCount, textPartCount, textCharCount };
+}
+
+function buildTrace(input: ResumeAnalysisInput, messages: ModelMessage[], stage: string): ResumeAnalysisAITrace {
+  const stats = messageStats(messages);
+  return {
+    stage,
+    provider: input.aiConfig.provider,
+    model: input.aiConfig.model,
+    baseURL: input.aiConfig.baseURL,
+    openAIEndpoint: input.aiConfig.openAIEndpoint,
+    transportURL: transportURL(input.aiConfig),
+    file: {
+      name: input.file.name,
+      type: input.file.type,
+      size: input.file.size,
+    },
+    request: {
+      outputJson: true,
+      maxOutputTokens: 16384,
+      messageCount: messages.length,
+      imageCount: stats.imageCount,
+      textPartCount: stats.textPartCount,
+      textCharCount: stats.textCharCount,
+      pdfTextExtracted: input.file.type === 'application/pdf' && stats.imageCount === 0,
+    },
+  };
+}
+
+function diagnosticHints(trace: ResumeAnalysisAITrace, error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || '');
+  const lower = raw.toLowerCase();
+  const hints: string[] = [];
+
+  if (lower === 'openai_error' || lower.includes('openai_error')) {
+    hints.push('上游 OpenAI 兼容网关只返回 openai_error，未透传 HTTP 状态码或响应体。请优先查看 diagnosticProbe 与网关日志。');
+  }
+  if (trace.request.imageCount > 0) {
+    hints.push('本次请求包含图片输入；后台文本渠道测试通过不等于多模态简历解析可用。');
+  }
+  if (trace.request.outputJson) {
+    hints.push('本次请求启用了 JSON 输出约束；部分 OpenAI 兼容网关对结构化输出支持不完整。');
+  }
+  if (trace.provider === 'openai' && trace.openAIEndpoint === 'chat') {
+    hints.push('当前走 /chat/completions；如果网关更完整支持 Responses API，可在 AI 渠道中切换 endpoint 后重试。');
+  }
+  return hints;
+}
+
+async function runDiagnosticProbe(input: ResumeAnalysisInput) {
+  return testAIChannelConfig({
+    provider: input.aiConfig.provider,
+    apiKey: input.aiConfig.apiKey,
+    baseUrl: input.aiConfig.baseURL,
+    model: input.aiConfig.model,
+    openAIEndpoint: input.aiConfig.openAIEndpoint,
+  }).catch((probeError) => ({
+    ok: false,
+    message: '诊断探针执行失败',
+    error: errorSummary(probeError, input.aiConfig),
+  }));
+}
+
+function unwrapTraceError(error: unknown) {
+  return error instanceof ResumeAnalysisAITraceError ? error.originalError : error;
+}
+
 export function describeResumeAnalysisError(error: unknown): {
   code: string;
   message: string;
   retryable?: boolean;
   details?: Record<string, unknown>;
 } {
-  if (isAIAPICallErrorLike(error)) {
-    const status = error.statusCode;
-    const raw = (error.responseBody || error.message || '').slice(0, 1000);
+  const actualError = unwrapTraceError(error);
+  if (isAIAPICallErrorLike(actualError)) {
+    const status = actualError.statusCode || actualError.status;
+    const raw = (actualError.responseBody || actualError.message || '').slice(0, 1000);
     const lower = raw.toLowerCase();
     let message = 'AI 服务调用失败，请稍后重试或检查后台 AI 渠道配置。';
     if (status === 401 || status === 403 || lower.includes('invalid api key') || lower.includes('unauthorized')) {
@@ -83,16 +268,23 @@ export function describeResumeAnalysisError(error: unknown): {
     return {
       code: 'ai_provider_error',
       message,
-      retryable: error.isRetryable,
+      retryable: actualError.isRetryable,
       details: {
         statusCode: status,
-        isRetryable: error.isRetryable,
+        isRetryable: actualError.isRetryable,
         raw,
       },
     };
   }
 
-  const rawMessage = error instanceof Error ? error.message : String(error || '未知错误');
+  const rawMessage = actualError instanceof Error ? actualError.message : String(actualError || '未知错误');
+  if (/^openai_error$/i.test(rawMessage.trim())) {
+    return {
+      code: 'ai_provider_unknown_error',
+      message: 'AI 渠道返回 openai_error，但未提供具体状态码或响应体。请查看任务日志中的 AI 调用 trace、diagnosticProbe 和上游网关日志。',
+      details: { raw: rawMessage.slice(0, 1000) },
+    };
+  }
   if (/No image|unsupported|multi.?modal|vision/i.test(rawMessage)) {
     return {
       code: 'ai_model_vision_unsupported',
@@ -112,11 +304,11 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
     await input.onProgress?.(message, metadata);
   };
 
-  await log('开始读取简历文件', { fileName: input.file.name, fileType: input.file.type, fileSize: input.file.size });
+  await log('开始读取简历文件', { progress: 25, fileName: input.file.name, fileType: input.file.type, fileSize: input.file.size });
   const model = getModel(input.aiConfig);
   const messages = await buildMessages(input.file.buffer, input.file.type, log);
 
-  await log('开始调用 AI 解析简历');
+  await log('开始调用 AI 解析简历', { progress: 55, provider: input.aiConfig.provider, model: input.aiConfig.model });
   return withMeteredAIUsage({
     userId: input.userId,
     aiConfig: input.aiConfig,
@@ -135,15 +327,34 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
         system: SYSTEM_PROMPT,
         messages,
         providerOptions: getProviderOptions(input.aiConfig),
+        output: Output.json(),
+      }).catch(async (error) => {
+        const trace = buildTrace(input, messages, 'generate_text');
+        trace.error = errorSummary(error, input.aiConfig);
+        trace.diagnosticProbe = await runDiagnosticProbe(input);
+        trace.hints = diagnosticHints(trace, error);
+        await log('AI 调用失败，已记录诊断 trace', { progress: 58, aiTrace: trace });
+        throw new ResumeAnalysisAITraceError(error instanceof Error ? error.message : String(error || 'AI 调用失败'), error, trace);
       });
 
-      await log('AI 解析完成，开始保存简历', { finishReason: result.finishReason, outputLength: result.text.length });
+      await log('AI 解析完成，开始整理结构化内容', { progress: 80, finishReason: result.finishReason, outputLength: result.text.length });
       const raw = parseJsonFromText(result.text);
       if (!raw || typeof raw !== 'object') {
         throw new Error('AI 返回内容无法解析为有效简历 JSON');
       }
 
       const resumeData = mapToResumeSchema(raw as Record<string, unknown>);
+      await log('结构化内容整理完成，开始保存简历', {
+        progress: 88,
+        sections: {
+          workExperience: resumeData.workExperience?.length || 0,
+          education: resumeData.education?.length || 0,
+          skills: resumeData.skills?.length || 0,
+          projects: resumeData.projects?.length || 0,
+          certifications: resumeData.certifications?.length || 0,
+          languages: resumeData.languages?.length || 0,
+        },
+      });
       const title = resumeData.personalInfo?.fullName || '未命名简历';
       let resume = input.resumeId ? await resumeRepository.findById(input.resumeId) : null;
       if (input.resumeId && !resume) {
@@ -180,7 +391,7 @@ export async function analyzeResumeFile(input: ResumeAnalysisInput) {
           content: section.content,
         })),
       );
-      await log('简历保存完成', { resumeId: resume.id, sectionCount: sections.length });
+      await log('简历保存完成', { progress: 96, resumeId: resume.id, sectionCount: sections.length });
       return {
         value: parsedResume,
         usage: result.usage,
@@ -201,15 +412,15 @@ async function buildMessages(
     const pdfText = await extractPdfText(buffer);
 
     if (pdfText.length > 200) {
-      await log('PDF 文本提取成功', { textLength: pdfText.length });
+      await log('PDF 文本提取成功', { progress: 42, textLength: pdfText.length });
       messages.push({
         role: 'user',
         content: `Below is the full text extracted from a resume PDF. Extract all resume information using the EXACT JSON schema from the system prompt.\n\n---\n${pdfText}\n---`,
       });
     } else {
-      await log('PDF 文本较少，转换页面为图片识别', { textLength: pdfText.length });
+      await log('PDF 文本较少，转换页面为图片识别', { progress: 35, textLength: pdfText.length });
       const pageImages = await pdfPagesToImages(buffer);
-      await log('PDF 页面图片转换完成', { pageCount: pageImages.length });
+      await log('PDF 页面图片转换完成', { progress: 48, pageCount: pageImages.length });
       const contentParts: Array<{ type: 'image'; image: string } | { type: 'text'; text: string }> = [];
       for (const png of pageImages) {
         contentParts.push({ type: 'image', image: `data:image/png;base64,${Buffer.from(png).toString('base64')}` });
@@ -219,6 +430,7 @@ async function buildMessages(
     }
   } else {
     const base64 = buffer.toString('base64');
+    await log('图片文件读取完成，准备视觉识别', { progress: 45, fileType });
     messages.push({
       role: 'user',
       content: [

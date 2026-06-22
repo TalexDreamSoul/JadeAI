@@ -9,6 +9,8 @@ type OAuthProfile = {
   picture?: string | null;
 };
 
+type AuthSessionRole = 'user' | 'admin';
+
 /** Provider IDs that are OAuth-based (not credentials/password/fingerprint). */
 const OAUTH_PROVIDER_IDS = new Set(['oidc']);
 
@@ -17,6 +19,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
   providers: await createRuntimeProviders(),
   callbacks: {
     async jwt({ token, user, account, profile }) {
+      const setTokenUser = async (input: { id?: string | null; email?: string | null; name?: string | null; avatar?: string | null }) => {
+        if (input.id) {
+          token.userId = input.id;
+        }
+        token.name = input.name || undefined;
+        token.email = input.email || undefined;
+        token.picture = input.avatar || undefined;
+
+        const dbUser = input.id
+          ? await userRepository.findById(input.id)
+          : input.email
+            ? await userRepository.findByEmail(input.email)
+            : null;
+        token.role = dbUser?.role === 'admin' ? 'admin' : 'user';
+      };
+
       // OIDC sign-in: create DB user on first login
       if (user && account?.provider && OAUTH_PROVIDER_IDS.has(account.provider)) {
         const email = (profile?.email || user.email) as string;
@@ -47,23 +65,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
             await createSampleResume(dbUser.id);
           }
         }
-        if (dbUser) {
-          token.userId = dbUser.id;
-        }
-        token.name = name;
-        token.email = email;
-        token.picture = avatar;
+        await setTokenUser({ id: dbUser?.id, email, name, avatar });
       }
 
       if (user && account?.provider === 'password') {
-        token.userId = user.id;
-        token.name = user.name;
-        token.email = user.email;
+        await setTokenUser({ id: user.id, email: user.email, name: user.name, avatar: user.image });
       }
 
       // Credentials (fingerprint) mode
       if (user && account?.provider === 'credentials') {
         token.userId = user.id;
+        token.role = 'user';
       }
 
       return token;
@@ -74,6 +86,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
         if (token.name) session.user.name = token.name as string;
         if (token.email) session.user.email = token.email as string;
         if (token.picture) session.user.image = token.picture as string;
+        const dbUser = session.user.id
+          ? await userRepository.findById(session.user.id)
+          : null;
+        const fallbackUser = !dbUser && session.user.email
+          ? await userRepository.findByEmail(session.user.email)
+          : null;
+        session.user.role = (dbUser?.role === 'admin' || fallbackUser?.role === 'admin' || token.role === 'admin' ? 'admin' : 'user') as AuthSessionRole;
       }
       return session;
     },

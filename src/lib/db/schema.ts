@@ -483,6 +483,20 @@ export const aiUsageLogs = sqliteTable('ai_usage_logs', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 
+export const adminAuditLogs = sqliteTable('admin_audit_logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  adminUserId: text('admin_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  targetUserId: text('target_user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  targetType: text('target_type').notNull().default('user'),
+  before: text('before', { mode: 'json' }).default('{}'),
+  after: text('after', { mode: 'json' }).default('{}'),
+  reason: text('reason').notNull().default(''),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+});
+
 export const notifications = sqliteTable('notifications', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),

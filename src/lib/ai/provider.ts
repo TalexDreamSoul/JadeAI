@@ -4,6 +4,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import { auth } from '@/lib/auth/config';
+import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { selectServerAIConfig, type OpenAIEndpoint } from './server-config';
@@ -20,8 +21,12 @@ export interface AIConfig {
   userId?: string;
 }
 
-export async function resolveAIRequestUser(_request: NextRequest) {
+export async function resolveAIRequestUser(request: NextRequest) {
   await dbReady;
+  const fingerprint = request.headers.get('x-fingerprint');
+  if (!config.auth.enabled && fingerprint) {
+    return userRepository.upsertByFingerprint(fingerprint);
+  }
 
   const session = await auth();
   if (session?.user?.id && session.user.email) {

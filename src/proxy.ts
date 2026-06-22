@@ -5,11 +5,12 @@ import { routing } from './i18n/routing';
 const intlMiddleware = createMiddleware(routing);
 const LOCALE_PATTERN = /^\/(zh|en)(?=\/|$)/;
 
-const PUBLIC_PAGE_PATHS = ['/login'];
+const PUBLIC_PAGE_PATHS = ['/', '/login', '/share'];
 const PUBLIC_API_PATHS = [
   '/api/auth',
   '/api/health',
   '/api/ready',
+  '/api/share',
 ];
 
 function stripLocale(pathname: string): string {
@@ -26,7 +27,9 @@ function hasSessionCookie(request: NextRequest): boolean {
 
 function isPublicPage(pathname: string): boolean {
   const withoutLocale = stripLocale(pathname);
-  return PUBLIC_PAGE_PATHS.some((path) => withoutLocale === path || withoutLocale.startsWith(`${path}/`));
+  return PUBLIC_PAGE_PATHS.some((path) => (
+    path === '/' ? withoutLocale === '/' : withoutLocale === path || withoutLocale.startsWith(`${path}/`)
+  ));
 }
 
 function isPublicApi(pathname: string): boolean {
@@ -42,7 +45,11 @@ function redirectToLogin(request: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
-export default async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  const response = intlMiddleware(request);
+  const authEnabled = process.env.AUTH_ENABLED === 'true';
+  if (!authEnabled) return response;
+
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/api/')) {
@@ -53,14 +60,14 @@ export default async function middleware(request: NextRequest) {
   }
 
   if (isPublicPage(pathname)) {
-    return intlMiddleware(request);
+    return response;
   }
 
   if (!hasSessionCookie(request)) {
     return redirectToLogin(request);
   }
 
-  return intlMiddleware(request);
+  return response;
 }
 
 export const config = {

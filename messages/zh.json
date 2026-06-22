@@ -26,6 +26,8 @@
     "noLoginMethods": "当前未启用任何登录方式，请联系管理员。",
     "localUser": "本地用户",
     "localOnlyHint": "未登录，本地 Only 模式",
+    "profile": "个人主页",
+    "admin": "管理后台",
     "settings": "设置",
     "welcomeBack": "欢迎回来",
     "loginDescription": "登录以管理你的简历",
@@ -1426,7 +1428,7 @@
     "loginFooterLinkUrl": "链接 URL（可选）"
   },
   "account": {
-    "nav": "商业中心"
+    "nav": "个人主页"
   },
   "aiReview": {
     "title": "AI Review",
@@ -1473,6 +1475,8 @@
     "openInterview": "模拟面试",
     "knowledgeTab": "知识图谱",
     "interviewTab": "模拟面试",
+    "prepareGroup": "求职准备",
+    "selectPrepareTool": "选择准备工具",
     "quickActions": "塔塔智能",
     "aiReviewTool": "AI Review",
     "translateTool": "翻译",

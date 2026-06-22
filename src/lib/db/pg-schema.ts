@@ -510,6 +510,20 @@ export const aiUsageLogs = pgTable('ai_usage_logs', {
   createdAt: integer('created_at').notNull().default(epochNow),
 });
 
+export const adminAuditLogs = pgTable('admin_audit_logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  adminUserId: text('admin_user_id').notNull(),
+  targetUserId: text('target_user_id'),
+  action: text('action').notNull(),
+  targetType: text('target_type').notNull().default('user'),
+  before: text('before').default('{}'),
+  after: text('after').default('{}'),
+  reason: text('reason').notNull().default(''),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+});
+
 export const notifications = pgTable('notifications', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull(),

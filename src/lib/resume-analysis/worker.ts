@@ -4,7 +4,7 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { resumeAnalysisJobRepository, type ResumeAnalysisJobRecord } from '@/lib/db/repositories/resume-analysis-job.repository';
 import { AIConfigError, resolveServerAIConfigForUser } from '@/lib/ai/provider';
 import { AIUsageInsufficientCreditsError } from '@/lib/commercial/ai-route-metering';
-import { analyzeResumeFile, describeResumeAnalysisError } from './parse-service';
+import { analyzeResumeFile, describeResumeAnalysisError, ResumeAnalysisAITraceError } from './parse-service';
 import { readStoredObject } from '@/lib/storage/object-storage';
 
 export type ResumeAnalysisWorkerOptions = {
@@ -36,8 +36,19 @@ function userFacingFailure(error: unknown) {
   return describeResumeAnalysisError(error).message;
 }
 
+function resumeAnalysisTrace(error: unknown) {
+  if (error instanceof ResumeAnalysisAITraceError) return error.trace;
+  return undefined;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function progressFromMetadata(metadata: Record<string, unknown> | undefined, fallback: number) {
+  const value = metadata?.progress;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(99, Math.round(value)));
 }
 
 async function getAnalysisFileBuffer(job: ResumeAnalysisJobRecord): Promise<Buffer> {
@@ -144,7 +155,16 @@ export class ResumeAnalysisWorker {
         language: job.language,
         resumeId: job.resumeId,
         onProgress: async (message, metadata) => {
+          const latest = await resumeAnalysisJobRepository.findById(job.id);
+          const progress = progressFromMetadata(metadata, latest?.progress || 20);
           await resumeAnalysisJobRepository.heartbeat(job.id, this.workerId);
+          await resumeAnalysisJobRepository.updateStatus(job.id, { progress });
+          await updateResumeAnalysisState(job, {
+            status: 'running',
+            progress,
+            attempts: latest?.attempts || job.attempts,
+            message,
+          });
           await resumeAnalysisJobRepository.appendLog(job.id, {
             level: 'info',
             message,
@@ -220,7 +240,14 @@ export class ResumeAnalysisWorker {
         : `已达到最大重试次数，任务失败：${message}`,
       workerId: this.workerId,
       attempt: attempts,
-      metadata: { errorCode: code, rawError: errorMessage(error), details: parsedError.details, retryable, maxAttempts },
+      metadata: {
+        errorCode: code,
+        rawError: errorMessage(error),
+        details: parsedError.details,
+        aiTrace: resumeAnalysisTrace(error),
+        retryable,
+        maxAttempts,
+      },
     });
   }
 }

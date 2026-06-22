@@ -3,7 +3,8 @@ import { SQLiteAdapter } from './adapters/sqlite';
 import { PostgreSQLAdapter } from './adapters/postgresql';
 import type { DatabaseAdapter } from './adapter';
 
-const skipDbInit = process.env.SKIP_DB_INIT === '1';
+const skipDbInit = process.env.SKIP_DB_INIT === '1'
+  || process.env.NEXT_PHASE === 'phase-production-build';
 
 function createUnavailableDb() {
   return new Proxy({}, {
@@ -35,9 +36,10 @@ if (skipDbInit) {
 
 // Initialize (migrate + seed) — must complete before first query.
 // Store the promise so consumers can await it if needed.
-const _initPromise = adapter.initialize().catch((e) =>
-  console.error('[DB] Initialize failed:', e)
-);
+const _initPromise = adapter.initialize().catch((e) => {
+  console.error('[DB] Initialize failed:', e);
+  throw e;
+});
 
 /** Await this before any DB operation to ensure tables exist */
 export const dbReady = _initPromise;

@@ -8,3 +8,7 @@ export const localeNames: Record<Locale, string> = {
   zh: '中文',
   en: 'English',
 };
+
+export function isLocale(value: string): value is Locale {
+  return (locales as readonly string[]).includes(value);
+}

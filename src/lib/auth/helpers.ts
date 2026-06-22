@@ -1,13 +1,16 @@
 import { auth } from './config';
+import { config } from '@/lib/config';
 import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 
 export async function getCurrentUserId(): Promise<string | null> {
   const session = await auth();
-  return session?.user?.id || null;
+  if (session?.user?.id) return session.user.id;
+
+  return null;
 }
 
-export async function resolveUser(_fingerprint?: string | null) {
+export async function resolveUser(fingerprint?: string | null) {
   await dbReady;
 
   const session = await auth();
@@ -21,9 +24,13 @@ export async function resolveUser(_fingerprint?: string | null) {
     return user;
   }
 
+  if (!config.auth.enabled && fingerprint) {
+    return userRepository.upsertByFingerprint(fingerprint);
+  }
+
   return null;
 }
 
-export function getUserIdFromRequest(_request: Request): string | null {
-  return null;
+export function getUserIdFromRequest(request: Request): string | null {
+  return request.headers.get('x-fingerprint') || null;
 }

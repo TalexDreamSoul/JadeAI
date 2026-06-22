@@ -5,16 +5,18 @@
  * the same Tailwind v4 engine used in the preview, and outputs a TS module
  * containing the CSS string constant.
  *
- * Usage: tsx scripts/build-export-css.ts
+ * Usage: node scripts/build-export-css.mjs
  */
 
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { compile } from 'tailwindcss';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 const ROOT = path.resolve(__dirname, '..');
 const EXPORT_TEMPLATES_DIR = path.join(ROOT, 'src/app/api/resume/[id]/export/templates');
 const EXPORT_UTILS = path.join(ROOT, 'src/app/api/resume/[id]/export/utils.ts');
@@ -33,8 +35,8 @@ const TW_PKG_DIR = path.dirname(
  * Tailwind utility classes (including arbitrary values like w-[35%], max-w-[210mm]).
  * Invalid candidates are silently ignored by Tailwind's compiler.build().
  */
-function extractCandidates(source: string): Set<string> {
-  const candidates = new Set<string>();
+function extractCandidates(source) {
+  const candidates = new Set();
 
   // This regex matches any token that looks like a Tailwind class:
   //  - Optionally starts with ! (important modifier) or - (negative)
@@ -44,9 +46,6 @@ function extractCandidates(source: string): Set<string> {
   //  - May have variant prefixes: sm:, hover:, dark:, etc.
   // Examples: flex, w-[35%], max-w-[210mm], text-sm, bg-slate-800, hover:bg-blue-500
   const TOKEN_RE = /[!-]?[a-zA-Z][a-zA-Z0-9_.-]*(?:\[[^\]\s]+\])?(?:[a-zA-Z0-9_.-]*(?:\[[^\]\s]+\])?)*(?:\/[a-zA-Z0-9._-]+)?/g;
-
-  // Variant prefix pattern (to capture things like sm:flex, hover:text-blue-500)
-  const VARIANT_RE = /(?:[a-z][a-z0-9-]*:)+/;
 
   for (const m of source.matchAll(TOKEN_RE)) {
     const token = m[0];
@@ -64,9 +63,9 @@ function extractCandidates(source: string): Set<string> {
  * This is necessary because Chrome's print/PDF engine mishandles
  * flexbox page fragmentation when utilities sit inside @layer.
  */
-function unwrapLayers(css: string): string {
+function unwrapLayers(css) {
   // Remove standalone @layer declarations (e.g. '@layer properties;')
-  let result = css.replace(/@layer\s+[^{]+;\s*/g, '');
+  const result = css.replace(/@layer\s+[^{]+;\s*/g, '');
 
   // Unwrap @layer blocks — replace '@layer name { ... }' with just '...'
   let output = '';
@@ -97,7 +96,7 @@ async function main() {
   console.log('[build-export-css] Scanning export templates...');
 
   // Collect all source files to scan
-  const files: string[] = [];
+  const files = [];
 
   // Export templates
   for (const f of fs.readdirSync(EXPORT_TEMPLATES_DIR)) {
@@ -110,7 +109,7 @@ async function main() {
   files.push(EXPORT_UTILS, EXPORT_BUILDERS);
 
   // Extract all candidates
-  const allCandidates = new Set<string>();
+  const allCandidates = new Set();
   for (const filePath of files) {
     const source = fs.readFileSync(filePath, 'utf8');
     for (const c of extractCandidates(source)) {
@@ -122,8 +121,8 @@ async function main() {
 
   // Compile with Tailwind v4
   const compiler = await compile('@import "tailwindcss";', {
-    loadStylesheet: async (id: string, base: string) => {
-      let filePath: string;
+    loadStylesheet: async (id, base) => {
+      let filePath;
       if (id === 'tailwindcss') {
         filePath = path.join(TW_PKG_DIR, 'index.css');
       } else if (id.startsWith('tailwindcss/')) {
