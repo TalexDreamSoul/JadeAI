@@ -9,7 +9,7 @@ import type {
   SummaryContent,
   WorkExperienceContent,
 } from '@/types/resume';
-import { buildHighlights, buildQrCodesHtml, degreeField, esc, getPersonalInfo, md, visibleSections, type ResumeWithSections, type Section } from '../utils';
+import { buildHighlights, buildQrCodesHtml, degreeField, esc, getPersonalInfo, md, renderPersonalInfoContactItems, visibleSections, type ResumeWithSections, type Section } from '../utils';
 
 const ACCENT = 'var(--resume-accent-color,#2563eb)';
 const MUTED = '#6b7280';
@@ -88,17 +88,7 @@ function buildTouchPureSectionContent(section: Section, lang: string): string {
 export function buildTouchPureHtml(resume: ResumeWithSections): string {
   const pi = getPersonalInfo(resume);
   const sections = visibleSections(resume);
-  const contacts = [
-    pi.email,
-    pi.phone,
-    pi.location,
-    pi.website,
-    pi.linkedin ? `LinkedIn: ${pi.linkedin}` : '',
-    pi.github ? `GitHub: ${pi.github}` : '',
-    pi.wechat ? `WeChat: ${pi.wechat}` : '',
-    pi.yearsOfExperience,
-    pi.educationLevel,
-  ].filter(Boolean);
+  const contactItems = renderPersonalInfoContactItems(pi);
 
   return `<div class="mx-auto max-w-[210mm] bg-white shadow-lg" style="font-family:Inter,Arial,sans-serif;color:#111827">
     <header class="mb-6 border-b border-zinc-200 pb-5">
@@ -107,7 +97,7 @@ export function buildTouchPureHtml(resume: ResumeWithSections): string {
           <div class="mb-2 h-1 w-12 rounded-full" style="background-color:${ACCENT}"></div>
           <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">${esc(pi.fullName || 'Your Name')}</h1>
           ${pi.jobTitle ? `<p class="mt-1 text-base font-medium" style="color:${ACCENT}">${esc(pi.jobTitle)}</p>` : ''}
-          ${contacts.length ? `<p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</p>` : ''}
+          ${contactItems ? `<p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">${contactItems}</p>` : ''}
         </div>
         ${pi.avatar ? `<img src="${esc(pi.avatar)}" alt="" class="shrink-0 border border-zinc-200 object-cover" style="width:58px;height:81px;border-radius:4px"/>` : ''}
       </div>
