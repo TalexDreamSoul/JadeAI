@@ -139,7 +139,7 @@ interface ResumeStore {
   toggleSectionVisibility: (sectionId: string) => void;
   setTemplate: (template: string) => void;
   setTitle: (title: string) => void;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
   persistLocalDraft: () => void;
   enableCloudSync: () => Promise<boolean>;
   disableCloudSync: () => Promise<boolean>;
@@ -316,12 +316,13 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
 
   save: async () => {
     const { currentResume, sections, isDirty } = get();
-    if (!currentResume || !isDirty) return;
+    if (!currentResume) return false;
+    if (!isDirty) return true;
 
     set({ isSaving: true });
     try {
       if (!isCloudAvailable() || isLocalResumeId(currentResume.id) || currentResume.cloudSyncEnabled === false) {
-        updateLocalResume(currentResume.id, {
+        const updated = updateLocalResume(currentResume.id, {
           title: currentResume.title,
           template: currentResume.template,
           themeConfig: currentResume.themeConfig,
@@ -334,18 +335,19 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
           jobDescription: currentResume.jobDescription,
           versionLabel: currentResume.versionLabel,
         });
+        if (!updated) throw new Error('Local resume could not be saved');
         set((state) => ({
           currentResume: state.currentResume ? { ...state.currentResume, cloudSyncEnabled: false } : null,
           isDirty: false,
         }));
-        return;
+        return true;
       }
 
       const fingerprint = typeof window !== 'undefined'
         ? localStorage.getItem('touchresume_fingerprint')
         : null;
 
-      await fetch(`/api/resume/${currentResume.id}`, {
+      const response = await fetch(`/api/resume/${currentResume.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -355,11 +357,14 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
           ...buildSavePayload(currentResume, sections),
         }),
       });
+      if (!response.ok) throw new Error(`Resume save failed with HTTP ${response.status}`);
 
       removeLocalDraft(currentResume.id);
       set({ isDirty: false });
+      return true;
     } catch (error) {
       console.error('Failed to save resume:', error);
+      return false;
     } finally {
       set({ isSaving: false });
     }
