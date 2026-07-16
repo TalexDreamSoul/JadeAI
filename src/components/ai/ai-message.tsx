@@ -37,10 +37,10 @@ function CollapsibleBlock({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="overflow-hidden rounded-md border border-zinc-200 bg-zinc-50">
+    <div className="overflow-hidden rounded-md border border-border bg-muted/50">
       <button
         type="button"
-        className="flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100"
+        className="flex w-full cursor-pointer items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
         onClick={() => setOpen(!open)}
       >
         {open ? (
@@ -53,7 +53,7 @@ function CollapsibleBlock({
         {statusIcon && <span className="ml-auto">{statusIcon}</span>}
       </button>
       {open && (
-        <div className="border-t border-zinc-200 bg-zinc-900 px-3 py-2">
+        <div className="border-t border-border bg-zinc-950 px-3 py-2">
           <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-zinc-300">
             {content}
           </pre>
@@ -86,7 +86,7 @@ function ToolCallCard({ part }: { part: any }) {
         label={`${t('toolCalling')} ${toolName}`}
         icon={
           isRunning ? (
-            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-zinc-300 border-t-zinc-600" />
+            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-[1.5px] border-border border-t-foreground" />
           ) : (
             <Terminal className="h-3 w-3 shrink-0" />
           )
@@ -155,20 +155,20 @@ export function AIMessage({ message }: AIMessageProps) {
     <div className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-          isUser ? 'bg-zinc-700' : 'bg-gradient-to-br from-brand to-brand'
+          isUser ? 'bg-primary text-primary-foreground' : 'bg-brand text-brand-foreground'
         }`}
       >
         {isUser ? (
-          <User className="h-3 w-3 text-white" />
+          <User className="h-3 w-3 text-current" />
         ) : (
-          <Bot className="h-3 w-3 text-white" />
+          <Bot className="h-3 w-3 text-current" />
         )}
       </div>
       <div
-        className={`min-w-0 max-w-[calc(100%-2.5rem)] rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
+        className={`min-w-0 max-w-[calc(100%-2.5rem)] break-words rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
           isUser
-            ? 'bg-zinc-800 text-white'
-            : 'bg-zinc-50 text-zinc-700 ring-1 ring-zinc-200/60'
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted/70 text-foreground ring-1 ring-border'
         }`}
       >
         {isUser ? (

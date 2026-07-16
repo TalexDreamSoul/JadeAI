@@ -153,7 +153,7 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
     <>
       {/* Floating chat window — always mounted to preserve state, toggled via CSS */}
       <div
-        className="fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl transition-opacity duration-200"
+        className="fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl transition-opacity duration-200"
         style={{
           width: winSize.w,
           height: winSize.h,
@@ -169,11 +169,11 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
           onMouseDown={onWindowMouseDown}
         >
           <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-white" />
-            <span className="text-sm font-semibold text-white">AI Assistant</span>
+            <MessageSquare className="h-4 w-4 text-brand-foreground" />
+            <span className="text-sm font-semibold text-brand-foreground">AI Assistant</span>
           </div>
           <button
-            className="rounded p-1 text-white/80 hover:bg-white/20 hover:text-white"
+            className="rounded p-1 text-brand-foreground/80 hover:bg-brand-foreground/15 hover:text-brand-foreground"
             onClick={toggleAiChat}
           >
             <Minus className="h-4 w-4" />
@@ -202,7 +202,7 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
         )}
         <button
           data-tour="ai-chat"
-          className="relative flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-hover text-white shadow-lg transition-transform hover:scale-110 active:cursor-grabbing active:scale-95"
+          className="relative flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-hover text-brand-foreground shadow-lg transition-transform hover:scale-110 active:cursor-grabbing active:scale-95"
           onMouseDown={onBubbleMouseDown}
           onClick={onBubbleClick}
         >
