@@ -253,7 +253,8 @@
         "ai": "AI",
         "jd": "JD",
         "mcp": "MCP"
-      }
+      },
+      "previewError": "预览渲染失败，可能是内容格式有误。请在左侧编辑修复，或撤销最近的 AI 修改。"
     },
     "aiPolish": "AI 润色",
     "invalidSectionContent": "该模块数据异常，请使用 AI 重新生成内容",
@@ -597,6 +598,8 @@
     "currentState": "当前",
     "suggestedChange": "建议",
     "optimize": "一键优化",
+    "optimizeCopy": "复制优化",
+    "copyOptimizeError": "复制简历失败，请重试",
     "pasteJd": "粘贴职位描述以开始分析",
     "noResults": "暂无分析结果",
     "newAnalysis": "新分析",
@@ -733,6 +736,8 @@
     "exporting": "导出中...",
     "success": "导出成功！",
     "error": "导出失败，请重试。",
+    "pdfFailedHint": "服务器生成 PDF 失败（可能未安装 Chromium 或资源不足）。可改用浏览器打印为 PDF。",
+    "printFallback": "用浏览器打印为 PDF",
     "cancel": "取消"
   },
   "import": {

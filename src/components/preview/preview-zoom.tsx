@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ResumePreview } from '@/components/preview/resume-preview';
+import { PreviewErrorBoundary } from '@/components/preview/preview-error-boundary';
 import type { Resume } from '@/types/resume';
 
 const A4_WIDTH = 794;
@@ -28,9 +30,10 @@ interface PreviewZoomProps {
   initialZoom?: number;
   mobileFit?: boolean;
   showToolbar?: boolean;
+  errorFallback?: ReactNode;
 }
 
-export function PreviewZoom({ resume, title, initialZoom = 80, mobileFit = false, showToolbar = true }: PreviewZoomProps) {
+export function PreviewZoom({ resume, title, initialZoom = 80, mobileFit = false, showToolbar = true, errorFallback }: PreviewZoomProps) {
   const [zoom, setZoom] = useState(() => clampZoom(initialZoom));
   const pinchStartRef = useRef<{ distance: number; zoom: number } | null>(null);
 
@@ -116,7 +119,16 @@ export function PreviewZoom({ resume, title, initialZoom = 80, mobileFit = false
               zoom: mobileFit ? undefined : scale,
             }}
           >
-            <ResumePreview resume={resume} />
+            {errorFallback ? (
+              <PreviewErrorBoundary
+                resetKey={resume.sections}
+                fallback={<div className="p-8 text-center text-sm text-zinc-500">{errorFallback}</div>}
+              >
+                <ResumePreview resume={resume} />
+              </PreviewErrorBoundary>
+            ) : (
+              <ResumePreview resume={resume} />
+            )}
           </div>
         </div>
       </div>

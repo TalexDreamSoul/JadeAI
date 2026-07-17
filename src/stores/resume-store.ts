@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import type { Resume, ResumeSection, SectionContent } from '@/types/resume';
 import { AUTOSAVE_DELAY } from '@/lib/constants';
-import { generateId } from '@/lib/utils';
 import { isCloudAvailable, useSettingsStore } from '@/stores/settings-store';
 import { normalizeThemeConfig } from '@/lib/theme-config';
 import { getLocalResume, isLocalResumeId, updateLocalResume, upsertLocalResume } from '@/lib/local-resumes';
+import { normalizeSectionContent } from '@/lib/resume/normalize-content';
 
 const LOCAL_DRAFT_PREFIX = 'touchresume_resume_draft:';
 
@@ -112,16 +112,6 @@ function readLocalDraft(resume: Resume): Resume | null {
   }
 }
 
-type IdentifiedRecord = Record<string, unknown> & { id?: unknown };
-
-function ensureItemIds(items: unknown) {
-  if (!Array.isArray(items)) return items;
-  return items.map((item) =>
-    typeof item === 'object' && item !== null && !('id' in item)
-      ? { ...(item as Record<string, unknown>), id: generateId() }
-      : item
-  );
-}
 
 interface ResumeStore {
   currentResume: Resume | null;
@@ -163,17 +153,11 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
     const sourceResume = localDraft || resume;
     const normalizedThemeConfig = normalizeThemeConfig(sourceResume.themeConfig);
 
-    // Normalize: ensure all items/categories in section content have id fields
-    const sections = (sourceResume.sections || []).map((s) => {
-      const content = s.content as unknown as Record<string, unknown>;
-      if (Array.isArray(content?.items)) {
-        content.items = ensureItemIds(content.items);
-      }
-      if (Array.isArray(content?.categories)) {
-        content.categories = ensureItemIds(content.categories as IdentifiedRecord[]);
-      }
-      return { ...s, content: content as unknown as typeof s.content };
-    });
+    // Normalize loaded content into renderer-safe shapes and restore missing ids.
+    const sections = (sourceResume.sections || []).map((section) => ({
+      ...section,
+      content: normalizeSectionContent(section.type, section.content) as unknown as typeof section.content,
+    }));
 
     set({
       currentResume: { ...sourceResume, themeConfig: normalizedThemeConfig, sections },

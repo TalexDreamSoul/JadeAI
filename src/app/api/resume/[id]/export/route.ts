@@ -46,7 +46,10 @@ export async function GET(
         return NextResponse.json(resume);
       }
       case 'html': {
-        const html = await generateHtml(resume);
+        // forPrint=true returns the print-optimized layout (used by the client-side
+        // "print to PDF" fallback when server Chromium is unavailable, issue #85).
+        const forPrint = request.nextUrl.searchParams.get('forPrint') === 'true';
+        const html = await generateHtml(resume, forPrint);
         return new NextResponse(html, {
           status: 200,
           headers: {
@@ -99,6 +102,12 @@ export async function GET(
       return commercialFeatureLockedResponse(error);
     }
     console.error('GET /api/resume/[id]/export error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Surface the real reason (e.g. "No Chrome/Chromium found ...") so PDF export
+    // failures are diagnosable instead of a generic 500 (issue #85).
+    const detail = error instanceof Error && error.message ? error.message : '';
+    return NextResponse.json(
+      { error: detail || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

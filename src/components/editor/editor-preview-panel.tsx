@@ -20,11 +20,14 @@ export function EditorPreviewPanel() {
   if (!liveResume) return null;
 
   return (
-    <PreviewZoom
-      resume={liveResume}
-      title={t('preview')}
-      initialZoom={80}
-      mobileFit={isMobile}
-    />
+    <div data-tour="preview" className="h-full border-l dark:border-zinc-800">
+      <PreviewZoom
+        resume={liveResume}
+        title={t('preview')}
+        initialZoom={80}
+        mobileFit={isMobile}
+        errorFallback={t('previewError')}
+      />
+    </div>
   );
 }
