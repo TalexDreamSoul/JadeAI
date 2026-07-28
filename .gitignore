@@ -48,5 +48,6 @@ touchresume-data/*
 .superpowers
 
 .playwright-mcp/
+output/
 
 test
