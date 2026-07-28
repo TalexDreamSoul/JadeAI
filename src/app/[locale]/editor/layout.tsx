@@ -3,5 +3,5 @@ export default function EditorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="h-screen overflow-hidden bg-zinc-50">{children}</div>;
+  return <div className="h-screen overflow-hidden bg-background text-foreground">{children}</div>;
 }

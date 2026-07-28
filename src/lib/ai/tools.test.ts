@@ -108,4 +108,21 @@ describe('updateSection — list field validation (issue #69)', () => {
     expect(Array.isArray(lastWrite?.data.content.categories)).toBe(true);
     expect(lastWrite?.data.content.categories[0].name).toBe('Languages');
   });
+
+  it('coerces an item.highlights written as a string into an array (issue #87)', async () => {
+    const value = JSON.stringify([{ id: 'p9', name: 'X', description: 'y', highlights: 'Shipped it' }]);
+    const res = await runUpdate({ sectionId: 'sec-proj', field: 'items', value });
+
+    expect(res.success).toBe(true);
+    expect(Array.isArray(lastWrite?.data.content.items[0].highlights)).toBe(true);
+    expect(lastWrite?.data.content.items[0].highlights).toEqual(['Shipped it']);
+  });
+
+  it('coerces a category.skills written as a string into an array (issue #87)', async () => {
+    const value = JSON.stringify([{ id: 'c2', name: 'Langs', skills: 'Go\nRust' }]);
+    const res = await runUpdate({ sectionId: 'sec-skills', field: 'categories', value });
+
+    expect(res.success).toBe(true);
+    expect(lastWrite?.data.content.categories[0].skills).toEqual(['Go', 'Rust']);
+  });
 });

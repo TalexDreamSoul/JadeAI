@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Copy, Loader2, Trash2, MoreVertical, Pencil, RefreshCw } from 'lucide-react';
+import { Copy, Loader2, Trash2, MoreVertical, Pencil, RefreshCw, Network } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -196,6 +196,16 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
               {t('common.duplicate')}
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/editor/${resume.id}/graph`);
+            }}
+          >
+            <Network className="mr-2 h-4 w-4" />
+            图谱
+          </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer text-red-600"
             onClick={(e) => {

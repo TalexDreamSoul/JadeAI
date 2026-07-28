@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Plus, Search, LayoutGrid, List, Sparkles, Upload, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -70,7 +70,7 @@ function sortResumes(resumes: Resume[], sort: SortOption): Resume[] {
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
-  const { resumes, isLoading, fetchResumes, createResume, deleteResume, renameResume, retryAnalysisJob, duplicateResume } = useResume();
+  const { resumes, isLoading, fetchResumes, upsertResume, createResume, deleteResume, renameResume, retryAnalysisJob, duplicateResume } = useResume();
   const { openModal, activeModal, closeModal } = useUIStore();
   const { fingerprint, isLoading: fpLoading } = useFingerprint();
   const localOnly = useIsLocalOnly();
@@ -122,7 +122,13 @@ export default function DashboardPage() {
 
   const hasResumes = resumes.length > 0;
   const hasResults = filteredResumes.length > 0;
+  const showInitialLoading = (isLoading || fpLoading) && !hasResumes;
   const hasActiveAnalysis = useMemo(() => resumes.some(isResumeAnalysisActive), [resumes]);
+
+  const handleResumeUploaded = useCallback((resume?: Resume) => {
+    if (resume) upsertResume(resume);
+    void fetchResumes();
+  }, [fetchResumes, upsertResume]);
 
   useEffect(() => {
     if (!hasActiveAnalysis) return;
@@ -251,7 +257,7 @@ export default function DashboardPage() {
       )}
 
       {/* Content */}
-      {isLoading || fpLoading ? (
+      {showInitialLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-48 rounded-xl" />
@@ -293,7 +299,7 @@ export default function DashboardPage() {
         open={activeModal === 'create-resume'}
         onClose={closeModal}
         onCreate={createResume}
-        onUploaded={fetchResumes}
+        onUploaded={handleResumeUploaded}
       />
       <GenerateResumeDialog
         open={activeModal === 'generate-resume'}

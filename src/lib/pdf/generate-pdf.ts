@@ -1,4 +1,5 @@
 import puppeteer, { type Page } from 'puppeteer-core';
+import { accessSync } from 'fs';
 
 // A4 dimensions in CSS pixels at 96 DPI
 const A4_WIDTH_PX = 794;   // 210mm
@@ -9,16 +10,17 @@ interface PdfOptions {
   fitOnePage?: boolean;
 }
 
-async function getBrowser() {
-  // Docker / self-hosted: use system Chromium via CHROME_PATH
-  if (process.env.CHROME_PATH) {
-    return puppeteer.launch({
-      executablePath: process.env.CHROME_PATH,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-      headless: true,
-    });
-  }
+// Container/host-friendly Chromium flags. --disable-dev-shm-usage avoids the
+// small default /dev/shm that makes Chrome crash in Docker on constrained boxes
+// (a common cause of the process dying mid-render → 502, issue #85).
+const LAUNCH_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+];
 
+async function getBrowser() {
   // Vercel serverless: use @sparticuz/chromium-min (downloads binary at runtime)
   if (process.env.VERCEL) {
     const chromium = await import('@sparticuz/chromium-min');
@@ -31,25 +33,44 @@ async function getBrowser() {
     });
   }
 
-  // Dev: use local Chrome/Chromium
+  // Docker / self-hosted (CHROME_PATH) first, then common install locations.
+  // We DON'T blindly trust CHROME_PATH: if it points at a missing binary the
+  // launch throws and the whole request 500s/hangs, so verify it exists and
+  // otherwise fall through to the candidates below (issue #85).
   const candidates = [
+    process.env.CHROME_PATH || null,
+    process.env['PROGRAMFILES'] ? `${process.env['PROGRAMFILES']}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env['PROGRAMFILES(X86)'] ? `${process.env['PROGRAMFILES(X86)']}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    process.env['PROGRAMFILES'] ? `${process.env['PROGRAMFILES']}\\Microsoft\\Edge\\Application\\msedge.exe` : null,
+    process.env['PROGRAMFILES(X86)'] ? `${process.env['PROGRAMFILES(X86)']}\\Microsoft\\Edge\\Application\\msedge.exe` : null,
+    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Microsoft\\Edge\\Application\\msedge.exe` : null,
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/usr/bin/google-chrome',
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
-  ];
+    '/usr/bin/chromium-browser-unstable',
+    '/snap/bin/chromium',
+  ].filter((path): path is string => Boolean(path));
 
   for (const path of candidates) {
     try {
-      const { accessSync } = await import('fs');
       accessSync(path);
-      return puppeteer.launch({ executablePath: path, headless: true });
+      return puppeteer.launch({
+        executablePath: path,
+        args: LAUNCH_ARGS,
+        headless: true,
+      });
     } catch {
       continue;
     }
   }
 
-  throw new Error('No Chrome/Chromium found. Install Google Chrome or set CHROME_PATH.');
+  throw new Error(
+    'No Chrome/Chromium found for PDF export. Install Google Chrome / Chromium (or Microsoft Edge), ' +
+    'or set CHROME_PATH to a valid Chromium binary. In Docker, `apk add chromium` and set ' +
+    'CHROME_PATH=/usr/bin/chromium-browser.',
+  );
 }
 
 // ─── Shrink state for iterative fitting ───────────────────────

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText, Output } from 'ai';
-import { z } from 'zod';
+import { mergeTailoredSections, resumeTailoringSchema } from '@/lib/ai/resume-tailoring';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { extractJson } from '@/lib/ai/extract-json';
 import { AIConfigError, extractAIConfig, getModel, getProviderOptions } from '@/lib/ai/provider';
@@ -12,58 +12,32 @@ import {
   CommercialFeatureLockedError,
 } from '@/lib/commercial/feature-gate-service';
 
-const tailoringSchema = z.object({
-  summary: z.object({ text: z.string() }).optional(),
-  skills: z.object({
-    categories: z.array(z.object({
-      name: z.string(),
-      skills: z.array(z.string()),
-    })),
-  }).optional(),
-  projects: z.object({
-    items: z.array(z.object({
-      name: z.string(),
-      url: z.string().optional(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
-      description: z.string(),
-      technologies: z.array(z.string()).default([]),
-      highlights: z.array(z.string()).default([]),
-    })),
-  }).optional(),
-});
+type ResumeRecord = NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>>;
 
-async function tailorDerivedResume(
+async function tailorResumeSections(
   aiConfig: Awaited<ReturnType<typeof extractAIConfig>>,
-  resume: Awaited<ReturnType<typeof resumeRepository.findById>>,
+  resume: ResumeRecord,
   jobDescription: string
 ) {
-  if (!resume || !jobDescription) return null;
   const result = await generateText({
     model: getModel(aiConfig),
-    system: 'You tailor resume content for a target JD. Return JSON only with optional summary, skills, projects. Preserve the resume language.',
+    system: `You tailor a source resume for a target JD.
+Return JSON only. Improve relevance and wording in summary, skills, work experience, and projects.
+Preserve the resume language, section structure, item IDs, dates, employers, titles, links, and all factual claims.
+Never invent skills, metrics, responsibilities, projects, or experience that are not supported by the source resume.
+For workExperience and projects, return only existing items using their exact IDs.`,
     prompt: JSON.stringify({
       jobDescription,
       sections: resume.sections,
     }),
-    maxOutputTokens: 4096,
+    maxOutputTokens: 6144,
     providerOptions: getProviderOptions(aiConfig),
     output: Output.json(),
   });
 
-  const tailored = extractJson(result.text, tailoringSchema);
-  for (const section of resume.sections) {
-    if (section.type === 'summary' && tailored.summary) {
-      await resumeRepository.updateSection(section.id, { content: tailored.summary });
-    }
-    if (section.type === 'skills' && tailored.skills) {
-      await resumeRepository.updateSection(section.id, { content: tailored.skills });
-    }
-    if (section.type === 'projects' && tailored.projects) {
-      await resumeRepository.updateSection(section.id, { content: tailored.projects });
-    }
-  }
+  const tailored = extractJson(result.text, resumeTailoringSchema);
   return {
+    sections: mergeTailoredSections(resume.sections, tailored),
     usage: result.usage,
   };
 }
@@ -81,51 +55,100 @@ export async function POST(
     const resume = await resumeRepository.findById(id);
     if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (resume.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
 
     const body = await request.json().catch(() => ({}));
     const targetCompany = String(body.targetCompany || '').trim();
     const targetJobTitle = String(body.targetJobTitle || '').trim();
     const jobDescription = String(body.jobDescription || '').trim();
-    const title = String(body.title || '').trim()
+    const requestedDerivedResumeId = String(body.derivedResumeId || '').trim();
+    const baseResumeId = resume.baseResumeId || (resume.isBase ? resume.id : resume.sourceResumeId) || resume.id;
+    let existingDerived: ResumeRecord | null = null;
+
+    if (requestedDerivedResumeId) {
+      existingDerived = await resumeRepository.findById(requestedDerivedResumeId);
+      if (!existingDerived) return NextResponse.json({ error: 'Derived resume not found' }, { status: 404 });
+      if (existingDerived.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      const belongsToSource = existingDerived.id !== resume.id && (
+        existingDerived.sourceResumeId === resume.id ||
+        existingDerived.baseResumeId === baseResumeId
+      );
+      if (!belongsToSource) {
+        return NextResponse.json({ error: 'Derived resume does not belong to this source resume' }, { status: 400 });
+      }
+    } else {
+      await assertCanCreateResume(user.id, Number(user.aiCredits || 0));
+    }
+
+    const requestedTitle = String(body.title || '').trim();
+    const title = requestedTitle
+      || existingDerived?.title
       || `${resume.title} - ${targetCompany || targetJobTitle || 'JD'}`;
 
-    const createDerivedResume = async (aiConfig?: Awaited<ReturnType<typeof extractAIConfig>>) => {
-      const derived = await resumeRepository.duplicate(id, user.id, title, {
-        baseResumeId: resume.isBase ? resume.id : resume.baseResumeId || resume.id,
-        targetCompany: targetCompany || null,
-        targetJobTitle: targetJobTitle || null,
-        jobDescription: jobDescription || null,
-        versionLabel: 'jd-v1',
-      });
-
-      if (!derived) throw new Error('Failed to derive resume');
-
+    const upsertDerivedResume = async (aiConfig?: Awaited<ReturnType<typeof extractAIConfig>>) => {
       const tailored = jobDescription && aiConfig
-        ? await tailorDerivedResume(aiConfig, derived, jobDescription)
+        ? await tailorResumeSections(aiConfig, resume, jobDescription)
         : null;
-      const tailoredDerived = await resumeRepository.findById(derived.id);
+      const sections = tailored?.sections || resume.sections;
+      let derived: ResumeRecord | null;
 
+      if (existingDerived) {
+        await resumeRepository.update(existingDerived.id, {
+          title,
+          template: resume.template,
+          themeConfig: resume.themeConfig,
+          language: resume.language,
+          sourceResumeId: resume.id,
+          baseResumeId,
+          targetCompany: targetCompany || null,
+          targetJobTitle: targetJobTitle || null,
+          jobDescription: jobDescription || null,
+          versionLabel: 'jd-v1',
+        });
+        derived = await resumeRepository.replaceSections(existingDerived.id, sections);
+      } else {
+        derived = await resumeRepository.createFromSnapshot(
+          { ...resume, sections },
+          user.id,
+          title,
+          {
+            sourceResumeId: resume.id,
+            baseResumeId,
+            targetCompany: targetCompany || null,
+            targetJobTitle: targetJobTitle || null,
+            jobDescription: jobDescription || null,
+            versionLabel: 'jd-v1',
+          }
+        );
+      }
+
+      if (!derived) throw new Error('Failed to save derived resume');
+      const refreshed = !!existingDerived;
       await resumeRepository.createEvent({
-        resumeId: tailoredDerived?.id || derived.id,
+        resumeId: derived.id,
         userId: user.id,
-        type: 'resume.derived',
-        title: 'Derived resume created',
+        type: refreshed ? 'resume.derived_refreshed' : 'resume.derived',
+        title: refreshed ? 'Derived resume refreshed' : 'Derived resume created',
         description: targetCompany || targetJobTitle || '',
         metadata: { sourceResumeId: resume.id, targetCompany, targetJobTitle, tailored: !!jobDescription },
       });
-      await resumeRepository.createVersion(derived.id, 'jd-v1', tailoredDerived || derived, 'jd');
+      await resumeRepository.createVersion(derived.id, 'jd-v1', derived, 'jd');
 
       return {
-        resume: tailoredDerived || derived,
+        resume: derived,
         usage: tailored?.usage,
-        metadata: { sourceResumeId: resume.id, derivedResumeId: derived.id, targetCompany, targetJobTitle },
+        metadata: {
+          sourceResumeId: resume.id,
+          derivedResumeId: derived.id,
+          targetCompany,
+          targetJobTitle,
+          refreshed,
+        },
       };
     };
 
     if (!jobDescription) {
-      const result = await createDerivedResume();
-      return NextResponse.json(result.resume, { status: 201 });
+      const result = await upsertDerivedResume();
+      return NextResponse.json(result.resume, { status: existingDerived ? 200 : 201 });
     }
 
     const aiConfig = await extractAIConfig(request);
@@ -133,18 +156,18 @@ export async function POST(
       userId: user.id,
       aiConfig,
       feature: 'resume.derive',
-      metadata: { sourceResumeId: resume.id, targetCompany, targetJobTitle },
+      metadata: { sourceResumeId: resume.id, targetCompany, targetJobTitle, derivedResumeId: existingDerived?.id },
       run: async () => {
-        const result = await createDerivedResume(aiConfig);
+        const derivedResult = await upsertDerivedResume(aiConfig);
         return {
-          value: result,
-          usage: result.usage,
-          metadata: result.metadata,
+          value: derivedResult,
+          usage: derivedResult.usage,
+          metadata: derivedResult.metadata,
         };
       },
     });
 
-    return NextResponse.json(result.resume, { status: 201 });
+    return NextResponse.json(result.resume, { status: existingDerived ? 200 : 201 });
   } catch (error) {
     if (error instanceof AIConfigError) {
       return NextResponse.json({ error: error.message }, { status: 401 });

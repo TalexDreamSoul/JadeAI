@@ -296,13 +296,13 @@
 
 /* AI chat markdown */
 .ai-markdown {
-  @apply text-[13px] leading-relaxed;
+  @apply break-words text-[13px] leading-relaxed text-foreground;
 }
 .ai-markdown p {
   @apply mb-2 last:mb-0;
 }
 .ai-markdown strong {
-  @apply font-semibold text-zinc-900 dark:text-zinc-100;
+  @apply font-semibold text-foreground;
 }
 .ai-markdown ul,
 .ai-markdown ol {
@@ -318,7 +318,10 @@
   @apply mb-0.5;
 }
 .ai-markdown code {
-  @apply rounded bg-zinc-200/60 px-1 py-0.5 text-xs text-brand dark:bg-zinc-700/60;
+  @apply rounded bg-background/80 px-1 py-0.5 text-xs text-brand;
+}
+.ai-markdown a {
+  @apply font-medium text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand;
 }
 .ai-markdown pre {
   @apply mb-2 overflow-x-auto rounded-lg bg-zinc-800 p-2.5 text-xs last:mb-0;
@@ -329,25 +332,25 @@
 .ai-markdown h1,
 .ai-markdown h2,
 .ai-markdown h3 {
-  @apply mb-1.5 mt-3 font-semibold text-zinc-900 dark:text-zinc-100 first:mt-0;
+  @apply mb-1.5 mt-3 font-semibold text-foreground first:mt-0;
 }
 .ai-markdown h1 { @apply text-sm; }
 .ai-markdown h2 { @apply text-[13px]; }
 .ai-markdown h3 { @apply text-[13px]; }
 .ai-markdown blockquote {
-  @apply mb-2 border-l-2 border-brand pl-2.5 text-zinc-500 dark:text-zinc-400 last:mb-0;
+  @apply mb-2 border-l-2 border-brand pl-2.5 text-muted-foreground last:mb-0;
 }
 .ai-markdown hr {
-  @apply my-2 border-zinc-200 dark:border-zinc-700;
+  @apply my-2 border-border;
 }
 .ai-markdown table {
   @apply mb-2 w-full border-collapse text-[12px] last:mb-0;
 }
 .ai-markdown th {
-  @apply border border-zinc-200 bg-zinc-100 px-2 py-1 text-left font-semibold text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200;
+  @apply border border-border bg-background px-2 py-1 text-left font-semibold text-foreground;
 }
 .ai-markdown td {
-  @apply border border-zinc-200 px-2 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400;
+  @apply border border-border px-2 py-1 text-foreground;
 }
 
 @keyframes thinkingWave {

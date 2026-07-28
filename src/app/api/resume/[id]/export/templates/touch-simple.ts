@@ -18,7 +18,7 @@ import type {
   GitHubRepoItem,
   CustomItem,
 } from '@/types/resume';
-import { buildHighlights, buildQrCodesHtml, degreeField, esc, getPersonalInfo, md, visibleSections, type ResumeWithSections, type Section } from '../utils';
+import { buildHighlights, buildQrCodesHtml, degreeField, esc, getPersonalInfo, md, renderPersonalInfoContactItems, visibleSections, type ResumeWithSections, type Section } from '../utils';
 
 const MUTED = '#71717a';
 
@@ -55,11 +55,11 @@ function buildSectionContent(section: Section, lang: string): string {
 export function buildTouchSimpleHtml(resume: ResumeWithSections): string {
   const pi = getPersonalInfo(resume);
   const sections = visibleSections(resume);
-  const contacts = [pi.jobTitle, pi.email, pi.phone, pi.location, pi.website].filter(Boolean);
+  const contactItems = renderPersonalInfoContactItems(pi, { includeJobTitle: true });
 
   return `<div class="mx-auto max-w-[210mm] bg-white shadow-lg" style="font-family:Inter,Arial,sans-serif;color:#18181b">
     <header class="mb-5 flex items-start justify-between gap-6 border-b border-zinc-200 pb-4">
-      <div class="min-w-0 flex-1"><h1 class="text-3xl font-semibold tracking-tight text-zinc-950">${esc(pi.fullName || 'Your Name')}</h1>${contacts.length ? `<p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-500">${contacts.map(c => `<span>${esc(c)}</span>`).join('')}</p>` : ''}</div>
+      <div class="min-w-0 flex-1"><h1 class="text-3xl font-semibold tracking-tight text-zinc-950">${esc(pi.fullName || 'Your Name')}</h1>${contactItems ? `<p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-500">${contactItems}</p>` : ''}</div>
       ${pi.avatar ? `<img src="${esc(pi.avatar)}" alt="" class="shrink-0 border border-zinc-200 object-cover" style="width:56px;height:78px;border-radius:4px"/>` : ''}
     </header>
     <main class="space-y-5">${sections.map(s => `<section data-section data-section-type="${esc(s.type)}"><h2 class="mb-2 border-b border-zinc-200 pb-1 text-[13px] font-semibold uppercase tracking-[0.16em] text-zinc-900">${esc(s.title)}</h2>${buildSectionContent(s, resume.language || 'en')}</section>`).join('')}</main>

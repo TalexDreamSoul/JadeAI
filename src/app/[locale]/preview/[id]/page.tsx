@@ -6,7 +6,9 @@ import { ArrowLeft, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from '@/i18n/routing';
 import { ResumePreview } from '@/components/preview/resume-preview';
+import { PreviewErrorBoundary } from '@/components/preview/preview-error-boundary';
 import { usePdfExport } from '@/hooks/use-pdf-export';
+import { normalizeSections } from '@/lib/resume/normalize-content';
 import type { Resume } from '@/types/resume';
 
 export default function PreviewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +24,8 @@ export default function PreviewPage({ params }: { params: Promise<{ id: string }
       headers: fingerprint ? { 'x-fingerprint': fingerprint } : {},
     })
       .then((res) => res.json())
-      .then(setResume)
+      // Heal AI-corrupted content so a bad shape can't crash the preview (issue #87).
+      .then((data: Resume) => setResume({ ...data, sections: normalizeSections(data.sections || []) }))
       .catch(console.error);
   }, [id]);
 
@@ -48,7 +51,14 @@ export default function PreviewPage({ params }: { params: Promise<{ id: string }
         </Button>
       </div>
       <div className="p-8 pb-20 sm:pb-8">
-        <ResumePreview resume={resume} />
+        <PreviewErrorBoundary
+          resetKey={resume.sections}
+          fallback={
+            <div className="p-8 text-center text-sm text-zinc-500">{t('editor.toolbar.previewError')}</div>
+          }
+        >
+          <ResumePreview resume={resume} />
+        </PreviewErrorBoundary>
       </div>
       {/* Mobile bottom action bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-white p-3 dark:bg-background sm:hidden">

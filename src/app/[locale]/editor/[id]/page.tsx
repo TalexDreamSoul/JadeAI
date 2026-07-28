@@ -31,6 +31,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { useResumeStore } from '@/stores/resume-store';
 import { useSettingsStore, useIsLocalOnly } from '@/stores/settings-store';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
+import { takePendingOptimizeMessage } from '@/lib/pending-optimize';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsDialog } from '@/components/settings/settings-dialog';
 import { IdlePrivacyLock } from '@/components/privacy/idle-privacy-lock';
@@ -65,7 +66,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     const tab = searchParams.get('careerTab');
     return tab === 'memory' || tab === 'match' || tab === 'knowledge' || tab === 'interview' ? tab : 'match';
   });
-  const { showThemeEditor, mobileActiveTab } = useEditorStore();
+  const { showThemeEditor, mobileActiveTab, setPendingAiMessage, setShowAiChat } = useEditorStore();
   const { activeModal, openModal, closeModal } = useUIStore();
   const { hydrate, _hydrated, _localOnlyHydrated } = useSettingsStore();
   const localOnly = useIsLocalOnly();
@@ -179,6 +180,17 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     const modal = searchParams.get('modal');
     if (modal) openModal(modal as Parameters<typeof openModal>[0]);
   }, [openModal, searchParams]);
+
+  // Consume a copy-optimize message handed off via pending-optimize.ts (gated
+  // on resume.id === id so it runs after useEditor's cleanup for the old id).
+  useEffect(() => {
+    if (!resume || resume.id !== id) return;
+    const message = takePendingOptimizeMessage(id);
+    if (message) {
+      setPendingAiMessage(message);
+      setShowAiChat(true);
+    }
+  }, [resume, id, setPendingAiMessage, setShowAiChat]);
 
   if (privacyLocked) {
     return (

@@ -20,12 +20,12 @@ export function AISuggestion({ suggestion, onApply, onDismiss }: AISuggestionPro
         <Sparkles className="h-3 w-3" />
         {t('suggestion')}
       </div>
-      <p className="mb-3 text-sm text-zinc-700">{suggestion}</p>
+      <p className="mb-3 text-sm text-foreground">{suggestion}</p>
       <div className="flex gap-2">
         <Button
           size="sm"
           onClick={onApply}
-          className="h-7 cursor-pointer gap-1 bg-brand text-xs hover:bg-brand-hover"
+          className="h-7 cursor-pointer gap-1 bg-brand text-brand-foreground text-xs hover:bg-brand-hover"
         >
           <Check className="h-3 w-3" />
           {t('applySuggestion')}

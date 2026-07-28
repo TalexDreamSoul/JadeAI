@@ -56,18 +56,60 @@ export function ExportDialog({ open, onOpenChange, resumeId }: ExportDialogProps
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pdf');
   const [state, setState] = useState<ExportState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [canPrintFallback, setCanPrintFallback] = useState(false);
 
   useEffect(() => {
     if (open) {
       setState('idle');
       setErrorMessage('');
       setSelectedFormat('pdf');
+      setCanPrintFallback(false);
     }
   }, [open]);
+
+  // Client-side fallback: when the server can't render a PDF (no Chromium / OOM →
+  // 502/500), fetch the print-ready HTML and open the browser's own print dialog,
+  // where the user can "Save as PDF" (issue #85).
+  const handlePrintFallback = useCallback(async () => {
+    try {
+      const fingerprint = localStorage.getItem('jade_fingerprint');
+      const res = await fetch(`/api/resume/${resumeId}/export?format=html&forPrint=true`, {
+        headers: { ...(fingerprint ? { 'x-fingerprint': fingerprint } : {}) },
+      });
+      if (!res.ok) throw new Error('Failed to load resume HTML');
+      const html = await res.text();
+
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.onload = () => {
+        const win = iframe.contentWindow;
+        if (!win) return;
+        // Give web fonts a beat to load before printing.
+        setTimeout(() => {
+          win.focus();
+          win.print();
+          // Remove after the print dialog has had time to open.
+          setTimeout(() => iframe.remove(), 60_000);
+        }, 400);
+      };
+      iframe.srcdoc = html;
+      document.body.appendChild(iframe);
+      onOpenChange(false);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : t('error'));
+    }
+  }, [resumeId, onOpenChange, t]);
 
   const handleExport = useCallback(async () => {
     setState('exporting');
     setErrorMessage('');
+    setCanPrintFallback(false);
 
     try {
       // Save first if dirty
@@ -114,6 +156,8 @@ export function ExportDialog({ open, onOpenChange, resumeId }: ExportDialogProps
     } catch (err: any) {
       setState('error');
       setErrorMessage(err.message || t('error'));
+      // Offer the browser-print fallback only for the PDF formats.
+      setCanPrintFallback(selectedFormat === 'pdf' || selectedFormat === 'pdf-one-page');
     }
   }, [resumeId, selectedFormat, currentResume, isDirty, save, onOpenChange, t]);
 
@@ -196,6 +240,21 @@ export function ExportDialog({ open, onOpenChange, resumeId }: ExportDialogProps
               <p className="text-sm font-medium text-red-600 dark:text-red-400">
                 {errorMessage || t('error')}
               </p>
+              {canPrintFallback && (
+                <>
+                  <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                    {t('pdfFailedHint')}
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handlePrintFallback}
+                    className="mt-3 cursor-pointer gap-1.5"
+                  >
+                    <FileDown className="h-3.5 w-3.5" />
+                    {t('printFallback')}
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>

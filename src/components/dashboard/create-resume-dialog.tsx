@@ -27,7 +27,7 @@ interface CreateResumeDialogProps {
   open: boolean;
   onClose: () => void;
   onCreate: (data: LocalResumeInput) => Promise<Resume | null>;
-  onUploaded?: () => void;
+  onUploaded?: (resume?: Resume) => void;
 }
 
 type Tab = 'template' | 'upload';
@@ -104,7 +104,7 @@ export function CreateResumeDialog({ open, onClose, onCreate, onUploaded }: Crea
       if (!data.resume?.id) throw new Error(data.error || 'Failed to create analysis job');
       toast.success('简历已上传', { description: data.message || '你可以在工作台查看解析进度。' });
       resetAndClose();
-      onUploaded?.();
+      onUploaded?.(data.resume as Resume);
     } catch (err: unknown) {
       setParseError(err instanceof Error ? err.message : t('dashboard.upload.parseFailed'));
     } finally {
