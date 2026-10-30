@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { EmailAuthForm } from './email-auth-form';
+import { DefaultTermsNotice } from './default-terms-notice';
 
 interface AuthProviderConfig {
   id: string;
@@ -107,7 +108,7 @@ export function LoginDialog({ open, onOpenChange, callbackUrl }: LoginDialogProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, providersLoaded, passwordEnabled, oauthProviders.length, loadingProvider]);
 
-  const renderedFooter = footerText || t('agreeTerms');
+  const hasCustomFooter = Boolean(footerText || (footerLinkText && footerLinkUrl));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,9 +170,9 @@ export function LoginDialog({ open, onOpenChange, callbackUrl }: LoginDialogProp
             </p>
           )}
 
-          {providersLoaded && renderedFooter && (
+          {providersLoaded && (hasCustomFooter ? (
             <p className="text-center text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-              {renderedFooter}
+              {footerText}
               {footerLinkText && footerLinkUrl && (
                 <>
                   {' '}
@@ -181,7 +182,9 @@ export function LoginDialog({ open, onOpenChange, callbackUrl }: LoginDialogProp
                 </>
               )}
             </p>
-          )}
+          ) : (
+            <DefaultTermsNotice />
+          ))}
         </div>
       </DialogContent>
     </Dialog>

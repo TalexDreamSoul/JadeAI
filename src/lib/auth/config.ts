@@ -2,11 +2,17 @@ import NextAuth from 'next-auth';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { createSampleResume } from '@/lib/db/sample-resume';
 import { createRuntimeProviders, getAdminEmails, getAuthMode } from './runtime-config';
+import {
+  canUseExistingAccountForOidc,
+  resolveVerifiedOidcEmail,
+  type OidcIdentityProfile,
+} from './oidc-policy';
 
 type OAuthProfile = {
   email?: string | null;
   name?: string | null;
   picture?: string | null;
+  email_verified?: boolean;
 };
 
 type AuthSessionRole = 'user' | 'admin';
@@ -18,6 +24,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
   trustHost: true,
   providers: await createRuntimeProviders(),
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (!account?.provider || !OAUTH_PROVIDER_IDS.has(account.provider)) return true;
+
+      const email = resolveVerifiedOidcEmail(profile as OidcIdentityProfile | undefined, user.email);
+      if (!email) return false;
+
+      const existing = await userRepository.findByEmail(email);
+      return canUseExistingAccountForOidc(existing);
+    },
     async jwt({ token, user, account, profile }) {
       const setTokenUser = async (input: { id?: string | null; email?: string | null; name?: string | null; avatar?: string | null }) => {
         if (input.id) {
@@ -27,23 +42,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
         token.email = input.email || undefined;
         token.picture = input.avatar || undefined;
 
-        const dbUser = input.id
-          ? await userRepository.findById(input.id)
-          : input.email
-            ? await userRepository.findByEmail(input.email)
-            : null;
+        const dbUser = input.id ? await userRepository.findById(input.id) : null;
         token.role = dbUser?.role === 'admin' ? 'admin' : 'user';
       };
 
       // OIDC sign-in: create DB user on first login
       if (user && account?.provider && OAUTH_PROVIDER_IDS.has(account.provider)) {
-        const email = (profile?.email || user.email) as string;
+        const email = resolveVerifiedOidcEmail(profile as OAuthProfile | undefined, user.email);
+        if (!email) return token;
         const name = (profile?.name || user.name) as string | undefined;
         const avatar = ((profile as OAuthProfile | undefined)?.picture || user.image) as string | undefined;
 
-        let dbUser = email ? await userRepository.findByEmail(email) : null;
+        let dbUser = await userRepository.findByEmail(email);
+        if (!canUseExistingAccountForOidc(dbUser)) return token;
         if (!dbUser) {
-          const normalizedEmail = email?.toLowerCase().trim() || '';
+          const normalizedEmail = email;
           const authMode = getAuthMode();
           const adminEmails = getAdminEmails();
           const hasAdmin = await userRepository.findFirstAdmin();
@@ -55,7 +68,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
                 : authMode === 'oidc-only' && process.env.AUTH_FIRST_OIDC_USER_ADMIN === 'true' && !hasAdmin;
 
           dbUser = await userRepository.create({
-            email: email || undefined,
+            email,
             name,
             avatarUrl: avatar,
             authType: 'oauth',
@@ -89,10 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => ({
         const dbUser = session.user.id
           ? await userRepository.findById(session.user.id)
           : null;
-        const fallbackUser = !dbUser && session.user.email
-          ? await userRepository.findByEmail(session.user.email)
-          : null;
-        session.user.role = (dbUser?.role === 'admin' || fallbackUser?.role === 'admin' || token.role === 'admin' ? 'admin' : 'user') as AuthSessionRole;
+        session.user.role = (dbUser?.role === 'admin' || token.role === 'admin' ? 'admin' : 'user') as AuthSessionRole;
       }
       return session;
     },

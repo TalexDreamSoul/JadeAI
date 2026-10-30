@@ -4,6 +4,11 @@ import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 import { createSampleResume } from '@/lib/db/sample-resume';
 import { hashPasswordForAuth, normalizeEmail, verifyPasswordForAuth } from './password';
+import {
+  getPasswordLoginAttemptKey,
+  getPasswordLoginRateLimitConfig,
+} from './login-rate-limit';
+import { durablePasswordLoginFailureLimiter } from './login-rate-limit-store';
 
 // ── OAuth provider registry ──────────────────────────────────────────────
 
@@ -160,6 +165,7 @@ type OIDCProfile = {
   name?: string | null;
   picture?: string | null;
   avatar_url?: string | null;
+  email_verified?: boolean;
 };
 
 const oauthProviderFactories: Record<string, (config: OAuthProviderConfig) => Provider> = {
@@ -267,7 +273,7 @@ export async function createPasswordProvider(): Promise<Provider> {
       email: { label: 'Email', type: 'email' },
       password: { label: 'Password', type: 'password' },
     },
-    async authorize(credentials) {
+    async authorize(credentials, request) {
       const settings = await getGlobalAuthSettings();
       if (!settings.publicPasswordEnabled && !settings.adminPasswordEnabled) {
         return null;
@@ -277,15 +283,21 @@ export async function createPasswordProvider(): Promise<Provider> {
       const password = String(credentials?.password || '');
       if (!email || !password) return null;
 
+      const rateLimitConfig = getPasswordLoginRateLimitConfig();
+      const rateLimitKey = getPasswordLoginAttemptKey(email, request);
+      if (await durablePasswordLoginFailureLimiter.isLimited(rateLimitKey, rateLimitConfig)) return null;
+
       const dbUser = await userRepository.findByEmail(email);
-      if (!dbUser || !(await verifyPasswordForAuth(password, (dbUser as AuthDbUser).passwordHash))) {
+      const passwordMatches = dbUser
+        ? await verifyPasswordForAuth(password, (dbUser as AuthDbUser).passwordHash)
+        : false;
+      const roleAllowed = settings.authMode !== 'oidc-with-admin-password' || dbUser?.role === 'admin';
+      if (!dbUser || !passwordMatches || !roleAllowed) {
+        await durablePasswordLoginFailureLimiter.recordFailure(rateLimitKey, rateLimitConfig);
         return null;
       }
 
-      // In OIDC + admin password mode, password login is an emergency/admin entry only.
-      if (settings.authMode === 'oidc-with-admin-password' && dbUser.role !== 'admin') {
-        return null;
-      }
+      await durablePasswordLoginFailureLimiter.clear(rateLimitKey);
 
       return {
         id: dbUser.id,

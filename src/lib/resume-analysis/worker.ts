@@ -6,6 +6,7 @@ import { AIConfigError, resolveServerAIConfigForUser } from '@/lib/ai/provider';
 import { AIUsageInsufficientCreditsError } from '@/lib/commercial/ai-route-metering';
 import { analyzeResumeFile, describeResumeAnalysisError, ResumeAnalysisAITraceError } from './parse-service';
 import { readStoredObject } from '@/lib/storage/object-storage';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 export type ResumeAnalysisWorkerOptions = {
   workerId?: string;
@@ -193,6 +194,17 @@ export class ResumeAnalysisWorker {
         workerId: this.workerId,
         attempt: job.attempts,
         metadata: { resumeId: resume.id },
+      });
+      await recordProductEventSafely({
+        eventName: 'resume_imported',
+        userId: job.userId,
+        metadata: {
+          resumeId: resume.id,
+          source: 'file_parse',
+          format: job.fileType === 'application/pdf' ? 'pdf' : 'image',
+          template: job.template,
+          language: job.language,
+        },
       });
     } catch (error) {
       await this.handleFailure(job, error);

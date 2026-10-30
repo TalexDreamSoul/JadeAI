@@ -4,6 +4,8 @@ import { dbReady } from '@/lib/db';
 import { userRepository } from '@/lib/db/repositories/user.repository';
 
 export async function getCurrentUserId(): Promise<string | null> {
+  if (!config.auth.enabled) return null;
+
   const session = await auth();
   if (session?.user?.id) return session.user.id;
 
@@ -13,20 +15,12 @@ export async function getCurrentUserId(): Promise<string | null> {
 export async function resolveUser(fingerprint?: string | null) {
   await dbReady;
 
+  if (!config.auth.enabled) {
+    return fingerprint ? userRepository.upsertByFingerprint(fingerprint) : null;
+  }
+
   const session = await auth();
-  if (session?.user?.id && session.user.email) {
-    let user = await userRepository.findById(session.user.id);
-
-    if (!user) {
-      user = await userRepository.findByEmail(session.user.email);
-    }
-
-    return user;
-  }
-
-  if (!config.auth.enabled && fingerprint) {
-    return userRepository.upsertByFingerprint(fingerprint);
-  }
+  if (session?.user?.id) return userRepository.findById(session.user.id);
 
   return null;
 }

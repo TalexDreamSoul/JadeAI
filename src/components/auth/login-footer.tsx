@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { DefaultTermsNotice } from './default-terms-notice';
 
 export function LoginFooter() {
-  const t = useTranslations('auth');
   const [footer, setFooter] = useState({ text: '', linkText: '', linkUrl: '' });
 
   useEffect(() => {
@@ -26,12 +25,12 @@ export function LoginFooter() {
     };
   }, []);
 
-  const text = footer.text || t('agreeTerms');
-  if (!text) return null;
+  const hasCustomFooter = Boolean(footer.text || (footer.linkText && footer.linkUrl));
+  if (!hasCustomFooter) return <DefaultTermsNotice className="mt-6" />;
 
   return (
     <p className="mt-6 text-center text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-      {text}
+      {footer.text}
       {footer.linkText && footer.linkUrl && (
         <>
           {' '}
