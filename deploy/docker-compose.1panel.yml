@@ -1,5 +1,5 @@
 x-jadeai-app: &jadeai-app
-  image: ${JADEAI_IMAGE:-ghcr.io/talexdreamsoul/jadeai:latest}
+  image: ${JADEAI_IMAGE:-ghcr.io/talexdreamsoul/jadeai-resume:production-latest}
   restart: unless-stopped
   init: true
   environment:
@@ -9,6 +9,18 @@ x-jadeai-app: &jadeai-app
     APP_NAME: ${APP_NAME:-JadeAI}
     AUTH_ENABLED: ${AUTH_ENABLED:-false}
     AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+    PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-}
+    ALLOW_MOCK_PAYMENTS: "false"
+    STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+    STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    STRIPE_CHECKOUT_SUCCESS_URL: ${STRIPE_CHECKOUT_SUCCESS_URL:-}
+    STRIPE_CHECKOUT_CANCEL_URL: ${STRIPE_CHECKOUT_CANCEL_URL:-}
+    STRIPE_EXPECT_LIVEMODE: ${STRIPE_EXPECT_LIVEMODE:-true}
+    STRIPE_WEBHOOK_TOLERANCE_SECONDS: ${STRIPE_WEBHOOK_TOLERANCE_SECONDS:-300}
+    STRIPE_API_TIMEOUT_MS: ${STRIPE_API_TIMEOUT_MS:-10000}
+    STRIPE_API_BASE_URL: ${STRIPE_API_BASE_URL:-https://api.stripe.com}
+    DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?DATA_ENCRYPTION_KEY is required}
+    DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
     AUTH_MODE: ${AUTH_MODE:-local}
     AUTH_URL: ${AUTH_URL:-}
     NEXTAUTH_URL: ${NEXTAUTH_URL:-}
@@ -23,6 +35,11 @@ x-jadeai-app: &jadeai-app
     AUTH_PASSWORD_PUBLIC_ENABLED: ${AUTH_PASSWORD_PUBLIC_ENABLED:-false}
     AUTH_PASSWORD_REGISTER_ENABLED: ${AUTH_PASSWORD_REGISTER_ENABLED:-false}
     AUTH_ADMIN_PASSWORD_ENABLED: ${AUTH_ADMIN_PASSWORD_ENABLED:-true}
+    ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@jadeai.local}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    AUTH_LOGIN_RATE_LIMIT_ATTEMPTS: ${AUTH_LOGIN_RATE_LIMIT_ATTEMPTS:-5}
+    AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS:-900}
+    RESUME_ANALYSIS_WORKER_TOKEN: ${RESUME_ANALYSIS_WORKER_TOKEN:-}
     ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     AUTH_FIRST_OIDC_USER_ADMIN: ${AUTH_FIRST_OIDC_USER_ADMIN:-false}
     DB_TYPE: ${DB_TYPE:-sqlite}
@@ -51,7 +68,7 @@ x-jadeai-app: &jadeai-app
   expose:
     - "3000"
   healthcheck:
-    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ready >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ready >/dev/null 2>&1 || exit 1"]
     interval: 10s
     timeout: 3s
     retries: 12

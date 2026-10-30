@@ -57,7 +57,7 @@ RUN mkdir -p /app/data
 VOLUME /app/data
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:${PORT:-3000}/api/ready >/dev/null 2>&1 || wget -qO- http://127.0.0.1:${PORT:-3000}/api/health >/dev/null 2>&1 || exit 1
+  CMD wget -qO- http://127.0.0.1:${PORT:-3000}/api/ready >/dev/null 2>&1 || exit 1
 
 EXPOSE 3000
 ENV PORT=3000

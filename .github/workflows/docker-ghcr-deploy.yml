@@ -1,14 +1,27 @@
-name: Build GHCR Image And Trigger Jenkins
+name: JadeAI Quality And Deployment
 
 on:
   push:
     branches:
       - main
       - preview
+  pull_request:
+    branches:
+      - main
+      - preview
   workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Deployment environment
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
 
 concurrency:
-  group: jadeai-${{ github.ref_name }}-deploy
+  group: jadeai-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -20,8 +33,74 @@ env:
   DEFAULT_IMAGE_NAME: jadeai-resume
 
 jobs:
-  build-and-trigger:
+  quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: jadeai
+          POSTGRES_PASSWORD: jadeai-test
+          POSTGRES_DB: jadeai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jadeai -d jadeai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Commercial smoke tests
+        run: pnpm smoke:commercial
+
+      - name: PostgreSQL integration
+        env:
+          NODE_ENV: test
+          DB_TYPE: postgresql
+          DATABASE_URL: postgresql://jadeai:jadeai-test@127.0.0.1:5432/jadeai_test
+          ALLOW_POSTGRES_INTEGRATION_TESTS: "true"
+          AUTH_ENABLED: "false"
+          AUTH_SECRET: postgres-integration-only-secret
+          ALLOW_MOCK_PAYMENTS: "true"
+          DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+        run: pnpm smoke:postgres
+
+      - name: Production build
+        run: pnpm build
+
+  build-and-trigger:
+    needs: quality
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'preview')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'push' && 'preview' || inputs.target_environment }}
 
     steps:
       - name: Checkout
@@ -32,6 +111,7 @@ jobs:
         shell: bash
         env:
           GHCR_IMAGE_NAME: ${{ vars.GHCR_IMAGE_NAME }}
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
         run: |
           set -euo pipefail
 
@@ -40,18 +120,21 @@ jobs:
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image_name="${GHCR_IMAGE_NAME:-$DEFAULT_IMAGE_NAME}"
           image_name="${image_name,,}"
+          env_name="${TARGET_ENVIRONMENT:-preview}"
 
-          case "$branch" in
-            main)
-              env_name="production"
+          case "$env_name" in
+            production)
+              if [ "$branch" != "main" ]; then
+                echo "Production deployments must be dispatched from main, got: $branch" >&2
+                exit 1
+              fi
               domain="resume.wc1.tagzxia.com"
               ;;
             preview)
-              env_name="preview"
               domain="resume-preview.wc1.tagzxia.com"
               ;;
             *)
-              echo "Unsupported branch for auto deploy: $branch" >&2
+              echo "Unsupported deployment environment: $env_name" >&2
               exit 1
               ;;
           esac

@@ -3,8 +3,10 @@
 This directory contains the deployment assets for the new JadeAI flow:
 
 ```text
-GitHub push main/preview
-  -> GitHub Actions builds and pushes GHCR image
+GitHub pull request or push main
+  -> GitHub Actions runs quality gates only
+GitHub push preview or manual production dispatch from main
+  -> GitHub Actions runs quality gates, then builds and pushes a GHCR image
   -> GitHub Actions triggers Jenkins job jadeai-deploy
   -> Jenkins SSHs to wlcb1
   -> wlcb1 pulls GHCR image and updates docker compose
@@ -97,7 +99,28 @@ Production uses the existing reverse proxy port and external Docker network. Ens
 CONTAINER_NAME=jadeai-app
 APP_PORT=3710
 APP_ENV=production
+AUTH_SECRET=<generated-session-secret>
+RESUME_ANALYSIS_WORKER_TOKEN=<generated-worker-token>
+ALLOW_MOCK_PAYMENTS=false
+PAYMENT_PROVIDER=stripe
+STRIPE_SECRET_KEY=<stripe-live-secret-key>
+STRIPE_WEBHOOK_SECRET=<stripe-live-webhook-secret>
+STRIPE_CHECKOUT_SUCCESS_URL=https://<public-domain>/account?checkout=success
+STRIPE_CHECKOUT_CANCEL_URL=https://<public-domain>/account?checkout=canceled
+STRIPE_EXPECT_LIVEMODE=true
+STRIPE_WEBHOOK_TOLERANCE_SECONDS=300
+STRIPE_API_TIMEOUT_MS=10000
+STRIPE_API_BASE_URL=https://api.stripe.com
 ```
+
+Generate both secrets outside the repository. If the database has no administrator, set
+`ADMIN_EMAIL` and a 12-character-or-longer `ADMIN_PASSWORD` for the first startup, verify
+the login, and then remove `ADMIN_PASSWORD` from the environment.
+
+Configure the Stripe webhook endpoint as
+`https://<public-domain>/api/payments/webhook/stripe`. Subscribe to Checkout Session
+completion/expiration, Payment Intent failure, refund, and dispute events. Keep
+`PAYMENT_PROVIDER` empty until both Stripe secrets and the public HTTPS return URLs are ready.
 
 ## Manual deploy test
 

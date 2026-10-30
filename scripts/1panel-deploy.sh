@@ -11,9 +11,9 @@ set -Eeuo pipefail
 # Optional env:
 #   COMPOSE_FILE=docker-compose.yml
 #   PROJECT_NAME=jadeai
-#   JADEAI_IMAGE=ghcr.io/<owner>/<repo>:latest
-#   IMAGE=ghcr.io/<owner>/<repo>:v1.2.3      # overrides JADEAI_IMAGE
-#   IMAGE_REF=ghcr.io/<owner>/<repo>@sha256:... # immutable digest; overrides IMAGE / JADEAI_IMAGE
+#   JADEAI_IMAGE=ghcr.io/<owner>/jadeai-resume:production-latest
+#   IMAGE=ghcr.io/<owner>/jadeai-resume:production-<sha>-<run> # overrides JADEAI_IMAGE
+#   IMAGE_REF=ghcr.io/<owner>/jadeai-resume@sha256:... # immutable digest; overrides IMAGE / JADEAI_IMAGE
 #   IMAGE_TAG=v1.2.3                         # overrides tag part of IMAGE / JADEAI_IMAGE
 #   APP_PORT=3003
 #   HEALTH_TIMEOUT=90
@@ -53,7 +53,7 @@ elif [[ -n "${IMAGE:-}" ]]; then
   export JADEAI_IMAGE="$IMAGE"
 fi
 if [[ -n "${IMAGE_TAG:-}" ]]; then
-  base_image="${JADEAI_IMAGE:-ghcr.io/talexdreamsoul/jadeai:latest}"
+  base_image="${JADEAI_IMAGE:-ghcr.io/talexdreamsoul/jadeai-resume:production-latest}"
   export JADEAI_IMAGE="${base_image%:*}:$IMAGE_TAG"
 fi
 
@@ -116,7 +116,7 @@ while (( SECONDS < deadline )); do
   state="$(docker inspect -f '{{.State.Status}}' "$new_container" 2>/dev/null || true)"
   health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$new_container" 2>/dev/null || true)"
   if [[ "$state" == "running" && ( "$health" == "healthy" || "$health" == "none" ) ]]; then
-    if docker exec "$new_container" wget -qO- http://127.0.0.1:3000/api/ready >/dev/null 2>&1 || docker exec "$new_container" wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+    if docker exec "$new_container" wget -qO- http://127.0.0.1:3000/api/ready >/dev/null 2>&1; then
       healthy=true
       break
     fi
@@ -157,7 +157,7 @@ fi
 log "checking public health through proxy"
 proxy_healthy=false
 for _ in $(seq 1 20); do
-  if curl -fsS --max-time 3 "http://127.0.0.1:${APP_PORT}/api/ready" >/dev/null || curl -fsS --max-time 3 "http://127.0.0.1:${APP_PORT}/api/health" >/dev/null; then
+  if curl -fsS --max-time 3 "http://127.0.0.1:${APP_PORT}/api/ready" >/dev/null; then
     proxy_healthy=true
     break
   fi
