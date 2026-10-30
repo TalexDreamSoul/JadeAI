@@ -2,7 +2,10 @@ import { eq } from 'drizzle-orm';
 import { hashPasswordForAuth, normalizeEmail } from '@/lib/auth/password';
 import { users } from './schema';
 
-const DEFAULT_ADMIN_EMAIL = 'admin@touchresume.local';
+const DEFAULT_ADMIN_EMAIL = 'admin@jadeai.local';
+const MIN_ADMIN_PASSWORD_LENGTH = 12;
+
+type AdminSeedEnvironment = Record<string, string | undefined>;
 
 type AdminSeedDb = {
   select: () => {
@@ -22,12 +25,17 @@ type AdminSeedDb = {
   };
 };
 
-function generatePassword() {
-  const bytes = crypto.getRandomValues(new Uint8Array(18));
-  return Buffer.from(bytes)
-    .toString('base64url')
-    .replace(/[-_]/g, '')
-    .slice(0, 22);
+export function resolveAdminSeedCredentials(env: AdminSeedEnvironment = process.env) {
+  const password = env.ADMIN_PASSWORD;
+  if (!password) return null;
+  if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
+    throw new Error(`ADMIN_PASSWORD must be at least ${MIN_ADMIN_PASSWORD_LENGTH} characters`);
+  }
+
+  return {
+    email: normalizeEmail(env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL),
+    password,
+  };
 }
 
 export async function ensureAdminUser(db: unknown) {
@@ -35,9 +43,14 @@ export async function ensureAdminUser(db: unknown) {
   const existingAdmins = await client.select().from(users).where(eq(users.role, 'admin')).limit(1);
   if (existingAdmins[0]) return;
 
-  const email = normalizeEmail(process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL);
+  const credentials = resolveAdminSeedCredentials();
+  if (!credentials) {
+    console.warn('[Admin] No administrator exists and ADMIN_PASSWORD is not set; automatic creation skipped.');
+    return;
+  }
+
+  const { email, password } = credentials;
   const existingUser = await client.select().from(users).where(eq(users.email, email)).limit(1);
-  const password = process.env.ADMIN_PASSWORD || generatePassword();
   const passwordHash = await hashPasswordForAuth(password);
 
   if (existingUser[0]) {
@@ -61,10 +74,6 @@ export async function ensureAdminUser(db: unknown) {
     });
   }
 
-  console.log('='.repeat(72));
-  console.log('[Admin] Initial administrator account created');
-  console.log(`[Admin] Email: ${email}`);
-  console.log(`[Admin] Password: ${password}`);
-  console.log('[Admin] Save this password now. It will not be shown again.');
-  console.log('='.repeat(72));
+  console.log(`[Admin] Initial administrator account created for ${email}.`);
+  console.log('[Admin] Remove ADMIN_PASSWORD from the runtime environment after verifying access.');
 }

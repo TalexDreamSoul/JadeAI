@@ -3,7 +3,7 @@
  * Used ONLY by drizzle-kit for PG migration generation.
  * Runtime code still imports table objects from schema.ts.
  */
-import { pgTable, text, integer } from 'drizzle-orm/pg-core';
+import { check, index, pgTable, text, integer } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 const epochNow = sql`extract(epoch from now())::integer`;
@@ -22,6 +22,30 @@ export const users = pgTable('users', {
   createdAt: integer('created_at').notNull().default(epochNow),
   updatedAt: integer('updated_at').notNull().default(epochNow),
 });
+
+export const authLoginAttempts = pgTable('auth_login_attempts', {
+  id: text('id').primaryKey(),
+  failures: integer('failures').notNull().default(0),
+  resetAt: integer('reset_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (table) => [
+  index('auth_login_attempts_reset_idx').on(table.resetAt),
+]);
+
+export const productEvents = pgTable('product_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventName: text('event_name').notNull(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  anonymousId: text('anonymous_id'),
+  metadata: text('metadata').notNull().default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+}, (table) => [
+  check('product_events_actor_check', sql`${table.userId} IS NOT NULL OR ${table.anonymousId} IS NOT NULL`),
+  index('product_events_created_idx').on(table.createdAt),
+  index('product_events_name_created_idx').on(table.eventName, table.createdAt),
+  index('product_events_user_created_idx').on(table.userId, table.createdAt),
+  index('product_events_anonymous_created_idx').on(table.anonymousId, table.createdAt),
+]);
 
 export const authAccounts = pgTable('auth_accounts', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -200,6 +224,39 @@ export const resumeAiReviews = pgTable('resume_ai_reviews', {
   createdAt: integer('created_at').notNull().default(epochNow),
 });
 
+export const resumeAnalysisJobs = pgTable('resume_analysis_jobs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  resumeId: text('resume_id').references(() => resumes.id, { onDelete: 'set null' }),
+  fileName: text('file_name').notNull(),
+  fileType: text('file_type').notNull(),
+  fileSize: integer('file_size').notNull().default(0),
+  fileData: text('file_data').notNull(),
+  template: text('template').notNull().default('touch-pure'),
+  language: text('language').notNull().default('zh'),
+  status: text('status').notNull().default('queued'),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(3),
+  progress: integer('progress').notNull().default(0),
+  position: integer('position').notNull().default(0),
+  workerId: text('worker_id'),
+  lockedAt: integer('locked_at'),
+  lastHeartbeatAt: integer('last_heartbeat_at'),
+  nextRunAt: integer('next_run_at').notNull().default(epochNow),
+  startedAt: integer('started_at'),
+  finishedAt: integer('finished_at'),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  logs: text('logs').notNull().default('[]'),
+  metadata: text('metadata').default('{}'),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('resume_analysis_jobs_user_status_idx').on(table.userId, table.status),
+  index('resume_analysis_jobs_status_next_run_idx').on(table.status, table.nextRunAt),
+  index('resume_analysis_jobs_worker_idx').on(table.workerId),
+]);
+
 export const templateMarketItems = pgTable('template_market_items', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   ownerUserId: text('owner_user_id').notNull(),
@@ -354,6 +411,28 @@ export const interviewReports = pgTable('interview_reports', {
   improvementPlan: text('improvement_plan').notNull(),
   createdAt: integer('created_at').notNull().default(epochNow),
 });
+
+export const jobApplications = pgTable('job_applications', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  companyName: text('company_name').notNull(),
+  jobTitle: text('job_title').notNull(),
+  jobDescription: text('job_description').notNull().default(''),
+  sourceUrl: text('source_url'),
+  stage: text('stage').notNull().default('saved'),
+  result: text('result').notNull().default('pending'),
+  resumeId: text('resume_id').references(() => resumes.id, { onDelete: 'set null' }),
+  jdAnalysisId: text('jd_analysis_id').references(() => jdAnalyses.id, { onDelete: 'set null' }),
+  interviewSessionId: text('interview_session_id').references(() => interviewSessions.id, { onDelete: 'set null' }),
+  appliedAt: integer('applied_at'),
+  resultAt: integer('result_at'),
+  notes: text('notes').notNull().default(''),
+  createdAt: integer('created_at').notNull().default(epochNow),
+  updatedAt: integer('updated_at').notNull().default(epochNow),
+}, (table) => [
+  index('job_applications_user_updated_idx').on(table.userId, table.updatedAt),
+  index('job_applications_user_stage_result_idx').on(table.userId, table.stage, table.result),
+]);
 
 export const membershipPlans = pgTable('membership_plans', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),

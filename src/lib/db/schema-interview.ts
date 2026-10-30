@@ -1,6 +1,6 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { index, sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import { users, resumes } from './schema';
+import { jdAnalyses, users, resumes } from './schema';
 
 export const interviewSessions = sqliteTable('interview_sessions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -48,3 +48,25 @@ export const interviewReports = sqliteTable('interview_reports', {
   improvementPlan: text('improvement_plan', { mode: 'json' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
+
+export const jobApplications = sqliteTable('job_applications', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  companyName: text('company_name').notNull(),
+  jobTitle: text('job_title').notNull(),
+  jobDescription: text('job_description').notNull().default(''),
+  sourceUrl: text('source_url'),
+  stage: text('stage', { enum: ['saved', 'applied', 'screening', 'interview', 'offer', 'closed'] }).notNull().default('saved'),
+  result: text('result', { enum: ['pending', 'offer', 'rejected', 'withdrawn', 'no_response'] }).notNull().default('pending'),
+  resumeId: text('resume_id').references(() => resumes.id, { onDelete: 'set null' }),
+  jdAnalysisId: text('jd_analysis_id').references(() => jdAnalyses.id, { onDelete: 'set null' }),
+  interviewSessionId: text('interview_session_id').references(() => interviewSessions.id, { onDelete: 'set null' }),
+  appliedAt: integer('applied_at', { mode: 'timestamp' }),
+  resultAt: integer('result_at', { mode: 'timestamp' }),
+  notes: text('notes').notNull().default(''),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  index('job_applications_user_updated_idx').on(table.userId, table.updatedAt),
+  index('job_applications_user_stage_result_idx').on(table.userId, table.stage, table.result),
+]);

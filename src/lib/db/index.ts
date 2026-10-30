@@ -20,6 +20,9 @@ if (skipDbInit) {
   adapter = {
     db: createUnavailableDb(),
     initialize: async () => undefined,
+    transaction: async () => {
+      throw new Error('Database transactions are unavailable while SKIP_DB_INIT=1');
+    },
     close: async () => undefined,
   };
 } else if (config.db.type === 'postgresql') {
@@ -45,4 +48,6 @@ const _initPromise = adapter.initialize().catch((e) => {
 export const dbReady = _initPromise;
 
 export const db = adapter.db;
+export const runInTransaction = <T>(operation: (transaction: any) => Promise<T>) =>
+  adapter.transaction(operation);
 export { adapter };

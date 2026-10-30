@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { check, index, sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const users = sqliteTable('users', {
@@ -15,6 +15,30 @@ export const users = sqliteTable('users', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
+
+export const authLoginAttempts = sqliteTable('auth_login_attempts', {
+  id: text('id').primaryKey(),
+  failures: integer('failures').notNull().default(0),
+  resetAt: integer('reset_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (table) => [
+  index('auth_login_attempts_reset_idx').on(table.resetAt),
+]);
+
+export const productEvents = sqliteTable('product_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventName: text('event_name').notNull(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  anonymousId: text('anonymous_id'),
+  metadata: text('metadata', { mode: 'json' }).notNull().default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  check('product_events_actor_check', sql`${table.userId} IS NOT NULL OR ${table.anonymousId} IS NOT NULL`),
+  index('product_events_created_idx').on(table.createdAt),
+  index('product_events_name_created_idx').on(table.eventName, table.createdAt),
+  index('product_events_user_created_idx').on(table.userId, table.createdAt),
+  index('product_events_anonymous_created_idx').on(table.anonymousId, table.createdAt),
+]);
 
 export const authAccounts = sqliteTable('auth_accounts', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -645,4 +669,5 @@ export {
   interviewRounds,
   interviewMessages,
   interviewReports,
+  jobApplications,
 } from './schema-interview';

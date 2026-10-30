@@ -148,8 +148,8 @@ export async function seedDemoUser(db: any) {
         items: [
           {
             id: crypto.randomUUID(),
-            name: 'TouchResume 简历助手',
-            url: 'https://github.com/example/touchresume',
+            name: 'JadeAI 简历助手',
+            url: 'https://github.com/TalexDreamSoul/jadeai',
             startDate: '2024-10',
             endDate: '2025-02',
             description: '基于 AI 的智能简历生成与优化工具，支持多模板、实时预览和 AI 对话式编辑。',

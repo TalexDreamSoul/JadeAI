@@ -1,6 +1,12 @@
 import { asc, eq } from 'drizzle-orm';
 import { db } from '../index';
 import { aiChannels } from '../schema';
+import {
+  canEncryptSecrets,
+  decryptSecret,
+  encryptSecret,
+  isEncryptedSecret,
+} from '@/lib/security/secret-crypto';
 
 export interface AIChannelRecord {
   id: string;
@@ -18,9 +24,22 @@ export interface AIChannelRecord {
   updatedAt?: Date | string | number;
 }
 
+async function hydrateChannel(row: AIChannelRecord): Promise<AIChannelRecord> {
+  const storedApiKey = row.apiKey || '';
+  const apiKey = decryptSecret(storedApiKey);
+  if (storedApiKey && !isEncryptedSecret(storedApiKey) && canEncryptSecrets()) {
+    await db
+      .update(aiChannels)
+      .set({ apiKey: encryptSecret(storedApiKey), updatedAt: new Date() })
+      .where(eq(aiChannels.id, row.id));
+  }
+  return { ...row, apiKey };
+}
+
 export const aiChannelRepository = {
   async list(): Promise<AIChannelRecord[]> {
-    return db.select().from(aiChannels).orderBy(asc(aiChannels.createdAt)) as Promise<AIChannelRecord[]>;
+    const rows = await db.select().from(aiChannels).orderBy(asc(aiChannels.createdAt)) as AIChannelRecord[];
+    return Promise.all(rows.map(hydrateChannel));
   },
 
   async listEnabled() {
@@ -30,7 +49,7 @@ export const aiChannelRepository = {
 
   async findById(id: string) {
     const rows = await db.select().from(aiChannels).where(eq(aiChannels.id, id)).limit(1);
-    return rows[0] ?? null;
+    return rows[0] ? hydrateChannel(rows[0] as AIChannelRecord) : null;
   },
 
   async create(data: {
@@ -48,7 +67,7 @@ export const aiChannelRepository = {
       id,
       name: data.name,
       provider: data.provider,
-      apiKey: data.apiKey,
+      apiKey: encryptSecret(data.apiKey),
       baseUrl: data.baseUrl,
       model: data.model,
       openAIEndpoint: data.openAIEndpoint || 'chat',
@@ -70,7 +89,12 @@ export const aiChannelRepository = {
     failureCount: number;
     lastUsedAt: Date | null;
   }>) {
-    await db.update(aiChannels).set({ ...data, updatedAt: new Date() }).where(eq(aiChannels.id, id));
+    const values = {
+      ...data,
+      ...(data.apiKey !== undefined ? { apiKey: encryptSecret(data.apiKey) } : {}),
+      updatedAt: new Date(),
+    };
+    await db.update(aiChannels).set(values).where(eq(aiChannels.id, id));
     return this.findById(id);
   },
 

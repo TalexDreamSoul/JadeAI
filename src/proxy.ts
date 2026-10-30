@@ -8,8 +8,10 @@ const LOCALE_PATTERN = /^\/(zh|en)(?=\/|$)/;
 const PUBLIC_PAGE_PATHS = ['/', '/login', '/share'];
 const PUBLIC_API_PATHS = [
   '/api/auth',
+  '/api/events',
   '/api/health',
   '/api/internal/resume-analysis/tick',
+  '/api/payments/webhook',
   '/api/ready',
   '/api/share',
 ];
@@ -47,27 +49,23 @@ function redirectToLogin(request: NextRequest) {
 }
 
 export async function proxy(request: NextRequest) {
-  const response = intlMiddleware(request);
-  const authEnabled = process.env.AUTH_ENABLED === 'true';
-  if (!authEnabled) return response;
-
   const { pathname } = request.nextUrl;
+  const authEnabled = process.env.AUTH_ENABLED === 'true';
 
+  // API routes are not locale-aware. Running next-intl first rewrites the
+  // Electron readiness probe from /api/health to /zh/api/health, which has no
+  // route and prevents the local desktop server from ever becoming ready.
   if (pathname.startsWith('/api/')) {
-    if (isPublicApi(pathname) || hasSessionCookie(request)) {
+    if (!authEnabled || isPublicApi(pathname) || hasSessionCookie(request)) {
       return NextResponse.next();
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (isPublicPage(pathname)) {
-    return response;
-  }
-
-  if (!hasSessionCookie(request)) {
-    return redirectToLogin(request);
-  }
-
+  const response = intlMiddleware(request);
+  if (!authEnabled) return response;
+  if (isPublicPage(pathname)) return response;
+  if (!hasSessionCookie(request)) return redirectToLogin(request);
   return response;
 }
 

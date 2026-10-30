@@ -1,5 +1,5 @@
 import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
-import { db } from '../index';
+import { db, runInTransaction } from '../index';
 import {
   adminAuditLogs,
   aiUsageLogs,
@@ -107,6 +107,38 @@ function walletTransactionId(data: {
 }) {
   if (!data.sourceId) return crypto.randomUUID();
   return `wallet_tx:${data.userId}:${data.currency}:${data.direction}:${data.source}:${data.sourceId}`;
+}
+
+async function findWalletAccount(database: any, userId: string, currency: WalletCurrency) {
+  const rows = await database
+    .select()
+    .from(walletAccounts)
+    .where(and(eq(walletAccounts.userId, userId), eq(walletAccounts.currency, currency)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function ensureWalletAccount(
+  database: any,
+  userId: string,
+  currency: WalletCurrency,
+  initialBalance = 0,
+) {
+  const id = walletAccountId(userId, currency);
+  await database
+    .insert(walletAccounts)
+    .values({ id, userId, currency, balance: initialBalance })
+    .onConflictDoNothing();
+  return findWalletAccount(database, userId, currency);
+}
+
+async function findWalletTransaction(database: any, id: string) {
+  const rows = await database
+    .select({ id: walletTransactions.id })
+    .from(walletTransactions)
+    .where(eq(walletTransactions.id, id))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export const membershipRepository = {
@@ -533,32 +565,11 @@ export const entitlementRepository = {
 
 export const walletRepository = {
   async findAccount(userId: string, currency: WalletCurrency) {
-    const rows = await db
-      .select()
-      .from(walletAccounts)
-      .where(and(eq(walletAccounts.userId, userId), eq(walletAccounts.currency, currency)))
-      .limit(1);
-    return rows[0] ?? null;
+    return findWalletAccount(db, userId, currency);
   },
 
   async ensureAccount(userId: string, currency: WalletCurrency, initialBalance = 0) {
-    const existing = await this.findAccount(userId, currency);
-    if (existing) return existing;
-
-    const id = walletAccountId(userId, currency);
-    try {
-      await db.insert(walletAccounts).values({
-        id,
-        userId,
-        currency,
-        balance: initialBalance,
-      });
-    } catch (error) {
-      const concurrent = await this.findAccount(userId, currency);
-      if (concurrent) return concurrent;
-      throw error;
-    }
-    return this.findAccount(userId, currency);
+    return ensureWalletAccount(db, userId, currency, initialBalance);
   },
 
   async credit(data: {
@@ -571,88 +582,56 @@ export const walletRepository = {
     metadata?: JsonRecord;
   }) {
     if (data.amount <= 0) throw new Error('Credit amount must be positive');
-    const account = await this.ensureAccount(data.userId, data.currency);
-    if (!account) throw new Error('Wallet account unavailable');
+    const id = walletTransactionId({
+      userId: data.userId,
+      currency: data.currency,
+      direction: 'credit',
+      source: data.source,
+      sourceId: data.sourceId,
+    });
 
-    if (data.sourceId) {
-      const id = walletTransactionId({
-        userId: data.userId,
-        currency: data.currency,
-        direction: 'credit',
-        source: data.source,
-        sourceId: data.sourceId,
-      });
-      const currentAccount = await this.findAccount(data.userId, data.currency) || account;
-      try {
-        await db.insert(walletTransactions).values({
+    try {
+      return await runInTransaction(async (transaction) => {
+        const account = await ensureWalletAccount(transaction, data.userId, data.currency);
+        if (!account) throw new Error('Wallet account unavailable');
+
+        if (data.sourceId && await findWalletTransaction(transaction, id)) {
+          return { account, transactionId: id, applied: false };
+        }
+
+        const updated = await transaction
+          .update(walletAccounts)
+          .set({
+            balance: sql`${walletAccounts.balance} + ${data.amount}`,
+            updatedAt: now(),
+          })
+          .where(eq(walletAccounts.id, account.id))
+          .returning({ balanceAfter: walletAccounts.balance });
+        const balanceAfter = Number(updated[0]?.balanceAfter);
+        if (!Number.isFinite(balanceAfter)) throw new Error('Wallet account update failed');
+
+        await transaction.insert(walletTransactions).values({
           id,
           accountId: account.id,
           userId: data.userId,
           currency: data.currency,
           direction: 'credit',
           amount: data.amount,
-          balanceAfter: Number(currentAccount.balance || 0),
+          balanceAfter,
           source: data.source,
           sourceId: data.sourceId,
           description: data.description || '',
           metadata: data.metadata || {},
         });
-      } catch {
-        const existingRows = await db
-          .select({ id: walletTransactions.id })
-          .from(walletTransactions)
-          .where(eq(walletTransactions.id, id))
-          .limit(1);
-        if (existingRows[0]) {
-          const existingAccount = await this.findAccount(data.userId, data.currency);
-          return { account: existingAccount, transactionId: existingRows[0].id, applied: false };
-        }
-        throw new Error('Wallet transaction insert failed');
+        const updatedAccount = await findWalletAccount(transaction, data.userId, data.currency);
+        return { account: updatedAccount, transactionId: id, applied: true };
+      });
+    } catch (error) {
+      if (data.sourceId && await findWalletTransaction(db, id)) {
+        return { account: await this.findAccount(data.userId, data.currency), transactionId: id, applied: false };
       }
-
-      const updated = await db
-        .update(walletAccounts)
-        .set({
-          balance: sql`${walletAccounts.balance} + ${data.amount}`,
-          updatedAt: now(),
-        })
-        .where(eq(walletAccounts.id, account.id))
-        .returning({ balanceAfter: walletAccounts.balance });
-      const balanceAfter = Number(updated[0]?.balanceAfter ?? Number(currentAccount.balance || 0) + data.amount);
-      await db
-        .update(walletTransactions)
-        .set({ balanceAfter })
-        .where(eq(walletTransactions.id, id));
-      const updatedAccount = await this.findAccount(data.userId, data.currency);
-      return { account: updatedAccount, transactionId: id, applied: true };
+      throw error;
     }
-
-    const updated = await db
-      .update(walletAccounts)
-      .set({
-        balance: sql`${walletAccounts.balance} + ${data.amount}`,
-        updatedAt: now(),
-      })
-      .where(eq(walletAccounts.id, account.id))
-      .returning({ balanceAfter: walletAccounts.balance });
-    const balanceAfter = Number(updated[0]?.balanceAfter ?? Number(account.balance || 0) + data.amount);
-
-    const id = crypto.randomUUID();
-    await db.insert(walletTransactions).values({
-      id,
-      accountId: account.id,
-      userId: data.userId,
-      currency: data.currency,
-      direction: 'credit',
-      amount: data.amount,
-      balanceAfter,
-      source: data.source,
-      sourceId: data.sourceId,
-      description: data.description || '',
-      metadata: data.metadata || {},
-    });
-    const updatedAccount = await this.findAccount(data.userId, data.currency);
-    return { account: updatedAccount, transactionId: id };
   },
 
   async debit(data: {
@@ -665,104 +644,61 @@ export const walletRepository = {
     metadata?: JsonRecord;
   }) {
     if (data.amount <= 0) throw new Error('Debit amount must be positive');
-    const account = await this.ensureAccount(data.userId, data.currency);
-    if (!account) throw new Error('Wallet account unavailable');
+    const id = walletTransactionId({
+      userId: data.userId,
+      currency: data.currency,
+      direction: 'debit',
+      source: data.source,
+      sourceId: data.sourceId,
+    });
 
-    if (data.sourceId) {
-      const id = walletTransactionId({
-        userId: data.userId,
-        currency: data.currency,
-        direction: 'debit',
-        source: data.source,
-        sourceId: data.sourceId,
-      });
-      const currentAccount = await this.findAccount(data.userId, data.currency) || account;
-      try {
-        await db.insert(walletTransactions).values({
+    try {
+      return await runInTransaction(async (transaction) => {
+        const account = await ensureWalletAccount(transaction, data.userId, data.currency);
+        if (!account) throw new Error('Wallet account unavailable');
+
+        if (data.sourceId && await findWalletTransaction(transaction, id)) {
+          return { ok: true as const, account, transactionId: id, applied: false };
+        }
+
+        const updated = await transaction
+          .update(walletAccounts)
+          .set({
+            balance: sql`${walletAccounts.balance} - ${data.amount}`,
+            updatedAt: now(),
+          })
+          .where(and(
+            eq(walletAccounts.id, account.id),
+            sql`${walletAccounts.balance} >= ${data.amount}`,
+          ))
+          .returning({ balanceAfter: walletAccounts.balance });
+        const balanceAfter = updated[0]?.balanceAfter;
+        if (balanceAfter === undefined || balanceAfter === null) {
+          return { ok: false as const, account, transactionId: null, applied: false };
+        }
+
+        await transaction.insert(walletTransactions).values({
           id,
           accountId: account.id,
           userId: data.userId,
           currency: data.currency,
           direction: 'debit',
           amount: data.amount,
-          balanceAfter: Number(currentAccount.balance || 0),
+          balanceAfter: Number(balanceAfter),
           source: data.source,
           sourceId: data.sourceId,
           description: data.description || '',
           metadata: data.metadata || {},
         });
-      } catch {
-        const existingRows = await db
-          .select({ id: walletTransactions.id })
-          .from(walletTransactions)
-          .where(eq(walletTransactions.id, id))
-          .limit(1);
-        if (existingRows[0]) {
-          const existingAccount = await this.findAccount(data.userId, data.currency);
-          return { ok: true as const, account: existingAccount, transactionId: existingRows[0].id, applied: false };
-        }
-        throw new Error('Wallet transaction insert failed');
+        const updatedAccount = await findWalletAccount(transaction, data.userId, data.currency);
+        return { ok: true as const, account: updatedAccount, transactionId: id, applied: true };
+      });
+    } catch (error) {
+      if (data.sourceId && await findWalletTransaction(db, id)) {
+        return { ok: true as const, account: await this.findAccount(data.userId, data.currency), transactionId: id, applied: false };
       }
-
-      const updated = await db
-        .update(walletAccounts)
-        .set({
-          balance: sql`${walletAccounts.balance} - ${data.amount}`,
-          updatedAt: now(),
-        })
-        .where(and(
-          eq(walletAccounts.id, account.id),
-          sql`${walletAccounts.balance} >= ${data.amount}`,
-        ))
-        .returning({ balanceAfter: walletAccounts.balance });
-      const balanceAfter = updated[0]?.balanceAfter;
-      if (balanceAfter === undefined || balanceAfter === null) {
-        await db.delete(walletTransactions).where(eq(walletTransactions.id, id));
-        const current = await this.findAccount(data.userId, data.currency);
-        return { ok: false as const, account: current || account, transactionId: null, applied: false };
-      }
-
-      await db
-        .update(walletTransactions)
-        .set({ balanceAfter: Number(balanceAfter) })
-        .where(eq(walletTransactions.id, id));
-      const updatedAccount = await this.findAccount(data.userId, data.currency);
-      return { ok: true as const, account: updatedAccount, transactionId: id, applied: true };
+      throw error;
     }
-
-    const updated = await db
-      .update(walletAccounts)
-      .set({
-        balance: sql`${walletAccounts.balance} - ${data.amount}`,
-        updatedAt: now(),
-      })
-      .where(and(
-        eq(walletAccounts.id, account.id),
-        sql`${walletAccounts.balance} >= ${data.amount}`,
-      ))
-      .returning({ balanceAfter: walletAccounts.balance });
-    const balanceAfter = updated[0]?.balanceAfter;
-    if (balanceAfter === undefined || balanceAfter === null) {
-      const currentAccount = await this.findAccount(data.userId, data.currency);
-      return { ok: false as const, account: currentAccount || account, transactionId: null };
-    }
-
-    const id = crypto.randomUUID();
-    await db.insert(walletTransactions).values({
-      id,
-      accountId: account.id,
-      userId: data.userId,
-      currency: data.currency,
-      direction: 'debit',
-      amount: data.amount,
-      balanceAfter: Number(balanceAfter),
-      source: data.source,
-      sourceId: data.sourceId,
-      description: data.description || '',
-      metadata: data.metadata || {},
-    });
-    const updatedAccount = await this.findAccount(data.userId, data.currency);
-    return { ok: true as const, account: updatedAccount, transactionId: id };
   },
 
   async listAccounts(userId: string) {
@@ -942,31 +878,33 @@ export const orderRepository = {
 
     const totalCents = normalized.reduce((sum, item) => sum + Number(item.product.priceCents || 0) * item.quantity, 0);
     const id = crypto.randomUUID();
-    await db.insert(orders).values({
-      id,
-      userId: data.userId,
-      orderNo: orderNo(),
-      status: 'pending_payment',
-      totalCents,
-      payableCents: totalCents,
-      currency: normalized[0]?.product.currency || 'CNY',
-      source: data.source || 'web',
-      metadata: data.metadata || {},
-    });
+    await runInTransaction(async (transaction) => {
+      await transaction.insert(orders).values({
+        id,
+        userId: data.userId,
+        orderNo: orderNo(),
+        status: 'pending_payment',
+        totalCents,
+        payableCents: totalCents,
+        currency: normalized[0]?.product.currency || 'CNY',
+        source: data.source || 'web',
+        metadata: data.metadata || {},
+      });
 
-    await db.insert(orderItems).values(normalized.map((item) => ({
-      id: crypto.randomUUID(),
-      orderId: id,
-      productId: item.product.id,
-      productType: item.product.type,
-      resourceType: item.product.resourceType,
-      resourceId: item.product.resourceId,
-      name: item.product.name,
-      quantity: item.quantity,
-      unitPriceCents: item.product.priceCents,
-      totalCents: Number(item.product.priceCents || 0) * item.quantity,
-      metadata: item.product.metadata || {},
-    })));
+      await transaction.insert(orderItems).values(normalized.map((item) => ({
+        id: crypto.randomUUID(),
+        orderId: id,
+        productId: item.product.id,
+        productType: item.product.type,
+        resourceType: item.product.resourceType,
+        resourceId: item.product.resourceId,
+        name: item.product.name,
+        quantity: item.quantity,
+        unitPriceCents: item.product.priceCents,
+        totalCents: Number(item.product.priceCents || 0) * item.quantity,
+        metadata: item.product.metadata || {},
+      })));
+    });
 
     return this.findByIdForUser(id, data.userId);
   },
@@ -1018,40 +956,181 @@ export const orderRepository = {
     return { ...order, items, payments: paymentRows };
   },
 
+  async findPaymentByProviderTradeNo(provider: string, providerTradeNo: string) {
+    const rows = await db
+      .select()
+      .from(payments)
+      .where(and(
+        eq(payments.provider, provider),
+        eq(payments.providerTradeNo, providerTradeNo),
+      ))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
   async markPaid(orderId: string, payment: {
     provider?: string;
     providerTradeNo?: string;
     rawPayload?: JsonRecord;
   }) {
+    const provider = payment.provider || 'mock';
+    const providerTradeNo = payment.providerTradeNo || `mock_${crypto.randomUUID()}`;
     const order = await this.findById(orderId);
     if (!order) throw new Error('Order not found');
-    if (order.status === 'paid' || order.status === 'fulfilling' || order.status === 'fulfilled') return order;
-    if (order.status !== 'pending_payment') throw new Error('Only pending orders can be paid');
+    const linkedPayment = await this.findPaymentByProviderTradeNo(provider, providerTradeNo);
+    if (linkedPayment && linkedPayment.orderId !== orderId) {
+      throw new Error('Payment transaction is already linked to another order');
+    }
+    if (order.status === 'paid' || order.status === 'fulfilling' || order.status === 'fulfilled') {
+      if (linkedPayment) return order;
+      throw new Error('Order already has a different completed payment');
+    }
+    if (!['pending_payment', 'payment_failed'].includes(order.status)) {
+      throw new Error('Only pending or failed orders can be paid');
+    }
 
-    const paidAt = now();
-    const paidRows = await db
-      .update(orders)
-      .set({ status: 'paid', paidAt, updatedAt: paidAt })
-      .where(and(eq(orders.id, orderId), eq(orders.status, 'pending_payment')))
-      .returning({
-        id: orders.id,
-        payableCents: orders.payableCents,
-        currency: orders.currency,
+    await runInTransaction(async (transaction) => {
+      const existingPayments = await transaction
+        .select({ id: payments.id, orderId: payments.orderId })
+        .from(payments)
+        .where(and(
+          eq(payments.provider, provider),
+          eq(payments.providerTradeNo, providerTradeNo),
+        ))
+        .limit(1);
+      if (existingPayments[0] && existingPayments[0].orderId !== orderId) {
+        throw new Error('Payment transaction is already linked to another order');
+      }
+
+      const paidAt = now();
+      const paidRows = await transaction
+        .update(orders)
+        .set({ status: 'paid', paidAt, updatedAt: paidAt })
+        .where(and(
+          eq(orders.id, orderId),
+          inArray(orders.status, ['pending_payment', 'payment_failed']),
+        ))
+        .returning({
+          id: orders.id,
+          payableCents: orders.payableCents,
+          currency: orders.currency,
+        });
+      const paidOrder = paidRows[0];
+      if (!paidOrder) return;
+
+      if (existingPayments[0]) {
+        await transaction
+          .update(payments)
+          .set({
+            status: 'succeeded',
+            amountCents: paidOrder.payableCents,
+            currency: paidOrder.currency,
+            rawPayload: payment.rawPayload || {},
+            paidAt,
+          })
+          .where(eq(payments.id, existingPayments[0].id));
+        return;
+      }
+
+      await transaction.insert(payments).values({
+        id: `payment:${provider}:${providerTradeNo}`,
+        orderId,
+        provider,
+        providerTradeNo,
+        status: 'succeeded',
+        amountCents: paidOrder.payableCents,
+        currency: paidOrder.currency,
+        rawPayload: payment.rawPayload || {},
+        paidAt,
       });
-    const paidOrder = paidRows[0];
-    if (!paidOrder) return this.findById(orderId);
-
-    await db.insert(payments).values({
-      id: crypto.randomUUID(),
-      orderId,
-      provider: payment.provider || 'mock',
-      providerTradeNo: payment.providerTradeNo || `mock_${crypto.randomUUID()}`,
-      status: 'succeeded',
-      amountCents: paidOrder.payableCents,
-      currency: paidOrder.currency,
-      rawPayload: payment.rawPayload || {},
-      paidAt,
     });
+    return this.findById(orderId);
+  },
+
+  async recordPaymentState(orderId: string, payment: {
+    provider: string;
+    providerTradeNo: string;
+    status: string;
+    amountCents: number;
+    currency: string;
+    rawPayload?: JsonRecord;
+    orderTransition?: {
+      from: string[];
+      to: string;
+      metadata?: JsonRecord;
+    };
+  }) {
+    const providerTradeNo = payment.providerTradeNo.trim();
+    if (!providerTradeNo) throw new Error('providerTradeNo is required');
+
+    await runInTransaction(async (transaction) => {
+      const orderRows = await transaction.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+      const order = orderRows[0];
+      if (!order) throw new Error('Order not found');
+
+      const existingPayments = await transaction
+        .select()
+        .from(payments)
+        .where(and(
+          eq(payments.provider, payment.provider),
+          eq(payments.providerTradeNo, providerTradeNo),
+        ))
+        .limit(1);
+      const existingPayment = existingPayments[0];
+      if (existingPayment && existingPayment.orderId !== orderId) {
+        throw new Error('Payment transaction is already linked to another order');
+      }
+
+      const staleAfterSuccess = existingPayment?.status === 'succeeded'
+        && ['processing', 'failed', 'expired'].includes(payment.status);
+      if (staleAfterSuccess) return;
+
+      const rawPayload = {
+        ...jsonRecord(existingPayment?.rawPayload),
+        ...(payment.rawPayload || {}),
+      };
+      if (existingPayment) {
+        await transaction
+          .update(payments)
+          .set({
+            status: payment.status,
+            amountCents: payment.amountCents,
+            currency: payment.currency,
+            rawPayload,
+          })
+          .where(eq(payments.id, existingPayment.id));
+      } else {
+        await transaction.insert(payments).values({
+          id: `payment:${payment.provider}:${providerTradeNo}`,
+          orderId,
+          provider: payment.provider,
+          providerTradeNo,
+          status: payment.status,
+          amountCents: payment.amountCents,
+          currency: payment.currency,
+          rawPayload,
+          paidAt: now(),
+        });
+      }
+
+      const transition = payment.orderTransition;
+      if (!transition || !transition.from.includes(order.status)) return;
+      await transaction
+        .update(orders)
+        .set({
+          status: transition.to,
+          metadata: {
+            ...jsonRecord(order.metadata),
+            ...(transition.metadata || {}),
+          },
+          updatedAt: now(),
+        })
+        .where(and(
+          eq(orders.id, orderId),
+          inArray(orders.status, transition.from),
+        ));
+    });
+
     return this.findById(orderId);
   },
 
@@ -1128,6 +1207,37 @@ export const notificationStoreRepository = {
       metadata: data.metadata || {},
     });
     return id;
+  },
+
+  async createOnce(data: {
+    id: string;
+    userId: string;
+    type: string;
+    title: string;
+    description?: string;
+    actionUrl?: string;
+    metadata?: JsonRecord;
+  }) {
+    try {
+      await db.insert(notifications).values({
+        id: data.id,
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        description: data.description || '',
+        actionUrl: data.actionUrl,
+        metadata: data.metadata || {},
+      });
+      return { id: data.id, created: true };
+    } catch (error) {
+      const rows = await db
+        .select({ id: notifications.id })
+        .from(notifications)
+        .where(eq(notifications.id, data.id))
+        .limit(1);
+      if (rows[0]) return { id: rows[0].id, created: false };
+      throw error;
+    }
   },
 
   async listForUser(userId: string, limit = 50) {

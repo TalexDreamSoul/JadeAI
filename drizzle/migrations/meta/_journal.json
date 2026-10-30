@@ -106,6 +106,34 @@
       "when": 1780300000000,
       "tag": "0014_resume_analysis_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1780400000000,
+      "tag": "0015_admin_audit_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1787544000000,
+      "tag": "0016_job_applications",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1787545000000,
+      "tag": "0017_auth_login_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1787546000000,
+      "tag": "0018_product_events",
+      "breakpoints": true
     }
   ]
 }
