@@ -1,16 +1,16 @@
 <div align="center">
 
-# TouchResume
+# JadeAI
 
-**AI 驱动的智能简历生成器**
+**AI 驱动的求职工作台**
 
-拖拽编辑、实时 AI 优化、50 套专业模板、多格式导出，轻松打造高质量简历。
+从简历制作、岗位投递到模拟面试和结果跟进，在一个工作台完成求职全流程。
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)](https://www.typescriptlang.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ed)](https://hub.docker.com/r/twwch/touchresume)
+[![Docker](https://img.shields.io/badge/GHCR-Ready-2496ed)](https://github.com/TalexDreamSoul/jadeai/pkgs/container/jadeai-resume)
 
 [English](./README.md)
 
@@ -33,6 +33,12 @@
 ---
 
 ## 最近更新
+
+### v0.4.2 · 上线收口与求职闭环
+- 新增投递追踪、结果回填、商业权益、Stripe Checkout 和第一方漏斗分析
+- 加固认证、密钥加密落库、持久化登录限流和支付/钱包事务
+- 新增数据库备份、就绪检查、部署门禁、法律页和云端 Electron 客户端
+- 模板扩展到 58 套，预览组件改为按需加载
 
 ### v0.3.4 · 主题色系统与配色切换
 - 引入语义化 `--brand-*` CSS token，下线全站 60+ 文件硬编码 `pink-*`
@@ -106,7 +112,7 @@
 
 - **拖拽编辑器** — 可视化拖拽排列简历模块与条目
 - **行内编辑** — 点击任意字段，直接在画布上编辑
-- **50 套专业模板** — 经典、现代、极简、创意、ATS 友好、时间线、北欧风、瑞士风等多种风格
+- **58 套专业模板** — 经典、现代、极简、创意、ATS 友好、时间线、北欧风、瑞士风等多种风格
 - **主题定制** — 颜色、字体、间距、页边距实时预览调整
 - **撤销 / 重做** — 完整编辑历史（最多 50 步）
 - **自动保存** — 可配置保存间隔（0.3s–5s），支持手动保存
@@ -171,12 +177,20 @@
 - **JSON 导入创建** — 在仪表盘直接通过 JSON 文件创建新简历
 - **复制与重命名** — 快捷简历管理操作
 - **新手引导** — 交互式分步引导，帮助新用户快速上手
+- **投递追踪** — 分页管理投递记录、面试阶段、结果和跟进日期
+- **求职工作台** — 把简历定制、岗位模板、投递状态和面试准备串成一条流程
+
+### 商业化与运营
+
+- **会员与权益** — 会员等级、AI 点数、积分、已购内容和兑换码
+- **真实支付** — Stripe Checkout 与签名 Webhook；Mock 支付只允许显式开发/测试环境
+- **运营后台** — 商品、订单、用户、存储、增长活动、审计记录和漏斗指标
 
 ### 其他
 
 - **双语界面** — 完整的中文（zh）和英文（en）界面
 - **暗色模式** — 浅色、深色、跟随系统三种主题
-- **灵活认证** — Google OAuth 或浏览器指纹（零配置即用）
+- **灵活认证** — 账号密码、管理员配置的 OIDC 或浏览器指纹模式
 - **双数据库** — SQLite（默认，零配置）或 PostgreSQL
 
 ## 技术栈
@@ -199,18 +213,20 @@
 ### Docker 部署（推荐）
 
 ```bash
-# 先生成一个密钥
-openssl rand -base64 32
+# 分别生成会话密钥和数据加密密钥
+export AUTH_SECRET="$(openssl rand -base64 32)"
+export DATA_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 
 docker run -d -p 3000:3000 \
-  -e AUTH_SECRET=<你生成的密钥> \
-  -v touchresume-data:/app/data \
-  twwch/touchresume:latest
+  --env AUTH_SECRET \
+  --env DATA_ENCRYPTION_KEY \
+  -v jadeai-data:/app/data \
+  ghcr.io/talexdreamsoul/jadeai-resume:production-latest
 ```
 
 打开 [http://localhost:3000](http://localhost:3000)。首次启动自动完成数据库迁移和数据初始化。
 
-> **`AUTH_SECRET`** 为必填项，用于会话加密。通过 `openssl rand -base64 32` 生成。
+> **`AUTH_SECRET`** 用于会话加密，**`DATA_ENCRYPTION_KEY`** 用于加密落库的服务凭据。两者应分别生成并妥善保管。
 
 > **AI 配置：** 可以通过 `AI_PROVIDER`、`AI_OPENAI_ENDPOINT`、`AI_API_KEY`、`AI_BASE_URL`、`AI_MODEL` 配置统一的服务端 AI。用户可在 **设置 > AI** 中选择“统一配置”或填写自己的自定义配置。
 
@@ -219,25 +235,27 @@ docker run -d -p 3000:3000 \
 
 ```bash
 docker run -d -p 3000:3000 \
-  -e AUTH_SECRET=<你生成的密钥> \
+  --env AUTH_SECRET \
+  --env DATA_ENCRYPTION_KEY \
   -e DB_TYPE=postgresql \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/touchresume \
-  twwch/touchresume:latest
+  -e DATABASE_URL=postgresql://user:pass@host:5432/jadeai \
+  ghcr.io/talexdreamsoul/jadeai-resume:production-latest
 ```
 
 </details>
 
 <details>
-<summary>使用 Google OAuth 登录</summary>
+<summary>启用账号认证</summary>
 
 ```bash
 docker run -d -p 3000:3000 \
   -e AUTH_ENABLED=true \
-  -e AUTH_SECRET=your-secret \
-  -e GOOGLE_CLIENT_ID=xxx \
-  -e GOOGLE_CLIENT_SECRET=xxx \
-  -v touchresume-data:/app/data \
-  twwch/touchresume:latest
+  --env AUTH_SECRET \
+  --env DATA_ENCRYPTION_KEY \
+  -e AUTH_PASSWORD_ENABLED=true \
+  -e AUTH_PASSWORD_REGISTER_ENABLED=true \
+  -v jadeai-data:/app/data \
+  ghcr.io/talexdreamsoul/jadeai-resume:production-latest
 ```
 
 </details>
@@ -246,14 +264,14 @@ docker run -d -p 3000:3000 \
 
 #### 环境要求
 
-- Node.js 18+
-- pnpm 9+
+- Node.js 20.9+
+- pnpm 10+
 
 #### 安装
 
 ```bash
-git clone https://github.com/twwch/TouchResume.git
-cd TouchResume
+git clone https://github.com/TalexDreamSoul/jadeai.git
+cd jadeai
 
 pnpm install
 cp .env.example .env.local
@@ -273,7 +291,7 @@ AUTH_ENABLED=false
 
 > **AI 配置：** 可选配置统一的服务端 AI 环境变量。用户可在 **设置 > AI** 中选择统一配置，或自行配置 API Key、Base URL 和模型。
 
-查看 `.env.example` 了解所有可用选项（Google OAuth、PostgreSQL 等）。
+查看 `.env.example` 了解所有可用选项。首个账号创建后，OIDC 供应商在管理后台配置。
 
 #### 初始化数据库并启动
 
@@ -295,7 +313,8 @@ pnpm dev
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
-| `AUTH_SECRET` | 是 | — | 会话加密密钥 |
+| `AUTH_SECRET` | 是 | — | 至少 32 字符的随机会话加密密钥 |
+| `DATA_ENCRYPTION_KEY` | 生产环境 | — | 用于加密落库服务凭据的 32 字节 Base64 密钥 |
 | `DB_TYPE` | 否 | `sqlite` | 数据库类型：`sqlite` 或 `postgresql` |
 | `DATABASE_URL` | PostgreSQL 时 | — | PostgreSQL 连接字符串 |
 | `SQLITE_PATH` | 否 | `./data/touchresume.db` | SQLite 数据库文件路径 |
@@ -307,10 +326,10 @@ pnpm dev
 | `IMAGE_AI_API_KEY` | 否 | — | 领英/职业照生成使用的统一 Gemini 图片 API Key |
 | `IMAGE_AI_BASE_URL` | 否 | Google Gemini API | 统一图片 AI API 地址 |
 | `IMAGE_AI_MODEL` | 否 | `gemini-3.1-flash-image-preview` | 统一图片 AI 模型 |
-| `AUTH_ENABLED` | 否 | `false` | 启用 Google OAuth（`true`）或使用指纹模式（`false`） |
-| `GOOGLE_CLIENT_ID` | OAuth 时 | — | Google OAuth 客户端 ID |
-| `GOOGLE_CLIENT_SECRET` | OAuth 时 | — | Google OAuth 客户端密钥 |
-| `APP_NAME` | 否 | `TouchResume` | 应用显示名称 |
+| `AUTH_ENABLED` | 否 | `false` | 启用账号认证（`true`）或使用指纹模式（`false`） |
+| `AUTH_PASSWORD_ENABLED` | 否 | `true` | 账号认证开启时允许密码登录 |
+| `AUTH_PASSWORD_REGISTER_ENABLED` | 否 | `true` | 允许用户通过邮箱和密码注册 |
+| `APP_NAME` | 否 | `JadeAI` | 应用显示名称 |
 | `DEFAULT_LOCALE` | 否 | `zh` | 默认语言：`zh` 或 `en` |
 
 ## 常用命令
@@ -319,6 +338,8 @@ pnpm dev
 |------|------|
 | `pnpm dev` | 启动开发服务器（Turbopack） |
 | `pnpm build` | 生产构建 |
+| `pnpm dev:desktop` | 启动本地 Electron 开发客户端 |
+| `pnpm dist:mac` | 构建云端模式的 macOS DMG 和更新 ZIP |
 | `pnpm start` | 启动生产服务器 |
 | `pnpm lint` | 运行 ESLint 检查 |
 | `pnpm type-check` | TypeScript 类型检查 |
@@ -356,7 +377,7 @@ src/
 │   ├── ui/                     # shadcn/ui 基础组件
 │   ├── editor/                 # 编辑器画布、区块、字段、弹窗
 │   ├── ai/                     # AI 对话面板与气泡
-│   ├── preview/templates/      # 50 套简历模板
+│   ├── preview/templates/      # 58 套简历模板
 │   ├── dashboard/              # 仪表盘卡片、网格、弹窗
 │   └── layout/                 # 头部、主题、语言切换
 ├── lib/
@@ -370,10 +391,10 @@ src/
 
 ## 模板列表
 
-TouchResume 内置 **50 套专业设计模板**，覆盖多种风格和行业需求：
+JadeAI 内置 **58 套专业设计模板**，覆盖多种风格和行业需求：
 
 <details>
-<summary>查看全部 50 套模板</summary>
+<summary>查看全部 58 套模板</summary>
 
 | # | 模板 | # | 模板 | # | 模板 |
 |---|------|---|------|---|------|
@@ -394,6 +415,9 @@ TouchResume 内置 **50 套专业设计模板**，覆盖多种风格和行业需
 | 15 | Infographic | 32 | Finance | 49 | Watercolor |
 | 16 | Compact | 33 | Berlin | 50 | Mosaic |
 | 17 | Euro | 34 | Legal | | |
+| 51 | Touch Pure | 52 | Touch Simple | 53 | Touch Flat |
+| 54 | Touch Line | 55 | Touch Compact | 56 | Touch Card |
+| 57 | Touch Grid | 58 | Touch Focus | | |
 
 </details>
 
@@ -466,7 +490,7 @@ TouchResume 内置 **50 套专业设计模板**，覆盖多种风格和行业需
 <details>
 <summary><b>AI 配置是如何工作的？</b></summary>
 
-TouchResume 支持两种模式。管理员可以通过 `AI_PROVIDER`、`AI_OPENAI_ENDPOINT`、`AI_API_KEY`、`AI_BASE_URL`、`AI_MODEL` 配置统一服务端 AI；用户在 **设置 > AI** 中选择“统一配置”后无需填写个人 Key。用户也可以选择“自定义配置”，自行填写服务商、API Key、Base URL 和模型。个人 API Key 仅保存在浏览器本地，不会写入应用数据库。
+JadeAI 支持两种模式。管理员可以通过 `AI_PROVIDER`、`AI_OPENAI_ENDPOINT`、`AI_API_KEY`、`AI_BASE_URL`、`AI_MODEL` 配置统一服务端 AI；用户在 **设置 > AI** 中选择“统一配置”后无需填写个人 Key。用户也可以选择“自定义配置”，自行填写服务商、API Key、Base URL 和模型。个人 API Key 仅保存在浏览器本地，不会写入应用数据库。
 
 </details>
 
@@ -480,24 +504,24 @@ TouchResume 支持两种模式。管理员可以通过 `AI_PROVIDER`、`AI_OPENA
 <details>
 <summary><b>不使用 OAuth 时认证如何工作？</b></summary>
 
-当 `AUTH_ENABLED=false`（默认）时，TouchResume 使用 FingerprintJS 进行浏览器指纹识别。系统为每个浏览器生成唯一的指纹 ID 作为用户标识。无需登录界面 — 用户可以直接开始创建简历。
+当 `AUTH_ENABLED=false`（默认）时，JadeAI 使用 FingerprintJS 进行浏览器指纹识别。启用认证后，可使用账号密码和管理员配置的 OIDC 供应商。
 
 </details>
 
 <details>
 <summary><b>PDF 导出是如何实现的？</b></summary>
 
-PDF 导出使用 Puppeteer Core + @sparticuz/chromium。50 套模板各有独立的服务端导出处理器，将简历渲染为高保真 PDF。同时支持 DOCX、HTML、TXT 和 JSON 格式导出。
+PDF 导出使用 Puppeteer Core + @sparticuz/chromium。每套模板都有独立的服务端导出处理器，将简历渲染为高保真 PDF。同时支持 DOCX、HTML、TXT 和 JSON 格式导出。
 
 </details>
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=LingyiChen-AI%2FTouchResume&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=TalexDreamSoul%2Fjadeai&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=TalexDreamSoul/jadeai&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=TalexDreamSoul/jadeai&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=TalexDreamSoul/jadeai&type=date&legend=top-left" />
  </picture>
 </a>
 

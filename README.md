@@ -1,16 +1,16 @@
 <div align="center">
 
-# TouchResume
+# JadeAI
 
-**AI-Powered Smart Resume Builder**
+**AI-powered career workspace**
 
-Build professional resumes with drag-and-drop editing, real-time AI optimization, 50 templates, and multi-format export.
+Create and tailor resumes, track applications, prepare for interviews, and manage career progress in one workspace.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)](https://www.typescriptlang.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ed)](https://hub.docker.com/r/twwch/touchresume)
+[![Docker](https://img.shields.io/badge/GHCR-Ready-2496ed)](https://github.com/TalexDreamSoul/jadeai/pkgs/container/jadeai-resume)
 
 [中文文档](./README.zh-CN.md)
 
@@ -26,6 +26,12 @@ Join our groups for discussion and support:
 
 
 ## Recent Updates
+
+### v0.4.2 · Production Readiness & Career Workflow
+- Added application tracking, result follow-up, commercial entitlements, Stripe Checkout, and first-party funnel analytics
+- Hardened authentication, encrypted stored secrets, durable login rate limiting, and transactional payment/wallet writes
+- Added database backups, readiness telemetry, deployment gates, legal pages, and a cloud-backed Electron client
+- Expanded the gallery to 58 templates and load template renderers on demand
 
 ### v0.3.4 · Brand Color System & Theme Switching
 - Introduced semantic `--brand-*` CSS tokens; replaced hardcoded `pink-*` across 60+ files
@@ -97,7 +103,7 @@ Watch the full deployment walkthrough on Bilibili:
 
 - **Drag & Drop Editor** — Visually arrange and reorder resume sections and items
 - **Inline Editing** — Click any field to edit directly on the canvas
-- **50 Professional Templates** — Classic, Modern, Minimal, Creative, ATS-Friendly, Timeline, Nordic, Swiss, and more
+- **58 Professional Templates** — Classic, Modern, Minimal, Creative, ATS-Friendly, Timeline, Nordic, Swiss, and more
 - **Theme Customization** — Colors, fonts, spacing, and margins with live preview
 - **Undo / Redo** — Full edit history (up to 50 steps)
 - **Auto Save** — Configurable interval (0.3s–5s), with manual save option
@@ -162,12 +168,20 @@ The following resume sections support Markdown syntax:
 - **Import from JSON** — Create a new resume from a JSON export directly on the dashboard
 - **Duplicate & Rename** — Quick resume management actions
 - **Interactive Tours** — Step-by-step onboarding for first-time users
+- **Application Tracker** — Paginated application records, interview stages, outcomes, and follow-up dates
+- **Career Workspace** — Resume tailoring, job templates, application status, and interview preparation in one flow
+
+### Commerce & Operations
+
+- **Membership & Entitlements** — Membership tiers, AI credits, points, purchased content, and redemption codes
+- **Payments** — Stripe Checkout with signed webhooks; mock payments are restricted to explicit development/test use
+- **Operations Console** — Products, orders, users, storage, growth programs, audit history, and funnel metrics
 
 ### Other
 
 - **Bilingual UI** — Full Chinese (zh) and English (en) interface
 - **Dark Mode** — Light, dark, and system theme support
-- **Flexible Auth** — Google OAuth or browser fingerprint (zero-config)
+- **Flexible Auth** — Password login, administrator-managed OIDC providers, or browser fingerprint mode
 - **Dual Database** — SQLite (default, zero-config) or PostgreSQL
 
 ## Tech Stack
@@ -190,18 +204,20 @@ The following resume sections support Markdown syntax:
 ### Docker (Recommended)
 
 ```bash
-# Generate a secret key first
-openssl rand -base64 32
+# Generate independent session and data-encryption keys
+export AUTH_SECRET="$(openssl rand -base64 32)"
+export DATA_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 
 docker run -d -p 3000:3000 \
-  -e AUTH_SECRET=<your-generated-secret> \
-  -v touchresume-data:/app/data \
-  twwch/touchresume:latest
+  --env AUTH_SECRET \
+  --env DATA_ENCRYPTION_KEY \
+  -v jadeai-data:/app/data \
+  ghcr.io/talexdreamsoul/jadeai-resume:production-latest
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Database auto-migrates and seeds on first start.
 
-> **`AUTH_SECRET`** is required for session encryption. Generate one with `openssl rand -base64 32`.
+> **`AUTH_SECRET`** encrypts sessions. **`DATA_ENCRYPTION_KEY`** encrypts stored service credentials. Generate and protect them independently.
 
 > **AI Configuration:** You can configure a unified server-side AI provider via `AI_PROVIDER`, `AI_OPENAI_ENDPOINT`, `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`. Users can choose **Unified Config** or enter their own custom key in **Settings > AI**.
 
@@ -210,25 +226,27 @@ Open [http://localhost:3000](http://localhost:3000). Database auto-migrates and 
 
 ```bash
 docker run -d -p 3000:3000 \
-  -e AUTH_SECRET=<your-generated-secret> \
+  --env AUTH_SECRET \
+  --env DATA_ENCRYPTION_KEY \
   -e DB_TYPE=postgresql \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/touchresume \
-  twwch/touchresume:latest
+  -e DATABASE_URL=postgresql://user:pass@host:5432/jadeai \
+  ghcr.io/talexdreamsoul/jadeai-resume:production-latest
 ```
 
 </details>
 
 <details>
-<summary>With Google OAuth</summary>
+<summary>With account authentication</summary>
 
 ```bash
 docker run -d -p 3000:3000 \
   -e AUTH_ENABLED=true \
-  -e AUTH_SECRET=your-secret \
-  -e GOOGLE_CLIENT_ID=xxx \
-  -e GOOGLE_CLIENT_SECRET=xxx \
-  -v touchresume-data:/app/data \
-  twwch/touchresume:latest
+  --env AUTH_SECRET \
+  --env DATA_ENCRYPTION_KEY \
+  -e AUTH_PASSWORD_ENABLED=true \
+  -e AUTH_PASSWORD_REGISTER_ENABLED=true \
+  -v jadeai-data:/app/data \
+  ghcr.io/talexdreamsoul/jadeai-resume:production-latest
 ```
 
 </details>
@@ -237,14 +255,14 @@ docker run -d -p 3000:3000 \
 
 #### Prerequisites
 
-- Node.js 18+
-- pnpm 9+
+- Node.js 20.9+
+- pnpm 10+
 
 #### Installation
 
 ```bash
-git clone https://github.com/twwch/TouchResume.git
-cd TouchResume
+git clone https://github.com/TalexDreamSoul/jadeai.git
+cd jadeai
 
 pnpm install
 cp .env.example .env.local
@@ -264,7 +282,7 @@ AUTH_ENABLED=false
 
 > **AI Configuration:** Optionally configure unified server-side AI env vars. Users can choose the unified config or their own API Key, Base URL, and Model in **Settings > AI**.
 
-See `.env.example` for all available options (Google OAuth, PostgreSQL, etc.).
+See `.env.example` for all available options. OIDC providers are configured in the administrator console after the first account is created.
 
 #### Initialize Database & Run
 
@@ -286,7 +304,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `AUTH_SECRET` | Yes | — | Secret key for session encryption |
+| `AUTH_SECRET` | Yes | — | Random secret of at least 32 characters for session encryption |
+| `DATA_ENCRYPTION_KEY` | Production | — | Base64-encoded 32-byte key for encrypting stored service credentials |
 | `DB_TYPE` | No | `sqlite` | Database type: `sqlite` or `postgresql` |
 | `DATABASE_URL` | When PostgreSQL | — | PostgreSQL connection string |
 | `SQLITE_PATH` | No | `./data/touchresume.db` | SQLite database file path |
@@ -298,10 +317,10 @@ Open [http://localhost:3000](http://localhost:3000).
 | `IMAGE_AI_API_KEY` | No | — | Unified Gemini image API key for LinkedIn/professional photo generation |
 | `IMAGE_AI_BASE_URL` | No | Google Gemini API | Unified image AI base URL |
 | `IMAGE_AI_MODEL` | No | `gemini-3.1-flash-image-preview` | Unified image AI model |
-| `AUTH_ENABLED` | No | `false` | Enable Google OAuth (`true`) or use fingerprint mode (`false`) |
-| `GOOGLE_CLIENT_ID` | When OAuth | — | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | When OAuth | — | Google OAuth client secret |
-| `APP_NAME` | No | `TouchResume` | Application display name |
+| `AUTH_ENABLED` | No | `false` | Enable account authentication (`true`) or use fingerprint mode (`false`) |
+| `AUTH_PASSWORD_ENABLED` | No | `true` | Enable password sign-in when account authentication is active |
+| `AUTH_PASSWORD_REGISTER_ENABLED` | No | `true` | Allow users to register with email and password |
+| `APP_NAME` | No | `JadeAI` | Application display name |
 | `DEFAULT_LOCALE` | No | `zh` | Default language: `zh` or `en` |
 
 ## Scripts
@@ -310,6 +329,8 @@ Open [http://localhost:3000](http://localhost:3000).
 |---------|-------------|
 | `pnpm dev` | Start dev server with Turbopack |
 | `pnpm build` | Production build |
+| `pnpm dev:desktop` | Start the local Electron development client |
+| `pnpm dist:mac` | Build the cloud-backed macOS DMG and update ZIP |
 | `pnpm start` | Start production server |
 | `pnpm lint` | Run ESLint |
 | `pnpm type-check` | TypeScript type checking |
@@ -347,7 +368,7 @@ src/
 │   ├── ui/                     # shadcn/ui base components
 │   ├── editor/                 # Editor canvas, sections, fields, dialogs
 │   ├── ai/                     # AI chat panel & bubble
-│   ├── preview/templates/      # 50 resume templates
+│   ├── preview/templates/      # 58 resume templates
 │   ├── dashboard/              # Dashboard cards, grid, dialogs
 │   └── layout/                 # Header, theme provider, locale switcher
 ├── lib/
@@ -361,10 +382,10 @@ src/
 
 ## Templates
 
-TouchResume includes **50 professionally designed resume templates** covering a wide range of styles and industries:
+JadeAI includes **58 professionally designed resume templates** covering a wide range of styles and industries:
 
 <details>
-<summary>View all 50 templates</summary>
+<summary>View all 58 templates</summary>
 
 | # | Template | # | Template | # | Template |
 |---|----------|---|----------|---|----------|
@@ -385,6 +406,9 @@ TouchResume includes **50 professionally designed resume templates** covering a 
 | 15 | Infographic | 32 | Finance | 49 | Watercolor |
 | 16 | Compact | 33 | Berlin | 50 | Mosaic |
 | 17 | Euro | 34 | Legal | | |
+| 51 | Touch Pure | 52 | Touch Simple | 53 | Touch Flat |
+| 54 | Touch Line | 55 | Touch Compact | 56 | Touch Card |
+| 57 | Touch Grid | 58 | Touch Focus | | |
 
 </details>
 
@@ -457,7 +481,7 @@ Contributions are welcome! Here's how to get started:
 <details>
 <summary><b>How does AI configuration work?</b></summary>
 
-TouchResume supports two modes. Admins can configure a unified server-side AI provider with `AI_PROVIDER`, `AI_OPENAI_ENDPOINT`, `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`; users may select **Unified Config** in **Settings > AI** without entering a personal key. Users can also select **Custom Config** and provide their own provider, API key, base URL, and model. Personal API keys are stored locally in the browser and are not persisted to the app database.
+JadeAI supports two modes. Admins can configure a unified server-side AI provider with `AI_PROVIDER`, `AI_OPENAI_ENDPOINT`, `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`; users may select **Unified Config** in **Settings > AI** without entering a personal key. Users can also select **Custom Config** and provide their own provider, API key, base URL, and model. Personal API keys are stored locally in the browser and are not persisted to the app database.
 
 </details>
 
@@ -471,26 +495,24 @@ Yes. Set the `DB_TYPE` environment variable to `sqlite` or `postgresql`. SQLite 
 <details>
 <summary><b>How does authentication work without OAuth?</b></summary>
 
-When `AUTH_ENABLED=false` (default), TouchResume uses browser fingerprinting via FingerprintJS. A unique fingerprint ID is generated for each browser and used as the user identifier. No login screen is shown — users can start building resumes immediately.
+When `AUTH_ENABLED=false` (default), JadeAI uses browser fingerprinting via FingerprintJS. A unique fingerprint ID is generated for each browser and used as the user identifier. When authentication is enabled, password login and administrator-managed OIDC providers are available.
 
 </details>
 
 <details>
 <summary><b>How is PDF export implemented?</b></summary>
 
-PDF export uses Puppeteer Core with @sparticuz/chromium. Each of the 50 templates has a dedicated server-side export handler that renders the resume to high-fidelity PDF. DOCX, HTML, TXT, and JSON exports are also supported.
+PDF export uses Puppeteer Core with @sparticuz/chromium. Each template has a dedicated server-side export handler that renders the resume to high-fidelity PDF. DOCX, HTML, TXT, and JSON exports are also supported.
 
 </details>
 
 ## Star History
 
-## Star History
-
-<a href="https://www.star-history.com/?repos=LingyiChen-AI%2FTouchResume&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=TalexDreamSoul%2Fjadeai&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=LingyiChen-AI/TouchResume&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=TalexDreamSoul/jadeai&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=TalexDreamSoul/jadeai&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=TalexDreamSoul/jadeai&type=date&legend=top-left" />
  </picture>
 </a>
 

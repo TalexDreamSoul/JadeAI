@@ -1,104 +1,123 @@
 # JadeAI 商业化成长平台进展
 
-> 目标：把 JadeAI 从「AI 简历工具」升级为「求职商业化成长平台」，用会员权益驱动 AI、模板、职位库、面试题库、下载、推广和支付闭环。
+> 状态快照：v0.4.2，2026-08-23。目标是判断能否安全进入小规模真实用户验证，而不是累计功能数量。
 
-## 当前状态
+## 状态口径
 
-### 已落地
-
-| 模块 | 当前进展 |
+| 状态 | 判定标准 |
 | --- | --- |
-| 商业化底座 | 已建立 membership、entitlement、wallet、billing、notification 基础域；核心数据进入 `user_memberships`、`user_entitlements`、`wallet_accounts`、`wallet_transactions`、`orders`、`payments`、`notifications`。 |
-| 会员体系 | 已有 free / pro / premium / business 四档会员；权益覆盖 AI 月额度、模型等级、简历数量、PDF/DOCX 导出、模板下载、职位模板、题库等级、模拟面试次数、推广返利、积分兑换折扣。 |
-| AI 消耗体系 | 主要 AI 路由已迁移到 `wallet_transactions` + `ai_usage_logs`；支持预扣、成功结算、失败退款、余额不足日志；`users.aiCredits` 仅作为兼容镜像同步。 |
-| 商品与订单 | 统一 `products` 商品模型，覆盖 membership、ai_credit_pack、resume_template、job_template、interview_question_bank、interview_mock_pack；mock 支付已接入订单创建、支付确认、履约和通知。 |
-| 模板付费下载 | 简历模板、职位模板走商品授权；购买、会员福利、兑换码、推广奖励最终写入 `user_entitlements`，下载接口按授权判断。 |
-| 面试题库 | 题库作为独立内容资产，包含行业、岗位、级别、公司类型、能力维度、难度、题型、参考答案、Rubric、关键词、AI 追问策略；支持会员等级/购买解锁、收藏、错题、练习记录、套题报告。 |
-| 积分与福利 | 已有 POINT / AI_CREDIT 账本、积分兑换、兑换码、积分任务、福利包、邀请裂变、推广返利、抽奖；所有奖励通过账本或权益记录发放。 |
-| 个人中心 | 已补齐会员、AI 点数、积分流水、订单、已购内容、题库权限、消息通知、兑换码、推广中心、抽奖记录等入口。 |
-| 运营后台 | 已补齐商品、订单、兑换码、增长/抽奖/推广、用户 AI 点数调整等基础运营能力。 |
+| 已实现 | 代码、数据模型和相关自动化验证已经存在。 |
+| 待真实验收 | 实现已具备，但真实第三方账号、基础设施或运营流程尚未端到端通过。 |
+| 未完成 | 发布所需实现或人工处置流程仍缺失。 |
+| 延期 | 不属于未来 2–4 周发布基线。 |
 
-### 已增加的关键回归烟测
+## 总体判断
 
-| 脚本 | 覆盖内容 |
+商业化核心域和两条黄金路径已经在代码层面闭环：
+
+- 求职闭环：创建/导入简历 → JD 分析 → 专项简历 → 导出 → 模拟面试 → 投递追踪。
+- 商业闭环：商品/会员 → 订单 → 结算 → 支付回调 → 履约 → 权益/钱包/通知。
+
+当前不能据此判定“可正式上线”。Stripe Test Mode、真实 PostgreSQL、备份恢复、生产密钥与 OIDC、法律主体、托管 CI、GHCR/Jenkins preview 和人工复核流程仍缺少真实环境验收证据。
+
+## 工程状态矩阵
+
+| 模块 | 状态 | 已有能力 | 剩余验收或风险 |
+| --- | --- | --- | --- |
+| 会员与权益 | 已实现 | free / pro / premium / business 四档会员；权益覆盖 AI 配额、模型等级、简历数量、导出、模板/职位模板/题库、模拟面试、推广和积分折扣。 | 核对真实售卖方案、到期规则、降级行为和页面文案。 |
+| 钱包与 AI 计量 | 已实现 | `wallet_transactions` 与 `ai_usage_logs` 支持预扣、结算、失败退款、余额不足记录；`users.aiCredits` 仅作为兼容镜像。 | 用真实模型验证流式中断、超时、重试和并发请求下的账实一致。 |
+| 商品、订单与履约 | 已实现 | 统一商品模型覆盖会员、AI 点数包、简历模板、职位模板、面试题库和模拟面试包；授权统一落到权益或钱包账本。 | 核对价格、库存/上下架、退款后权益回收和客服补发流程。 |
+| Stripe | 待真实验收 | 已实现 Checkout Session、服务端幂等键、客户端确认禁用、签名 webhook、livemode 校验、金额/币种/订单匹配，以及成功、处理中、失败、过期、退款和争议状态归一化。 | 使用真实 Test Mode 密钥和公开 HTTPS webhook 验证完整往返；完成域名、密钥、重复回调、退款/争议和日终对账。 |
+| 模板与题库商业化 | 已实现 | 简历模板、职位模板和面试题库支持会员或购买解锁；题库有收藏、练习、错题和报告资产。 | 用真实账号验收购买前锁定、支付后授权、下载/访问和退款后的状态。 |
+| 积分与增长 | 已实现 | POINT / AI_CREDIT 账本、积分兑换、兑换码、邀请关系、推广返利、抽奖和通知已经接入统一奖励出口。 | 真实活动前补奖池/预算上限、作弊处置和人工纠错流程。 |
+| 投递追踪 | 已实现 | 支持投递记录 CRUD、分页筛选、阶段和结果，并可关联简历、JD 分析与面试。 | 小规模用户验证字段与提醒需求，不扩展为复杂 CRM。 |
+| 产品事件与漏斗 | 已实现 | `product_events` 只接受 11 个事件和各事件 metadata 白名单；匿名 fingerprint 仅保存 SHA-256；单批最多 20 条并按 actor 限流。管理员可查看 7/30 天严格时序 cohort 漏斗。 | 用真实流量核对漏报、重复事件、匿名/登录身份切换、数据保留和隐私披露。 |
+| 密钥保护 | 已实现，待运维验收 | 敏感配置支持加密落库，并有密钥加密 smoke。 | 配置生产 `DATA_ENCRYPTION_KEY`、轮换旧密钥、备份密钥和失效处置；确认页面不回显明文。 |
+| 登录与 OIDC | 已实现，待策略验收 | 登录失败限流持久化到数据库；OIDC 只接受已验证邮箱，并限制自动使用既有账号的条件。 | 锁定生产身份源、回调域名和账号关联策略，验证多实例限流与误锁恢复。 |
+| 法律页 | 已实现，待法律验收 | 中英文隐私政策和服务条款页面已存在，登录及站点入口可引用。 | 填写真实运营主体、联系邮箱、适用地区规则，并由有权限的人员复核退款、数据处理和争议条款。 |
+| 事务与幂等 | 已实现，待真实并发验收 | 商业事务 smoke 覆盖原子性、失败回滚、履约重试，以及重复 `providerTradeNo` 拒绝。 | 在真实 PostgreSQL 并发压测；为部分退款、争议、账本差异和权益补发建立人工复核队列与审计 SOP。 |
+| 数据库与备份 | 待真实验收 | SQLite 迁移到 `0018`，PostgreSQL 迁移到 `0016`；提供 SQLite 一致性备份、PostgreSQL custom dump、SHA-256 和归档校验。 | 在真实 PostgreSQL 从空库和代表性数据执行迁移；完成隔离恢复演练、恢复后业务 smoke、RPO/RTO 和外部备份保留策略。 |
+| Electron | 待发行验收 | 正式桌面包为云端模式，不携带 Next.js、SQLite 迁移或第二套业务数据库；本地数据库包有独立实验命令。 | 验收生产 HTTPS、登录/支付/下载、签名、公证、断网和自动更新。本地数据库包不作为商业版承诺。 |
+| CI/CD | 待托管环境验收 | GitHub Actions 配置了 type-check、test、lint、13 个商业 smoke、PostgreSQL integration、production build，再构建 GHCR 镜像并触发 Jenkins。 | 必须让同一干净版本在托管 CI 和 preview 环境完整通过。配置存在不代表当前未提交改动已经通过。 |
+
+## 产品事件口径
+
+当前固定 11 个白名单事件：
+
+| 漏斗 | 事件 |
 | --- | --- |
-| `scripts/smoke-ai-metering-ledger.ts` | AI 预扣、成功结算、失败退款、余额不足日志。 |
-| `scripts/smoke-ai-json-usage.ts` | JSON AI 重试场景的 token usage 聚合。 |
-| `scripts/smoke-points-exchange.ts` | 积分兑换 AI 点数/模拟面试权益的幂等、通知去重、余额不足。 |
-| `scripts/smoke-paid-order-fulfillment-retry.ts` | 已支付但未履约订单的重试履约幂等。 |
-| `scripts/smoke-share-download-entitlement.ts` | 分享下载按简历所有者会员权益校验。 |
-| `scripts/smoke-job-template-download-entitlement.ts` | 职位模板未购锁定、购买后授权、下载成功。 |
-| `scripts/smoke-interview-question-bank-commerce.ts` | 题库未购锁定、购买后访问、收藏、练习、错题记录。 |
-| `scripts/smoke-interview-mock-quota.ts` | 模拟面试月度额度与额外包分组消费。 |
-| `scripts/smoke-low-credit-notification.ts` | 低 AI 点数通知去重和已读状态。 |
-| `scripts/smoke-referral-cycle.ts` | 裂变推广邀请关系防成环。 |
+| 简历 | `resume_imported`、`resume_created`、`jd_analyzed`、`tailored_resume_created`、`resume_exported` |
+| 面试 | `mock_interview_started`、`mock_interview_completed` |
+| 投递 | `application_created`、`application_result_recorded` |
+| 商业 | `checkout_started`、`payment_succeeded` |
 
-## 关键设计决策
+后台接口只接受 `days=7` 或 `days=30`。每一步都要求同一 actor 的首次事件时间不早于上一步，因此反向发生的历史事件不会被误计为正向转化。
 
-- 钱包只做账本入口，不直接改用户余额；`users.aiCredits` 仅保留兼容读写并由钱包余额同步。
-- 商品购买、会员福利、兑换码、推广奖励统一落到 `user_entitlements` 或 `wallet_transactions`，下载/访问接口只判断授权。
-- mock 支付先沉淀支付适配器接口，后续微信、支付宝、Stripe 只替换 provider adapter，不改订单履约主流程。
-- 面试题库不塞进职位模板，单独建内容资产和练习资产，保证后续可以独立售卖、组卷、评分和增长运营。
-- 流式 AI 接口使用 reservation 模式，成功 `completeAIUsage`，失败/中断/构造异常 `refundAIUsage`。
+## 商业 smoke 基线
 
-## 下一步计划
+`pnpm smoke:commercial` 当前聚合 13 个场景：
 
-### P0：上线前收口
+| 脚本 | 覆盖重点 |
+| --- | --- |
+| `smoke-ai-json-usage.ts` | JSON AI 重试的 token usage 聚合。 |
+| `smoke-ai-metering-ledger.ts` | AI 预扣、结算、退款和余额不足。 |
+| `smoke-interview-mock-quota.ts` | 模拟面试月额度与额外包消费。 |
+| `smoke-share-download-entitlement.ts` | 分享下载按所有者权益判断。 |
+| `smoke-job-template-download-entitlement.ts` | 职位模板购买、授权和下载。 |
+| `smoke-interview-question-bank-commerce.ts` | 题库购买、访问、收藏、练习和错题。 |
+| `smoke-points-exchange.ts` | 积分兑换、幂等、通知去重和余额不足。 |
+| `smoke-referral-cycle.ts` | 邀请关系防成环。 |
+| `smoke-low-credit-notification.ts` | 低 AI 点数通知去重和已读。 |
+| `smoke-paid-order-fulfillment-retry.ts` | 已支付未履约订单的重试幂等。 |
+| `smoke-commercial-transaction-atomicity.ts` | 商业事务回滚和重复 provider trade。 |
+| `smoke-secret-encryption-at-rest.ts` | 敏感配置加密落库。 |
+| `smoke-durable-login-rate-limit.ts` | 数据库持久化登录限流。 |
 
-1. **生产级幂等与事务审计**
-   - 对 `walletRepository.debit/credit`、订单履约、权益发放、兑换码领取、推广返利做事务边界复核。
-   - 给订单履约、积分兑换、兑换码、抽奖增加稳定 request id / source id 约束说明。
-2. **全量商业化 E2E 验证**
-   - 把当前 smoke 串成一个商业化回归命令。
-   - 覆盖用户从购买会员、购买模板/题库、AI 消耗、积分兑换、消息通知到个人中心查看的完整链路。
-3. **真实支付适配准备**
-   - 根据 `docs/research/wechat-pay.md` 补微信支付 provider 草案。
-   - 明确支付回调验签、订单状态机、重复回调、退款/关闭订单策略。
-4. **数据迁移与兼容清理**
-   - 检查 SQLite/PostgreSQL 两套 schema 与 migration 是否一致。
-   - 逐步把业务读写从 `users.aiCredits` 迁移到 wallet API，只保留兼容镜像。
+聚合脚本已经内置 `NODE_ENV=test`、SQLite 内存库、`AUTH_ENABLED=false`、`ALLOW_MOCK_PAYMENTS=true` 和测试专用加密密钥。若单独运行依赖模拟支付的脚本，尤其是订单履约、职位模板和面试题库脚本，仍必须显式设置 `ALLOW_MOCK_PAYMENTS=true`；不要把 mock 支付开关带入生产环境。
 
-### P1：增长与内容深化
+## 发布门禁
 
-1. **面试题库增强**
-   - 支持按 JD 自动组卷、错题复习计划、AI 评分报告历史对比。
-   - 后台补题库导入/批量编辑/上下架/价格策略。
-2. **推广与裂变增强**
-   - 推广中心增加邀请转化漏斗、返利明细、活动页和渠道码。
-   - 抽奖补充奖池库存、中奖概率、风控限制。
-3. **个人中心体验优化**
-   - 订单详情、权益到期提醒、通知筛选、积分任务状态进一步细化。
-
-### P2：架构迁移
-
-1. **Monorepo 迁移**
-   - 目标结构：`apps/web`、`apps/mobile`、`packages/db`、`packages/billing`、`packages/ai`、`packages/types`、`packages/auth`。
-   - 迁移前先冻结商业化核心 API 合约和数据库 schema。
-2. **RN 小程序**
-   - 复用业务类型和 API，不强行复用 Web 组件。
-   - 首期只做个人中心、订单/权益、题库练习、简历查看与轻编辑。
-
-## 当前未完成事项
-
-- 真实支付尚未接入，当前仍为 mock 支付。
-- Monorepo/RN 小程序迁移尚未执行。
-- 生产级事务、并发一致性和回滚补偿仍需专项审计。
-- 商业化后台仍需要更完整的运营报表和批量内容管理。
-- 当前存在大量商业化相关文件尚未纳入一次正式提交，提交前需要排除 `.serena/`、`.spec-workflow/` 等工具目录。
-
-## 建议验证命令
+本地和托管 CI 应按同一顺序执行：
 
 ```bash
 pnpm type-check
-
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-ai-metering-ledger.ts"
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-ai-json-usage.ts"
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-points-exchange.ts"
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-paid-order-fulfillment-retry.ts"
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-share-download-entitlement.ts"
-AUTH_ENABLED=false SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-job-template-download-entitlement.ts"
-AUTH_ENABLED=false SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-interview-question-bank-commerce.ts"
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-interview-mock-quota.ts"
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-low-credit-notification.ts"
-SQLITE_PATH=":memory:" pnpm exec tsx "scripts/smoke-referral-cycle.ts"
+pnpm test
+pnpm lint
+pnpm smoke:commercial
+pnpm smoke:postgres
+pnpm build
 ```
+
+`pnpm smoke:postgres` 仅在隔离 PostgreSQL 中运行，需要显式配置 `DB_TYPE=postgresql`、`DATABASE_URL` 和 `ALLOW_POSTGRES_INTEGRATION_TESTS=true`。测试凭据应由 CI secret 注入，不写入仓库。
+
+门禁通过的判定对象必须是同一个干净版本。某个开发机曾经通过、工作流文件已经存在、GHCR/Jenkins 配置已经写好，都不能替代当前版本的托管 CI 结果和 preview 业务验收。
+
+## 发布前阻塞项
+
+| 优先级 | 阻塞项 | 完成证据 |
+| --- | --- | --- |
+| P0 | Stripe Test Mode 真实闭环 | Checkout、真实签名 webhook、重复回调、成功/失败、退款/争议和订单/支付/权益对账记录一致。 |
+| P0 | 真实 PostgreSQL 与恢复 | 双库迁移对齐、PG integration 通过、备份校验通过、隔离恢复成功且恢复后商业 smoke 通过。 |
+| P0 | 生产安全与身份 | 加密密钥和轮换可用，多实例登录限流生效，OIDC 账号关联符合策略，密钥不回显。 |
+| P0 | 事务与人工复核 | 真实并发下账本/订单/权益原子，重复 provider trade 被拒绝；异常单有可审计的人工复核和补偿流程。 |
+| P0 | 同版本 CI 与 preview | type-check、test、lint、13 smoke、PG integration、build、GHCR 和 Jenkins preview 全部基于同一版本通过。 |
+| P0 | 法律与运营配置 | 真实运营主体、联系邮箱、价格、退款、隐私和数据保留规则已复核并与页面一致。 |
+| P1 | Electron 正式发行 | 仅在本轮包含桌面发布时阻塞：云端地址、签名、公证、首启、断网、支付返回和更新全部验收。 |
+
+## 未来 2–4 周
+
+1. **发布基线**：冻结环境、迁移和 provider；在干净版本跑完整门禁并打通 preview。
+2. **真实依赖验收**：只处理 Stripe、PostgreSQL、备份恢复、AI/存储、OIDC、密钥、法律和桌面发行边界。
+3. **小规模用户**：让一小批可跟踪用户完成求职和商业黄金路径，结合错误日志与 7/30 天严格时序漏斗复盘。
+4. **最大流失点优化**：只选择一个相邻步骤做最小实验；没有数据证明前不并行启动新平台工程。
+
+## 明确延期
+
+- Monorepo。
+- React Native 或小程序。
+- 自定义模板编辑器。
+- 模板社区或创作者市场。
+- 复杂 BI 和自助归因平台。
+- 内置本地数据库的桌面商业版。
+
+这些方向不是当前发布前提，也不作交付承诺。只有真实用户与漏斗数据证明它们比现有阻塞项更重要时，才重新评估。
