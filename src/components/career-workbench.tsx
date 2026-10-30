@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Brain,
+  BriefcaseBusiness,
   Check,
   ChevronDown,
   Copy,
@@ -50,9 +51,10 @@ import { useFingerprint } from '@/hooks/use-fingerprint';
 import { Link, useRouter } from '@/i18n/routing';
 import { getAIHeaders } from '@/stores/settings-store';
 import { useEditorStore } from '@/stores/editor-store';
-import { purchaseProductWithMockPayment } from '@/lib/commercial/client-payments';
+import { purchaseProduct } from '@/lib/commercial/client-payments';
 import type { Resume } from '@/types/resume';
 import { InterviewLobby } from '@/components/interview/interview-lobby';
+import { JobApplicationTracker } from '@/components/career/job-application-tracker';
 import KnowledgePage from '@/app/[locale]/knowledge/page';
 
 type CareerWorkbenchProps = {
@@ -63,7 +65,7 @@ type CareerWorkbenchProps = {
   onResumeChanged?: () => void | Promise<void>;
 };
 
-export type CareerWorkbenchTab = 'match' | 'history' | 'memory' | 'knowledge' | 'interview';
+export type CareerWorkbenchTab = 'match' | 'applications' | 'history' | 'memory' | 'knowledge' | 'interview';
 export type CareerWorkbenchAiTool = 'ai-review' | 'translate' | 'cover-letter' | 'grammar-check';
 type JdHistoryAction = 'match-analysis' | 'cloud-analysis' | 'batch-analysis' | 'derive-resume' | 'build-knowledge' | 'create-interview';
 
@@ -276,12 +278,13 @@ function renderDiffParts(parts: DiffPart[], side: 'old' | 'new') {
 
 export const CAREER_WORKBENCH_TABS: { value: CareerWorkbenchTab; icon: React.ElementType; labelKey: string }[] = [
   { value: 'match', icon: Target, labelKey: 'matchTab' },
+  { value: 'applications', icon: BriefcaseBusiness, labelKey: 'applicationsTab' },
   { value: 'memory', icon: Brain, labelKey: 'memoryTab' },
   { value: 'knowledge', icon: Network, labelKey: 'knowledgeTab' },
   { value: 'interview', icon: MessageSquareText, labelKey: 'interviewTab' },
 ];
 
-const PRIMARY_CAREER_WORKBENCH_TABS = CAREER_WORKBENCH_TABS.filter((item) => item.value === 'match' || item.value === 'memory');
+const PRIMARY_CAREER_WORKBENCH_TABS = CAREER_WORKBENCH_TABS.filter((item) => item.value === 'match' || item.value === 'applications' || item.value === 'memory');
 const PREPARE_CAREER_WORKBENCH_TABS = CAREER_WORKBENCH_TABS.filter((item) => item.value === 'knowledge' || item.value === 'interview');
 
 export function CareerWorkbenchNav({
@@ -526,16 +529,18 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     if (template.locked && template.product?.id && template.id) {
       setBusy(`job-template-${template.id}`);
       try {
-        await purchaseProductWithMockPayment({
+        const payment = await purchaseProduct({
           productId: template.product.id,
           headers: getHeaders(),
+          returnUrl: window.location.href,
           clientContext: { source: 'job_template', jobTemplateId: template.id },
         });
+        if (payment.status !== 'completed') return;
         await load();
         toast.success('职位模板已解锁');
       } catch (error) {
         console.error(error);
-        toast.error('职位模板解锁失败');
+        toast.error(error instanceof Error ? error.message : '职位模板解锁失败');
         setBusy(null);
         return;
       } finally {
@@ -568,11 +573,13 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
     setBusy(`job-template-download-${selectedTemplate.id}`);
     try {
       if (selectedTemplate.locked && selectedTemplate.product?.id) {
-        await purchaseProductWithMockPayment({
+        const payment = await purchaseProduct({
           productId: selectedTemplate.product.id,
           headers: getHeaders(),
+          returnUrl: window.location.href,
           clientContext: { source: 'job_template_download', jobTemplateId: selectedTemplate.id },
         });
+        if (payment.status !== 'completed') return;
         await load();
       }
 
@@ -597,7 +604,7 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
       toast.success('职位模板已下载');
     } catch (error) {
       console.error(error);
-      toast.error('职位模板下载失败');
+      toast.error(error instanceof Error ? error.message : '职位模板下载失败');
     } finally {
       setBusy(null);
     }
@@ -1422,7 +1429,14 @@ export function CareerWorkbench({ embedded = false, resumeId, activeTab, onActiv
             <ExternalLink className="h-5 w-5 text-brand" />
           </Link>}
 
-          {currentTab === 'knowledge' ? (
+          {currentTab === 'applications' ? (
+            <JobApplicationTracker defaults={{
+              resumeId: selectedResumeId,
+              companyName: targetCompany,
+              jobTitle,
+              jobDescription,
+            }} />
+          ) : currentTab === 'knowledge' ? (
             <div className="rounded-lg border bg-white p-4 dark:bg-zinc-900">
               <KnowledgePage embedded />
             </div>
