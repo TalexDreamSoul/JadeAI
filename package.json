@@ -1,10 +1,27 @@
 {
-  "name": "touchresume",
-  "version": "0.1.0",
+  "name": "jadeai",
+  "version": "0.4.2",
+  "description": "JadeAI career workspace for resumes, applications, interviews, and AI guidance.",
+  "author": "TalexDreamSoul",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TalexDreamSoul/jadeai.git"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "private": true,
+  "main": "./out/main/index.js",
   "packageManager": "pnpm@10.29.2",
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:desktop": "node scripts/build-electron.mjs --watch",
+    "build:desktop": "pnpm build:electron",
+    "build:desktop:local": "pnpm build && pnpm build:electron",
+    "build:electron": "node scripts/build-electron.mjs",
+    "dist:mac": "pnpm build:desktop && electron-builder --config config/electron-builder.config.cjs --mac",
+    "dist:mac:local": "pnpm build:desktop:local && JADE_DESKTOP_INCLUDE_LOCAL=true electron-builder --config config/electron-builder.config.cjs --mac",
+    "dist:win": "pnpm build:desktop && electron-builder --config config/electron-builder.config.cjs --win",
     "mcp:resume": "tsx scripts/jadeai-resume-mcp.ts",
     "resume-analysis:worker": "tsx scripts/resume-analysis-worker.ts",
     "check:mcp:resume": "tsx scripts/check-jadeai-resume-mcp.ts",
@@ -18,21 +35,25 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "smoke:commercial": "node scripts/run-commercial-smokes.mjs",
+    "smoke:postgres": "tsx scripts/smoke-postgresql-integration.ts",
     "type-check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:generate:pg": "drizzle-kit generate --config drizzle-pg.config.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "db:backup": "node scripts/backup-database.mjs",
+    "db:backup:verify": "node scripts/verify-database-backup.mjs",
     "db:seed": "tsx src/lib/db/seed.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3",
       "@swc/core",
-      "sharp",
-      "unrs-resolver",
+      "better-sqlite3",
+      "electron",
       "esbuild",
-      "@parcel/watcher"
+      "sharp",
+      "unrs-resolver"
     ]
   },
   "dependencies": {
@@ -49,11 +70,12 @@
     "@langchain/openai": "1.4.7",
     "@sparticuz/chromium-min": "^143.0.4",
     "ai": "^6.0.78",
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "docx": "^9.0.0",
     "drizzle-orm": "^0.45.1",
+    "electron-updater": "^6.8.9",
     "jsonrepair": "^3.13.2",
     "lucide-react": "^0.563.0",
     "mupdf": "^1.27.0",
@@ -86,6 +108,9 @@
     "@types/uuid": "^11.0.0",
     "@vitejs/plugin-react": "^6.0.2",
     "drizzle-kit": "^0.31.9",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "shadcn": "^3.8.4",
