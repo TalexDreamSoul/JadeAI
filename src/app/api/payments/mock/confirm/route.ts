@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { confirmCommercialPayment } from '@/lib/commercial/payment-service';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +18,18 @@ export async function POST(request: NextRequest) {
       provider: 'mock',
       rawPayload: body,
     });
+    if (order) {
+      await recordProductEventSafely({
+        eventName: 'payment_succeeded',
+        userId: user.id,
+        metadata: {
+          orderId,
+          provider: 'mock',
+          amountCents: Number(order.payableCents || 0),
+          currency: String(order.currency || 'CNY').toUpperCase(),
+        },
+      });
+    }
     return NextResponse.json(order);
   } catch (error) {
     console.error('POST /api/payments/mock/confirm error:', error);

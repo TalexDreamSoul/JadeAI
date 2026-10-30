@@ -3,6 +3,7 @@ import { PRODUCT_SEEDS, WALLET_CURRENCY_AI_CREDIT } from './catalog';
 import { parseJsonObject } from './json';
 import { grantReferralOrderCommission } from './growth-service';
 import { grantMembershipMonthlyAICredits } from './membership-credit-service';
+import { assertPaymentProviderAllowed } from './payment-policy';
 import {
   entitlementRepository,
   membershipRepository,
@@ -79,6 +80,7 @@ export async function markCommercialOrderPaid(input: {
   providerTradeNo?: string;
   rawPayload?: Record<string, unknown>;
 }) {
+  assertPaymentProviderAllowed(input.provider);
   const order = await orderRepository.findByIdForUser(input.orderId, input.userId);
   if (!order) throw new Error('Order not found');
   if (order.status === 'canceled') throw new Error('订单已取消，无法支付');
