@@ -19,6 +19,7 @@ import { getTemplateLabel } from '@/lib/template-labels';
 import { EmailAuthForm } from '@/components/auth/email-auth-form';
 import { cn } from '@/lib/utils';
 import type { Resume } from '@/types/resume';
+import { ProductFunnelPanel } from '@/components/admin/product-funnel-panel';
 
 interface AIChannel {
   id: string;
@@ -366,6 +367,7 @@ type AdminTabKey =
   | 'tasks'
   | 'audit'
   | 'templates'
+  | 'funnel'
   | 'commerce'
   | 'settings';
 
@@ -621,7 +623,16 @@ const DEFAULT_STORAGE_SETTINGS: StorageSettings = {
 
 const QINIU_REGION_OPTIONS = ['z0', 'z1', 'z2', 'na0', 'as0', 'cn-east-2'];
 
-const ORDER_STATUS_OPTIONS = ['all', 'pending_payment', 'paid', 'fulfilled', 'canceled'];
+const ORDER_STATUS_OPTIONS = [
+  'all',
+  'pending_payment',
+  'payment_failed',
+  'paid',
+  'fulfilling',
+  'fulfilled',
+  'manual_review',
+  'canceled',
+];
 const USER_ROLE_OPTIONS: UserRoleFilter[] = ['all', 'admin', 'user'];
 const AI_CHANNEL_STATUS_OPTIONS = ['all', 'enabled', 'disabled'] as const;
 const AI_USAGE_STATUS_OPTIONS = ['all', 'success', 'reserved', 'failed_refunded', 'insufficient_credits'];
@@ -1033,15 +1044,12 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [userQuery, setUserQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('all');
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [userEditForm, setUserEditForm] = useState(EMPTY_USER_EDIT_FORM);
   const [confirmingUserEdit, setConfirmingUserEdit] = useState(false);
   const [savingUserEdit, setSavingUserEdit] = useState(false);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [jobTemplates, setJobTemplates] = useState<AdminJobTemplate[]>([]);
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
-  const [selectedJobTemplateIds, setSelectedJobTemplateIds] = useState<Set<string>>(new Set());
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
@@ -1049,41 +1057,30 @@ export default function AdminPage() {
   const [productQuery, setProductQuery] = useState('');
   const [orderQuery, setOrderQuery] = useState('');
   const [redeemCodeQuery, setRedeemCodeQuery] = useState('');
-  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
-  const [selectedRedeemCodeIds, setSelectedRedeemCodeIds] = useState<Set<string>>(new Set());
   const [aiUsage, setAiUsage] = useState<AdminAIUsageLog[]>([]);
   const [aiUsageStatusFilter, setAiUsageStatusFilter] = useState('all');
   const [aiUsageQuery, setAiUsageQuery] = useState('');
   const [aiChannelQuery, setAiChannelQuery] = useState('');
   const [aiChannelStatusFilter, setAiChannelStatusFilter] = useState<(typeof AI_CHANNEL_STATUS_OPTIONS)[number]>('all');
-  const [selectedAIChannelIds, setSelectedAIChannelIds] = useState<Set<string>>(new Set());
-  const [selectedAIUsageIds, setSelectedAIUsageIds] = useState<Set<string>>(new Set());
   const [resumeAnalysisJobs, setResumeAnalysisJobs] = useState<AdminResumeAnalysisJob[]>([]);
   const [resumeAnalysisStatusFilter, setResumeAnalysisStatusFilter] = useState('all');
   const [resumeAnalysisQuery, setResumeAnalysisQuery] = useState('');
-  const [selectedResumeAnalysisJobIds, setSelectedResumeAnalysisJobIds] = useState<Set<string>>(new Set());
   const [resumeAnalysisJobDetail, setResumeAnalysisJobDetail] = useState<AdminResumeAnalysisJobDetail | null>(null);
   const [resumeAnalysisDetailMode, setResumeAnalysisDetailMode] = useState<'detail' | 'preview'>('detail');
   const [loadingResumeAnalysisJobId, setLoadingResumeAnalysisJobId] = useState<string | null>(null);
   const [walletTransactions, setWalletTransactions] = useState<AdminWalletTransaction[]>([]);
   const [adminAuditLogs, setAdminAuditLogs] = useState<AdminAuditLog[]>([]);
   const [adminAuditQuery, setAdminAuditQuery] = useState('');
-  const [selectedAdminAuditLogIds, setSelectedAdminAuditLogIds] = useState<Set<string>>(new Set());
   const [walletDirectionFilter, setWalletDirectionFilter] = useState('all');
   const [walletTransactionQuery, setWalletTransactionQuery] = useState('');
-  const [selectedWalletTransactionIds, setSelectedWalletTransactionIds] = useState<Set<string>>(new Set());
   const [reviewComments, setReviewComments] = useState<AdminReviewComment[]>([]);
   const [reviewCommentStatusFilter, setReviewCommentStatusFilter] = useState<ReviewCommentStatusFilter>('all');
   const [reviewCommentQuery, setReviewCommentQuery] = useState('');
-  const [selectedReviewCommentIds, setSelectedReviewCommentIds] = useState<Set<string>>(new Set());
   const [reviewPresence, setReviewPresence] = useState<AdminReviewPresence[]>([]);
   const [reviewPresenceQuery, setReviewPresenceQuery] = useState('');
-  const [selectedReviewPresenceIds, setSelectedReviewPresenceIds] = useState<Set<string>>(new Set());
   const [changeProposals, setChangeProposals] = useState<AdminChangeProposal[]>([]);
   const [changeProposalStatusFilter, setChangeProposalStatusFilter] = useState<ChangeProposalStatusFilter>('all');
   const [changeProposalQuery, setChangeProposalQuery] = useState('');
-  const [selectedChangeProposalIds, setSelectedChangeProposalIds] = useState<Set<string>>(new Set());
   const [redeemCodes, setRedeemCodes] = useState<AdminRedeemCode[]>([]);
   const [growth, setGrowth] = useState<AdminGrowthState | null>(null);
   const [dashboardDetail, setDashboardDetail] = useState<DashboardDetailKey>('storage');
@@ -1139,6 +1136,7 @@ export default function AdminPage() {
     { value: 'tasks', icon: FileClock, label: '任务队列' },
     { value: 'audit', icon: ClipboardCheck, label: '审计' },
     { value: 'templates', icon: FileSliders, label: '模板' },
+    { value: 'funnel', icon: Activity, label: '产品漏斗' },
     { value: 'commerce', icon: ReceiptText, label: t('commerce') },
     { value: 'settings', icon: Settings2, label: '设置' },
   ], [t]);
@@ -1464,6 +1462,7 @@ export default function AdminPage() {
     total: orders.length,
     paid: orders.filter((order) => order.status === 'paid').length,
     fulfilled: orders.filter((order) => order.status === 'fulfilled').length,
+    manualReview: orders.filter((order) => order.status === 'manual_review').length,
     payable: orders.reduce((total, order) => total + Number(order.payableCents || 0), 0),
   }), [orders]);
 
@@ -1478,7 +1477,7 @@ export default function AdminPage() {
       order.source,
       order.currency,
       ...(order.items || []).map((item) => item.name),
-      ...(order.payments || []).map((payment) => payment.provider),
+      ...(order.payments || []).flatMap((payment) => [payment.provider, payment.status]),
     ].some((value) => String(value || '').toLowerCase().includes(query)));
   }, [orderQuery, orders]);
 
@@ -1826,10 +1825,6 @@ export default function AdminPage() {
     closeAIChannelActionDialog();
     setError('');
     await load();
-  };
-
-  const markDangerousCleanupPending = (target = '选中的测试数据') => {
-    setError(`${target} 清理属于真实数据删除，需要老板明确确认后再接入执行。当前只保留选择和操作入口。`);
   };
 
   const openEditUserDialog = (user: AdminUser) => {
@@ -2327,8 +2322,6 @@ export default function AdminPage() {
               icon={Users}
               rows={filteredUsers}
               getRowId={(user) => user.id}
-              selectedIds={selectedUserIds}
-              onSelectedIdsChange={setSelectedUserIds}
               emptyText={users.length === 0 ? t('noUsers') : '没有匹配的用户'}
               metrics={(
                 <MetricStrip
@@ -2356,16 +2349,6 @@ export default function AdminPage() {
                     </select>
                     <Button type="button" variant="outline" size="sm" onClick={load} className="gap-2">
                       <RefreshCw className="h-4 w-4" />刷新
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => markDangerousCleanupPending(`选中的 ${selectedUserIds.size} 个用户`)}
-                      disabled={selectedUserIds.size === 0}
-                      className="gap-2 text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />清理
                     </Button>
                   </div>
                 </>
@@ -2417,17 +2400,9 @@ export default function AdminPage() {
                 { key: 'createdAt', header: '创建时间', cell: (user) => <span className="text-xs text-zinc-500">{formatDate(user.createdAt)}</span> },
               ]}
               renderRowActions={(user) => (
-                <>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label="预览用户" onClick={() => setError(`用户 ${user.email || user.id} 详情预览后续接入。`)}>
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑用户" onClick={() => openEditUserDialog(user)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label="删除用户" onClick={() => markDangerousCleanupPending(user.email || user.id)} className="text-red-600 hover:text-red-700">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </>
+                <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑用户" onClick={() => openEditUserDialog(user)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
               )}
             />
 
@@ -2611,8 +2586,6 @@ export default function AdminPage() {
             icon={FileClock}
             rows={filteredResumeAnalysisJobs}
             getRowId={(job) => job.id}
-            selectedIds={selectedResumeAnalysisJobIds}
-            onSelectedIdsChange={setSelectedResumeAnalysisJobIds}
             emptyText={resumeAnalysisJobs.length === 0 ? '暂无简历分析任务' : '没有匹配的任务'}
             minWidth="1180px"
             metrics={(
@@ -2954,8 +2927,6 @@ export default function AdminPage() {
                 icon={ShieldCheck}
                 rows={filteredAdminAuditLogs}
                 getRowId={(log) => log.id}
-                selectedIds={selectedAdminAuditLogIds}
-                onSelectedIdsChange={setSelectedAdminAuditLogIds}
                 emptyText={adminAuditLogs.length === 0 ? '暂无管理操作审计' : '没有匹配的管理操作'}
                 minWidth="1100px"
                 toolbar={(
@@ -3013,8 +2984,6 @@ export default function AdminPage() {
                 icon={Coins}
                 rows={filteredWalletTransactions}
                 getRowId={(transaction) => transaction.id}
-                selectedIds={selectedWalletTransactionIds}
-                onSelectedIdsChange={setSelectedWalletTransactionIds}
                 emptyText={walletTransactions.length === 0 ? t('noWalletTransactions') : t('noWalletTransactionMatches')}
                 minWidth="1100px"
                 toolbar={(
@@ -3053,13 +3022,6 @@ export default function AdminPage() {
                   { key: 'amount', header: '金额', cell: (transaction) => <div className="text-xs"><div className="font-medium">{transaction.direction === 'credit' ? '+' : '-'}{Number(transaction.amount || 0)}</div><div className="text-zinc-500">{t('walletBalanceAfter')}: {Number(transaction.balanceAfter || 0)}</div></div> },
                   { key: 'createdAt', header: '时间', cell: (transaction) => <span className="text-xs text-zinc-500">{formatDateTime(transaction.createdAt)}</span> },
                 ]}
-                renderRowActions={(transaction) => (
-                  <>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="预览流水" onClick={() => setError(`流水 ${transaction.id} 详情预览后续接入。`)}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑流水" onClick={() => setError('额度流水为审计记录，默认不提供编辑。')}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="删除流水" onClick={() => markDangerousCleanupPending(`流水 ${transaction.id}`)} className="text-red-600 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </>
-                )}
               />
             )}
 
@@ -3070,8 +3032,6 @@ export default function AdminPage() {
                 icon={MessageSquareText}
                 rows={filteredReviewComments}
                 getRowId={(comment) => comment.id}
-                selectedIds={selectedReviewCommentIds}
-                onSelectedIdsChange={setSelectedReviewCommentIds}
                 emptyText={reviewComments.length === 0 ? t('noReviewComments') : t('noReviewCommentMatches')}
                 minWidth="1120px"
                 toolbar={(
@@ -3088,13 +3048,6 @@ export default function AdminPage() {
                   { key: 'share', header: '分享', cell: (comment) => <span className="text-xs text-zinc-500">{comment.share?.label || comment.share?.token || shortId(comment.shareId)}</span> },
                   { key: 'createdAt', header: '时间', cell: (comment) => <span className="text-xs text-zinc-500">{formatDate(comment.createdAt)}</span> },
                 ]}
-                renderRowActions={(comment) => (
-                  <>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="预览评论" onClick={() => setError(`评论 ${comment.id} 详情预览后续接入。`)}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑评论" onClick={() => setError('评论状态编辑后续接入。')}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="删除评论" onClick={() => markDangerousCleanupPending(`评论 ${comment.id}`)} className="text-red-600 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </>
-                )}
               />
             )}
 
@@ -3105,8 +3058,6 @@ export default function AdminPage() {
                 icon={Radio}
                 rows={filteredReviewPresence}
                 getRowId={(presence) => presence.id}
-                selectedIds={selectedReviewPresenceIds}
-                onSelectedIdsChange={setSelectedReviewPresenceIds}
                 emptyText={reviewPresence.length === 0 ? t('noReviewPresence') : t('noReviewPresenceMatches')}
                 minWidth="980px"
                 toolbar={<TableSearch value={reviewPresenceQuery} onChange={setReviewPresenceQuery} placeholder={t('reviewPresenceSearchPlaceholder')} />}
@@ -3116,13 +3067,6 @@ export default function AdminPage() {
                   { key: 'cursor', header: '光标', cell: (presence) => <span className="text-xs text-zinc-500">{Math.round(presence.cursorX)}%, {Math.round(presence.cursorY)}%</span> },
                   { key: 'lastSeen', header: '最后在线', cell: (presence) => <span className="text-xs text-zinc-500">{formatDateTime(presence.lastSeenAt)}</span> },
                 ]}
-                renderRowActions={(presence) => (
-                  <>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="预览实时审阅" onClick={() => setError(`实时审阅 ${presence.id} 详情预览后续接入。`)}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑实时审阅" onClick={() => setError('实时审阅记录默认不提供编辑。')}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="清理实时审阅" onClick={() => markDangerousCleanupPending(`实时审阅 ${presence.id}`)} className="text-red-600 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </>
-                )}
               />
             )}
 
@@ -3133,8 +3077,6 @@ export default function AdminPage() {
                 icon={ClipboardCheck}
                 rows={filteredChangeProposals}
                 getRowId={(proposal) => proposal.id}
-                selectedIds={selectedChangeProposalIds}
-                onSelectedIdsChange={setSelectedChangeProposalIds}
                 emptyText={changeProposals.length === 0 ? t('noChangeProposals') : t('noChangeProposalMatches')}
                 minWidth="1160px"
                 toolbar={(
@@ -3151,13 +3093,6 @@ export default function AdminPage() {
                   { key: 'field', header: '字段', cell: (proposal) => <span className="text-xs text-zinc-500">{proposal.targetField}</span> },
                   { key: 'createdAt', header: '时间', cell: (proposal) => <span className="text-xs text-zinc-500">{formatDate(proposal.createdAt)}</span> },
                 ]}
-                renderRowActions={(proposal) => (
-                  <>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="预览提案" onClick={() => setError(`提案 ${proposal.id} 详情预览后续接入。`)}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑提案" onClick={() => setError('提案审批操作后续接入。')}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button type="button" variant="ghost" size="icon-xs" aria-label="删除提案" onClick={() => markDangerousCleanupPending(`提案 ${proposal.id}`)} className="text-red-600 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </>
-                )}
               />
             )}
           </div>
@@ -3352,8 +3287,6 @@ export default function AdminPage() {
               icon={Bot}
               rows={filteredAIChannels}
               getRowId={(channel) => channel.id}
-              selectedIds={selectedAIChannelIds}
-              onSelectedIdsChange={setSelectedAIChannelIds}
               emptyText={channels.length === 0 ? '暂无 AI 渠道。' : '没有匹配的 AI 渠道'}
               minWidth="1060px"
               metrics={(
@@ -3438,8 +3371,6 @@ export default function AdminPage() {
               icon={Activity}
               rows={filteredAiUsage}
               getRowId={(item) => item.id}
-              selectedIds={selectedAIUsageIds}
-              onSelectedIdsChange={setSelectedAIUsageIds}
               emptyText={aiUsage.length === 0 ? t('noAiUsage') : t('noAiUsageMatches')}
               minWidth="1120px"
               metrics={(
@@ -3481,19 +3412,6 @@ export default function AdminPage() {
                 { key: 'credits', header: '额度', cell: (item) => <div className="text-xs"><div className="font-medium">{item.creditsCharged} {t('aiUsageCreditsUnit')}</div><div className="text-zinc-500">{Number(item.totalTokens || 0).toLocaleString()} tokens</div></div> },
                 { key: 'createdAt', header: '时间', cell: (item) => <span className="text-xs text-zinc-500">{formatDate(item.createdAt)}</span> },
               ]}
-              renderRowActions={(item) => (
-                <>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label="预览用量" onClick={() => setError(`AI 用量 ${item.id} 详情预览后续接入。`)}>
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑用量" onClick={() => setError('AI 用量为审计记录，默认不提供编辑。')}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label="删除用量" onClick={() => markDangerousCleanupPending(`AI 用量 ${item.id}`)} className="text-red-600 hover:text-red-700">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              )}
             />
           </div>
 
@@ -4094,8 +4012,6 @@ export default function AdminPage() {
                   icon={FileSliders}
                   rows={filteredTemplates}
                   getRowId={(template) => template.id}
-                  selectedIds={selectedTemplateIds}
-                  onSelectedIdsChange={setSelectedTemplateIds}
                   emptyText={templates.length === 0 ? t('noTemplates') : t('noTemplateMatches')}
                   minWidth="980px"
                   metrics={(
@@ -4141,17 +4057,11 @@ export default function AdminPage() {
                   ]}
                   renderRowActions={(template) => (
                     <>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="预览模板" onClick={() => setError(`模板 ${template.name} 预览后续接入。`)}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
                       <Button type="button" variant="ghost" size="icon-xs" aria-label="复制模板" onClick={() => copyTemplate(template)}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                       <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑模板" onClick={() => editTemplate(template)}>
                         <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="删除模板" onClick={() => markDangerousCleanupPending(`模板 ${template.name}`)} className="text-red-600 hover:text-red-700">
-                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </>
                   )}
@@ -4185,8 +4095,6 @@ export default function AdminPage() {
                   icon={Briefcase}
                   rows={filteredJobTemplates}
                   getRowId={(template) => template.id}
-                  selectedIds={selectedJobTemplateIds}
-                  onSelectedIdsChange={setSelectedJobTemplateIds}
                   emptyText={jobTemplates.length === 0 ? t('noJobTemplates') : t('noJobTemplateMatches')}
                   minWidth="1120px"
                   metrics={(
@@ -4254,9 +4162,6 @@ export default function AdminPage() {
                           <CheckCircle2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="删除岗位模板" onClick={() => markDangerousCleanupPending(`岗位模板 ${template.title}`)} className="text-red-600 hover:text-red-700">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
                     </>
                   )}
                 />
@@ -4418,6 +4323,11 @@ export default function AdminPage() {
           </div>
 	        </TabsContent>
 
+
+          <TabsContent value="funnel" className="mt-0">
+            <ProductFunnelPanel />
+          </TabsContent>
+
 	        <TabsContent value="commerce" className="mt-0">
 	          <div className="space-y-4">
               <MetricStrip
@@ -4456,8 +4366,6 @@ export default function AdminPage() {
                   icon={ReceiptText}
                   rows={filteredProducts}
                   getRowId={(product) => product.id}
-                  selectedIds={selectedProductIds}
-                  onSelectedIdsChange={setSelectedProductIds}
                   emptyText={products.length === 0 ? t('noProducts') : '没有匹配的产品'}
                   minWidth="1080px"
                   metrics={(
@@ -4506,40 +4414,25 @@ export default function AdminPage() {
                     { key: 'money', header: '展示金额', cell: (product) => <span className="text-xs text-zinc-500">{money(product.priceCents, product.currency)}</span> },
                     { key: 'active', header: '状态', cell: (product) => <Switch checked={product.active} onCheckedChange={(checked) => updateProduct(product, { active: checked })} /> },
                   ]}
-                  renderRowActions={(product) => (
-                    <>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="预览产品" onClick={() => setError(`产品 ${product.name} 预览后续接入。`)}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑产品" onClick={() => setError('产品名称和描述编辑后续接入；价格和上下架已支持行内编辑。')}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="删除产品" onClick={() => markDangerousCleanupPending(`产品 ${product.name}`)} className="text-red-600 hover:text-red-700">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  )}
                 />
               )}
 
               {commercePanel === 'orders' && (
                 <AdminDataTable
                   title={t('orders')}
-                  description="查看订单、支付和履约状态。"
+                  description="查看订单、支付、履约状态和退款/争议人工复核队列。"
                   icon={ListChecks}
                   rows={filteredOrders}
                   getRowId={(order) => order.id}
-                  selectedIds={selectedOrderIds}
-                  onSelectedIdsChange={setSelectedOrderIds}
                   emptyText={orders.length === 0 ? t('noOrders') : '没有匹配的订单'}
-                  minWidth="1180px"
+                  minWidth="1280px"
                   metrics={(
                     <MetricStrip
                       items={[
                         { label: '订单数', value: orderStats.total },
                         { label: '已支付', value: orderStats.paid },
                         { label: '已履约', value: orderStats.fulfilled, tone: 'good' },
-                        { label: '应付金额', value: money(orderStats.payable) },
+                        { label: '待人工复核', value: orderStats.manualReview, tone: orderStats.manualReview > 0 ? 'warn' : 'default' },
                       ]}
                     />
                   )}
@@ -4553,24 +4446,17 @@ export default function AdminPage() {
                   )}
                   columns={[
                     { key: 'order', header: '订单', cell: (order) => <div className="min-w-0"><p className="truncate font-medium">{order.orderNo}</p><p className="truncate text-xs text-zinc-500">{order.userId}</p></div> },
-                    { key: 'status', header: '状态', cell: (order) => <Badge variant="outline">{order.status}</Badge> },
+                    { key: 'status', header: '订单状态', cell: (order) => <Badge variant="outline" className={cn(order.status === 'manual_review' && 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200')}>{order.status}</Badge> },
                     { key: 'amount', header: '金额', cell: (order) => <span className="text-xs text-zinc-500">{money(order.payableCents, order.currency)}</span> },
+                    { key: 'payment', header: '最新支付', cell: (order) => {
+                      const payment = order.payments?.[0];
+                      return payment
+                        ? <div className="min-w-0"><p className="truncate text-xs font-medium">{payment.provider}</p><p className="truncate text-xs text-zinc-500">{payment.status}</p></div>
+                        : <span className="text-xs text-zinc-400">-</span>;
+                    } },
                     { key: 'items', header: '商品', cell: (order) => <span className="line-clamp-2 text-xs text-zinc-500">{order.items?.length ? order.items.map((item) => `${item.name} x${item.quantity}`).join(' / ') : '-'}</span> },
                     { key: 'createdAt', header: '创建时间', cell: (order) => <span className="text-xs text-zinc-500">{formatDate(order.createdAt)}</span> },
                   ]}
-                  renderRowActions={(order) => (
-                    <>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="预览订单" onClick={() => setError(`订单 ${order.orderNo} 详情预览后续接入。`)}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑订单" onClick={() => setError('订单编辑/履约操作后续接入。')}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon-xs" aria-label="删除订单" onClick={() => markDangerousCleanupPending(`订单 ${order.orderNo}`)} className="text-red-600 hover:text-red-700">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  )}
                 />
               )}
 
@@ -4582,8 +4468,6 @@ export default function AdminPage() {
                     icon={KeyRound}
                     rows={filteredRedeemCodes}
                     getRowId={(code) => code.id}
-                    selectedIds={selectedRedeemCodeIds}
-                    onSelectedIdsChange={setSelectedRedeemCodeIds}
                     emptyText={redeemCodes.length === 0 ? '暂无兑换码' : '没有匹配的兑换码'}
                     minWidth="900px"
                     metrics={(
@@ -4603,19 +4487,6 @@ export default function AdminPage() {
                       { key: 'claims', header: '领取', cell: (code) => <span className="text-xs text-zinc-500">{code.claimedCount}/{code.maxClaims}</span> },
                       { key: 'expiresAt', header: '过期', cell: (code) => <span className="text-xs text-zinc-500">{formatDate(code.expiresAt || undefined)}</span> },
                     ]}
-                    renderRowActions={(code) => (
-                      <>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label="预览兑换码" onClick={() => setError(`兑换码 ${code.code} 详情预览后续接入。`)}>
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label="编辑兑换码" onClick={() => setError('兑换码编辑/停用操作后续接入。')}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label="删除兑换码" onClick={() => markDangerousCleanupPending(`兑换码 ${code.code}`)} className="text-red-600 hover:text-red-700">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
                   />
 
                   <Card>

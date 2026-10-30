@@ -8,6 +8,7 @@ import {
   sanitizeQiniuStorageConfig,
   type QiniuProtocol,
 } from '@/lib/storage/qiniu-config';
+import { encryptSecret } from '@/lib/security/secret-crypto';
 
 function stringInput(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -79,7 +80,7 @@ export async function PUT(request: NextRequest) {
       publicRead: nextQiniu.publicRead,
     };
     if (nextQiniu.secretKey) {
-      storedQiniu.secretKey = nextQiniu.secretKey;
+      storedQiniu.secretKey = encryptSecret(nextQiniu.secretKey);
     }
 
     await userRepository.updateGlobalSettings({
