@@ -2,6 +2,7 @@ import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import { Link } from '@/i18n/routing';
 import { Github } from 'lucide-react';
+import { APP_NAME } from '@/lib/constants';
 
 export function LandingFooter() {
   const t = useTranslations('landing.footer');
@@ -16,17 +17,10 @@ export function LandingFooter() {
       ],
     },
     {
-      titleKey: 'resources.title' as const,
-      links: [
-        { key: 'resources.resumeTips' as const, href: '#' },
-        { key: 'resources.examples' as const, href: '#' },
-      ],
-    },
-    {
       titleKey: 'legal.title' as const,
       links: [
-        { key: 'legal.privacy' as const, href: '#' },
-        { key: 'legal.terms' as const, href: '#' },
+        { key: 'legal.privacy' as const, href: '/privacy' },
+        { key: 'legal.terms' as const, href: '/terms' },
       ],
     },
   ];
@@ -35,16 +29,16 @@ export function LandingFooter() {
     <footer className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="py-12 sm:py-16">
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr]">
             {/* Brand column */}
             <div className="sm:col-span-2 lg:col-span-1">
-              <Image src="/logo.png" alt="TouchResume" width={32} height={32} className="h-8 w-8 rounded-lg" />
+              <Image src="/logo.png" alt={APP_NAME} width={32} height={32} className="h-8 w-8 rounded-lg" />
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
                 AI-powered resume builder
               </p>
               <div className="mt-6 flex items-center gap-4">
                 <a
-                  href="https://github.com"
+                  href="https://github.com/TalexDreamSoul/jadeai"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"

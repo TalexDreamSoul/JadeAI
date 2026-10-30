@@ -290,6 +290,7 @@ export default function DashboardPage() {
               onDuplicate={() => duplicateResume(resume.id)}
               onRename={(title) => renameResume(resume.id, title)}
               onRetryAnalysis={(jobId) => retryAnalysisJob(jobId)}
+              onShare={localOnly ? undefined : () => setShareResumeId(resume.id)}
             />
           ))}
         </div>

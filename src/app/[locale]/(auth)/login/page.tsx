@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { LoginButton } from '@/components/auth/login-button';
 import { LoginFooter } from '@/components/auth/login-footer';
 import { Separator } from '@/components/ui/separator';
+import { APP_NAME } from '@/lib/constants';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -14,7 +15,7 @@ export default function LoginPage() {
       <div className="mb-6">
         <Image
           src="/logo.png"
-          alt="TouchResume"
+          alt={APP_NAME}
           width={48}
           height={48}
           className="rounded-xl drop-shadow-sm"

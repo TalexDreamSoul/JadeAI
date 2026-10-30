@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import { getLocale } from 'next-intl/server';
+import { APP_NAME } from '@/lib/constants';
 import './globals.css';
 
-const appName = process.env.APP_NAME || 'TouchResume';
+const appName = process.env.APP_NAME || APP_NAME;
 
 export const metadata: Metadata = {
   title: `${appName} - AI Resume Builder`,
@@ -11,13 +13,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = await getLocale();
+
   return (
-    <html suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body suppressHydrationWarning className="font-sans antialiased">
         <script
           dangerouslySetInnerHTML={{

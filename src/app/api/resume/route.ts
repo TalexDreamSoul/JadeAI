@@ -8,6 +8,7 @@ import {
   commercialFeatureLockedResponse,
   CommercialFeatureLockedError,
 } from '@/lib/commercial/feature-gate-service';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -142,6 +143,20 @@ export async function POST(request: NextRequest) {
       }
 
       const fullResume = await resumeRepository.findById(resume.id);
+      if (fullResume) {
+        const imported = Array.isArray(sections) && sections.length > 0;
+        await recordProductEventSafely({
+          eventName: imported ? 'resume_imported' : 'resume_created',
+          userId: user.id,
+          metadata: {
+            resumeId: fullResume.id,
+            source: imported ? 'json' : 'blank',
+            ...(imported ? { format: 'json' } : {}),
+            template: fullResume.template,
+            language: fullResume.language,
+          },
+        });
+      }
       return NextResponse.json(fullResume, { status: 201 });
     }
 

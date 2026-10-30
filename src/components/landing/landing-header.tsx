@@ -8,6 +8,7 @@ import { Link } from '@/i18n/routing';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LocaleSwitcher } from '@/components/layout/locale-switcher';
+import { APP_NAME } from '@/lib/constants';
 import {
   Sheet,
   SheetContent,
@@ -42,7 +43,7 @@ export function LandingHeader() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="TouchResume" width={36} height={36} priority className="h-9 w-9 rounded-lg" />
+            <Image src="/logo.png" alt={APP_NAME} width={36} height={36} priority className="h-9 w-9 rounded-lg" />
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {[
@@ -85,7 +86,7 @@ export function LandingHeader() {
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <div className="flex h-full flex-col">
                 <div className="flex h-14 items-center border-b border-zinc-100 px-5 dark:border-zinc-900">
-                  <Image src="/logo.png" alt="TouchResume" width={32} height={32} className="h-8 w-8 rounded-lg" />
+                  <Image src="/logo.png" alt={APP_NAME} width={32} height={32} className="h-8 w-8 rounded-lg" />
                 </div>
                 <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
                   {[

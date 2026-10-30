@@ -134,7 +134,7 @@ export function getProviderOptions(config: AIConfig) {
 
   return {
     openai: {
-      // Responses API stores generations by default; keep TouchResume calls stateless.
+      // Responses API stores generations by default; keep JadeAI calls stateless.
       store: false,
     },
   };

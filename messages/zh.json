@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "TouchResume",
+    "appName": "JadeAI",
     "save": "保存",
     "cancel": "取消",
     "delete": "删除",
@@ -31,7 +31,7 @@
     "settings": "设置",
     "welcomeBack": "欢迎回来",
     "loginDescription": "登录以管理你的简历",
-    "agreeTerms": "登录即表示你同意我们的服务条款和隐私政策",
+    "agreeTerms": "登录即表示你同意我们的 <terms>服务条款</terms> 和 <privacy>隐私政策</privacy>",
     "loginWithEmail": "邮箱登录",
     "registerWithEmail": "注册账号",
     "switchToRegister": "没有账号？注册",
@@ -64,6 +64,8 @@
     "sortNameDesc": "名称 Z-A",
     "viewGrid": "网格视图",
     "viewList": "列表视图",
+    "openResume": "打开简历「{title}」",
+    "resumeActions": "{title} 的简历操作",
     "templateTouchPure": "TouchPure",
     "templateClassic": "经典",
     "templateModern": "现代",
@@ -379,6 +381,7 @@
     "toolSuggestSkills": "已推荐技能",
     "loadMore": "加载更多",
     "loadingMore": "加载中...",
+    "minimize": "收起 AI 助手",
     "bubbleTooltip": "与 AI 助手对话",
     "apiKeyMissing": "AI 未配置",
     "apiKeyMissingHint": "请登录并确保账号有可用 AI 额度；如仍不可用，请联系管理员配置统一 AI。",
@@ -745,7 +748,7 @@
     "description": "导入之前导出的 JSON 文件，替换当前简历内容",
     "dashboardDescription": "导入之前导出的 JSON 文件，创建新简历",
     "selectFile": "点击选择或拖拽 .json 文件到此处",
-    "dragHint": "支持从 TouchResume 导出的 .json 文件",
+    "dragHint": "支持从 JadeAI 导出的 .json 文件",
     "importing": "导入中...",
     "success": "导入成功！",
     "error": "导入失败，请重试。",
@@ -959,7 +962,7 @@
     },
     "cta": {
       "title": "准备好打造你的最佳简历了吗？",
-      "subtitle": "已有数千名求职者通过 TouchResume 收获面试机会。无需注册，即刻开始。",
+      "subtitle": "已有数千名求职者通过 JadeAI 收获面试机会。无需注册，即刻开始。",
       "button": "立即创建简历"
     },
     "footer": {
@@ -983,7 +986,7 @@
         "terms": "服务条款",
         "cookies": "Cookie 政策"
       },
-      "copyright": "© {year} TouchResume. 保留所有权利。"
+      "copyright": "© {year} JadeAI. 保留所有权利。"
     }
   },
   "linkedinPhoto": {
@@ -1041,7 +1044,7 @@
     "submit": "查看简历",
     "invalidPassword": "密码错误，请重试。",
     "notFound": "此简历不存在或已被删除。",
-    "viewOnTouchResume": "前往 TouchResume",
+    "viewOnTouchResume": "前往 JadeAI",
     "download": "下载",
     "review": "Review 评论",
     "reviewName": "你的称呼",
@@ -1096,7 +1099,7 @@
     "resumeOwner": "简历所有者",
     "antiCrawlerWatermark": "禁止 AI 爬虫/训练采集",
     "sensitiveWatermark": "含敏感内容 请勿外传",
-    "copyright": "© TouchResume 平台与 {owner} 共同保留版权所有",
+    "copyright": "© JadeAI 平台与 {owner} 共同保留版权所有",
     "sensitiveNotice": "本页面可能包含个人敏感信息，仅供授权访问者评审使用；禁止复制、抓取、训练或二次传播。",
     "offlineTitle": "网络已断开",
     "offlineDescription": "为避免分享简历内容在离线环境中意外保留，页面已清空本地简历数据。恢复网络后会重新从服务器拉取最新配置与内容。",
@@ -1172,6 +1175,9 @@
       "unmark": "取消标记",
       "endRound": "结束本轮",
       "pause": "暂停面试",
+      "resume": "继续面试",
+      "paused": "面试已暂停，可继续查看记录；恢复后才能回答或操作本轮。",
+      "pausedInputPlaceholder": "恢复面试后继续回答",
       "inputPlaceholder": "输入你的回答...",
       "send": "发送",
       "nextRound": "进入下一轮",
@@ -1578,6 +1584,7 @@
     "openEditor": "打开编辑器",
     "openEditorHint": "继续手动调整当前简历",
     "matchTab": "JD 匹配",
+    "applicationsTab": "投递追踪",
     "historyTab": "历史分析",
     "memoryTab": "个人记忆",
     "matchResult": "匹配结果",
@@ -1667,12 +1674,82 @@
       "interview_gap": "面试缺口"
     }
   },
+  "careerApplications": {
+    "title": "投递追踪",
+    "summary": "共 {count} 条投递记录",
+    "newApplication": "记录投递",
+    "searchPlaceholder": "搜索公司或职位",
+    "search": "搜索",
+    "allStages": "全部阶段",
+    "allResults": "全部结果",
+    "companyAndRole": "公司 / 职位",
+    "company": "公司",
+    "role": "职位",
+    "stage": "阶段",
+    "result": "结果",
+    "appliedAt": "投递日期",
+    "resultAt": "结果日期",
+    "relations": "关联资产",
+    "updatedAt": "最近更新",
+    "actions": "操作",
+    "sourceUrl": "职位链接",
+    "resume": "专项简历",
+    "jdAnalysis": "JD 分析",
+    "interview": "模拟面试",
+    "jobDescription": "JD 快照",
+    "notes": "备注",
+    "notSet": "未关联",
+    "matchScore": "匹配 {score}",
+    "openSource": "打开职位来源",
+    "empty": "暂无投递记录",
+    "noMatches": "没有符合筛选条件的投递记录",
+    "pagination": "第 {page} / {totalPages} 页，共 {total} 条",
+    "previousPage": "上一页",
+    "nextPage": "下一页",
+    "createTitle": "记录一次投递",
+    "editTitle": "更新投递记录",
+    "formDescription": "保存职位上下文，并关联本次使用的简历、JD 分析或模拟面试。",
+    "cancel": "取消",
+    "save": "保存",
+    "edit": "编辑",
+    "delete": "删除",
+    "deleteTitle": "删除投递记录？",
+    "deleteDescription": "将删除 {company} · {role} 的投递记录，关联的简历、分析和面试不会被删除。",
+    "requiredFields": "请填写公司和职位",
+    "created": "投递记录已创建",
+    "updated": "投递记录已更新",
+    "deleted": "投递记录已删除",
+    "loadFailed": "加载投递记录失败",
+    "saveFailed": "保存投递记录失败",
+    "deleteFailed": "删除投递记录失败",
+    "stages": {
+      "saved": "待投递",
+      "applied": "已投递",
+      "screening": "筛选中",
+      "interview": "面试中",
+      "offer": "已录用",
+      "closed": "已结束"
+    },
+    "results": {
+      "pending": "待定",
+      "offer": "Offer",
+      "rejected": "未通过",
+      "withdrawn": "已撤回",
+      "no_response": "无回复"
+    },
+    "interviewStatuses": {
+      "preparing": "准备中",
+      "in_progress": "进行中",
+      "paused": "已暂停",
+      "completed": "已完成"
+    }
+  },
   "notifications": {
     "title": "通知",
     "markAllRead": "全部已读",
     "browserNotifications": "浏览器通知",
     "empty": "暂无通知",
-    "defaultBody": "你有一条新的 TouchResume 通知",
+    "defaultBody": "你有一条新的 JadeAI 通知",
     "view": "查看"
   }
 }

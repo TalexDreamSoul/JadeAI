@@ -85,7 +85,7 @@ function buildSkillMarkdown(endpoint: string, token: string | null) {
 
   return `---
 name: jadeai-resume
-description: Use when the user asks to read, analyze, tailor, or safely update JadeAI/TouchResume resumes, JD analyses, knowledge graph data, or resume chat history via the user's JadeAI MCP API key.
+description: Use when the user asks to read, analyze, tailor, or safely update JadeAI resumes, JD analyses, knowledge graph data, or resume chat history via the user's JadeAI MCP API key.
 ---
 
 # JadeAI Resume

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
-import { hashPassword } from '@/lib/utils/share';
+import { verifyPassword } from '@/lib/utils/share';
 
 async function resolveShare(token: string, password: string | null, userId?: string) {
   const share = await shareRepository.findByToken(token);
@@ -14,7 +14,7 @@ async function resolveShare(token: string, password: string | null, userId?: str
   }
   if (share.password) {
     if (!password) return { error: NextResponse.json({ error: 'Password required', passwordRequired: true }, { status: 401 }) };
-    if (await hashPassword(password) !== share.password) {
+    if (!await verifyPassword(password, share.password)) {
       return { error: NextResponse.json({ error: 'Invalid password', passwordRequired: true }, { status: 401 }) };
     }
   }

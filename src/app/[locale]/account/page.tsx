@@ -6,6 +6,7 @@ import {
   Brush,
   ExternalLink,
   Gift,
+  Loader2,
   Lock,
   Palette,
   ReceiptText,
@@ -29,7 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useFingerprint } from '@/hooks/use-fingerprint';
-import { payExistingOrderWithMockPayment, purchaseProductWithMockPayment } from '@/lib/commercial/client-payments';
+import { payExistingOrder, purchaseProduct } from '@/lib/commercial/client-payments';
 import { BRAND_OPTIONS } from '@/components/layout/brand-switcher';
 import { useBrand, type Brand } from '@/components/layout/brand-provider';
 import { cn } from '@/lib/utils';
@@ -578,12 +579,13 @@ export default function AccountPage() {
     setBusyProductId(product.id);
     setError('');
     try {
-      await purchaseProductWithMockPayment({
+      const payment = await purchaseProduct({
         productId: product.id,
         headers: requestHeaders,
+        returnUrl: window.location.href,
         clientContext: { source: 'account' },
       });
-      await load();
+      if (payment.status === 'completed') await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : '购买失败');
     } finally {
@@ -632,11 +634,13 @@ export default function AccountPage() {
     setBusyProductId(orderId);
     setError('');
     try {
-      await payExistingOrderWithMockPayment({
+      const payment = await payExistingOrder({
         orderId,
         headers: requestHeaders,
+        returnUrl: window.location.href,
         clientContext: { source: 'account_order' },
       });
+      if (payment.status !== 'completed') return;
       if (selectedOrder?.id === orderId) {
         await openOrderDetail(orderId);
       }
@@ -981,14 +985,14 @@ export default function AccountPage() {
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
-          <nav className="flex w-full max-w-full gap-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:flex-col lg:overflow-visible">
+          <nav className="grid w-full max-w-full grid-cols-2 gap-1 rounded-xl border border-zinc-200 bg-white p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:grid-cols-3 md:grid-cols-6 lg:flex lg:flex-col">
             {ACCOUNT_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               return (
                 <a
                   key={item.href}
                   href={item.href}
-                  className="flex h-9 flex-none items-center gap-2 rounded-md px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50 lg:w-full"
+                  className="flex h-11 min-w-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50 lg:h-9 lg:w-full"
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="whitespace-nowrap">{item.label}</span>
@@ -1016,7 +1020,7 @@ export default function AccountPage() {
                 </div>
                 <Badge variant="secondary" className="rounded-md">{plan?.key || 'free'}</Badge>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                 {[
                   ['AI 月额度', planValue(entitlements, 'ai.monthly_credits', '0')],
                   ['模型等级', planValue(entitlements, 'ai.model_tier', 'basic')],
@@ -1044,6 +1048,7 @@ export default function AccountPage() {
                     onClick={() => buyProduct(product)}
                     className="cursor-pointer"
                   >
+                    {busyProductId === product.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                     {product.resourceId === plan?.key ? '当前套餐' : `${product.name} ${money(product.priceCents, product.currency)}`}
                   </Button>
                 ))}
@@ -1075,6 +1080,7 @@ export default function AccountPage() {
                     onClick={() => buyProduct(product)}
                     className="cursor-pointer"
                   >
+                    {busyProductId === product.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                     {product.name}
                   </Button>
                 ))}
@@ -1200,6 +1206,7 @@ export default function AccountPage() {
                               disabled={busyProductId === order.id}
                               onClick={() => payOrder(order.id)}
                             >
+                              {busyProductId === order.id && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
                               继续支付
                             </button>
                             <button
@@ -1278,6 +1285,7 @@ export default function AccountPage() {
                           disabled={busyProductId === product.id || busyProductId === bank.id}
                           onClick={() => unlockQuestionBank(bank, product)}
                         >
+                          {(busyProductId === product.id || busyProductId === bank.id) && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                           解锁 {money(product.priceCents, product.currency)}
                         </Button>
                       ) : (
@@ -1742,6 +1750,7 @@ export default function AccountPage() {
                         disabled={busyProductId === selectedOrder.id}
                         onClick={() => payOrder(selectedOrder.id)}
                       >
+                        {busyProductId === selectedOrder.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                         继续支付
                       </Button>
                       <Button

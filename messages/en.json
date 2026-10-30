@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "TouchResume",
+    "appName": "JadeAI",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -22,7 +22,7 @@
     "loginWithProvider": "Sign in with {provider}",
     "welcomeBack": "Welcome back",
     "loginDescription": "Sign in to manage your resumes",
-    "agreeTerms": "By signing in, you agree to our Terms of Service and Privacy Policy",
+    "agreeTerms": "By signing in, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>",
     "loginWithEmail": "Sign in with Email",
     "registerWithEmail": "Create Account",
     "switchToRegister": "No account? Register",
@@ -64,6 +64,8 @@
     "sortNameDesc": "Name Z-A",
     "viewGrid": "Grid view",
     "viewList": "List view",
+    "openResume": "Open resume \"{title}\"",
+    "resumeActions": "Resume actions for {title}",
     "templateTouchPure": "TouchPure",
     "templateClassic": "Classic",
     "templateModern": "Modern",
@@ -379,6 +381,7 @@
     "toolSuggestSkills": "Suggested skills",
     "loadMore": "Load more",
     "loadingMore": "Loading...",
+    "minimize": "Minimize AI Assistant",
     "bubbleTooltip": "Chat with AI Assistant",
     "apiKeyMissing": "AI Not Configured",
     "apiKeyMissingHint": "Log in and make sure your account has AI credits. If it is still unavailable, ask an admin to configure unified AI.",
@@ -745,7 +748,7 @@
     "description": "Import a previously exported JSON file to replace current content",
     "dashboardDescription": "Import a previously exported JSON file to create a new resume",
     "selectFile": "Click to select or drag a .json file here",
-    "dragHint": "Supports .json files exported from TouchResume",
+    "dragHint": "Supports .json files exported from JadeAI",
     "importing": "Importing...",
     "success": "Import successful!",
     "error": "Import failed. Please try again.",
@@ -959,7 +962,7 @@
     },
     "cta": {
       "title": "Ready to Build Your Best Resume?",
-      "subtitle": "Join thousands of job seekers who have landed interviews with TouchResume. No sign-up required.",
+      "subtitle": "Join thousands of job seekers who have landed interviews with JadeAI. No sign-up required.",
       "button": "Create Your Resume Now"
     },
     "footer": {
@@ -983,7 +986,7 @@
         "terms": "Terms of Service",
         "cookies": "Cookie Policy"
       },
-      "copyright": "© {year} TouchResume. All rights reserved."
+      "copyright": "© {year} JadeAI. All rights reserved."
     }
   },
   "linkedinPhoto": {
@@ -1041,7 +1044,7 @@
     "submit": "View Resume",
     "invalidPassword": "Invalid password. Please try again.",
     "notFound": "This resume is not available or has been removed.",
-    "viewOnTouchResume": "View on TouchResume",
+    "viewOnTouchResume": "View on JadeAI",
     "download": "Download",
     "review": "Review Comments",
     "reviewName": "Your name",
@@ -1096,7 +1099,7 @@
     "resumeOwner": "Resume owner",
     "antiCrawlerWatermark": "No AI crawler / training collection",
     "sensitiveWatermark": "Sensitive content - do not share",
-    "copyright": "© Copyright reserved by TouchResume platform and {owner}",
+    "copyright": "© Copyright reserved by JadeAI platform and {owner}",
     "sensitiveNotice": "This page may contain sensitive personal information and is for authorized review only. Copying, scraping, model training, or redistribution is prohibited.",
     "offlineTitle": "Network disconnected",
     "offlineDescription": "To avoid accidentally retaining shared resume content offline, local resume data has been cleared. When the network is restored, the latest content and share settings will be fetched from the server again.",
@@ -1172,6 +1175,9 @@
       "unmark": "Unmark",
       "endRound": "End Round",
       "pause": "Pause",
+      "resume": "Resume",
+      "paused": "The interview is paused. You can review the conversation and resume when ready.",
+      "pausedInputPlaceholder": "Resume the interview to answer",
       "inputPlaceholder": "Type your answer...",
       "send": "Send",
       "nextRound": "Next Round",
@@ -1578,6 +1584,7 @@
     "openEditor": "Open editor",
     "openEditorHint": "Continue editing the selected resume",
     "matchTab": "JD match",
+    "applicationsTab": "Applications",
     "historyTab": "Analysis history",
     "memoryTab": "Career memory",
     "matchResult": "Match result",
@@ -1667,12 +1674,82 @@
       "interview_gap": "Interview gap"
     }
   },
+  "careerApplications": {
+    "title": "Applications",
+    "summary": "{count} applications",
+    "newApplication": "Add application",
+    "searchPlaceholder": "Search company or role",
+    "search": "Search",
+    "allStages": "All stages",
+    "allResults": "All results",
+    "companyAndRole": "Company / role",
+    "company": "Company",
+    "role": "Role",
+    "stage": "Stage",
+    "result": "Result",
+    "appliedAt": "Applied",
+    "resultAt": "Result date",
+    "relations": "Linked work",
+    "updatedAt": "Updated",
+    "actions": "Actions",
+    "sourceUrl": "Job URL",
+    "resume": "Tailored resume",
+    "jdAnalysis": "JD analysis",
+    "interview": "Mock interview",
+    "jobDescription": "JD snapshot",
+    "notes": "Notes",
+    "notSet": "Not linked",
+    "matchScore": "Match {score}",
+    "openSource": "Open job source",
+    "empty": "No applications yet",
+    "noMatches": "No applications match these filters",
+    "pagination": "Page {page} of {totalPages} · {total} total",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "createTitle": "Add application",
+    "editTitle": "Update application",
+    "formDescription": "Save the job context and link the resume, JD analysis, or mock interview used for it.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete application?",
+    "deleteDescription": "This removes the application for {company} · {role}. Linked resumes, analyses, and interviews stay intact.",
+    "requiredFields": "Enter a company and role",
+    "created": "Application created",
+    "updated": "Application updated",
+    "deleted": "Application deleted",
+    "loadFailed": "Failed to load applications",
+    "saveFailed": "Failed to save application",
+    "deleteFailed": "Failed to delete application",
+    "stages": {
+      "saved": "Saved",
+      "applied": "Applied",
+      "screening": "Screening",
+      "interview": "Interviewing",
+      "offer": "Offer",
+      "closed": "Closed"
+    },
+    "results": {
+      "pending": "Pending",
+      "offer": "Offer",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn",
+      "no_response": "No response"
+    },
+    "interviewStatuses": {
+      "preparing": "Preparing",
+      "in_progress": "In progress",
+      "paused": "Paused",
+      "completed": "Completed"
+    }
+  },
   "notifications": {
     "title": "Notifications",
     "markAllRead": "Mark all read",
     "browserNotifications": "Browser notifications",
     "empty": "No notifications",
-    "defaultBody": "You have a new TouchResume notification",
+    "defaultBody": "You have a new JadeAI notification",
     "view": "View"
   }
 }

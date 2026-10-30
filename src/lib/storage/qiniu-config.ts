@@ -1,3 +1,10 @@
+import {
+  canEncryptSecrets,
+  decryptSecret,
+  encryptSecret,
+  isEncryptedSecret,
+} from '@/lib/security/secret-crypto';
+
 export type StorageProvider = 'qiniu';
 export type QiniuStorageSource = 'db' | 'env' | 'none';
 export type QiniuProtocol = 'https' | 'http';
@@ -110,7 +117,8 @@ export function readStoredQiniuStorageConfig(rawSettings: Record<string, unknown
   const enabled = optionalBoolSetting(raw.enabled);
   const publicRead = optionalBoolSetting(raw.publicRead);
   const accessKey = optionalStringSetting(raw.accessKey);
-  const secretKey = optionalStringSetting(raw.secretKey);
+  const storedSecretKey = optionalStringSetting(raw.secretKey);
+  const secretKey = storedSecretKey === undefined ? undefined : decryptSecret(storedSecretKey);
   const bucket = optionalStringSetting(raw.bucket);
   const region = optionalStringSetting(raw.region);
   const domain = optionalStringSetting(raw.domain);
@@ -200,6 +208,22 @@ export async function getGlobalStorageSettings(): Promise<GlobalStorageSettings>
   const rawSettings = await userRepository.getGlobalSettings();
   const envConfig = getEnvQiniuStorageConfig();
   const storedConfig = readStoredQiniuStorageConfig(rawSettings);
+  const storedStorage = asRecord(rawSettings.storage);
+  const nestedQiniu = asRecord(storedStorage.qiniu);
+  const rawQiniu = Object.keys(nestedQiniu).length > 0 ? nestedQiniu : storedStorage;
+  const rawStoredSecret = optionalStringSetting(rawQiniu.secretKey);
+  if (rawStoredSecret && !isEncryptedSecret(rawStoredSecret) && canEncryptSecrets()) {
+    await userRepository.updateGlobalSettings({
+      storage: {
+        ...storedStorage,
+        provider: 'qiniu',
+        qiniu: {
+          ...rawQiniu,
+          secretKey: encryptSecret(rawStoredSecret),
+        },
+      },
+    });
+  }
   const source: QiniuStorageSource = hasConfigValue(storedConfig)
     ? 'db'
     : hasConfigValue(envConfig)

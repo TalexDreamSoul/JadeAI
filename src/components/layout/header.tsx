@@ -16,6 +16,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { APP_NAME } from '@/lib/constants';
 
 type NavItem = { href: string; i18nKey: string; match: string; tourId?: string };
 
@@ -83,7 +84,7 @@ export function Header() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="flex items-center gap-1">
-            <Image src="/logo.png" alt="TouchResume" width={36} height={36} priority className="h-9 w-9 rounded-lg" />
+            <Image src="/logo.png" alt={APP_NAME} width={36} height={36} priority className="h-9 w-9 rounded-lg" />
           </Link>
           <nav className="hidden md:flex items-center gap-1">
             {renderDesktopLink(DASHBOARD_NAV_ITEM)}

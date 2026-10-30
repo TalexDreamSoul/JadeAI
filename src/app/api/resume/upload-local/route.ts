@@ -7,6 +7,7 @@ import {
   commercialFeatureLockedResponse,
   CommercialFeatureLockedError,
 } from '@/lib/commercial/feature-gate-service';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 type SectionInput = {
   id?: string;
@@ -84,6 +85,17 @@ export async function POST(request: NextRequest) {
         title: 'Local resume uploaded',
         metadata: { sourceLocalId: typeof body.id === 'string' ? body.id : null },
       }).catch(() => null);
+      await recordProductEventSafely({
+        eventName: 'resume_imported',
+        userId: user.id,
+        metadata: {
+          resumeId: fullResume.id,
+          source: 'local_sync',
+          format: 'local',
+          template: fullResume.template,
+          language: fullResume.language,
+        },
+      });
     }
 
     return NextResponse.json(fullResume, { status: 201 });

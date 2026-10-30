@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { Link } from '@/i18n/routing';
+import { APP_NAME } from '@/lib/constants';
 
 export default function AuthLayout({
   children,
@@ -34,7 +35,7 @@ export default function AuthLayout({
       {/* Logo - top left */}
       <div className="absolute left-6 top-6 z-20">
         <Link href="/" className="transition-opacity hover:opacity-80">
-          <Image src="/logo.png" alt="TouchResume" width={40} height={40} className="h-10 w-10 rounded-xl" />
+          <Image src="/logo.png" alt={APP_NAME} width={40} height={40} className="h-10 w-10 rounded-xl" />
         </Link>
       </div>
 

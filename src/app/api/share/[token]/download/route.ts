@@ -5,7 +5,7 @@ import { generateHtml } from '@/app/api/resume/[id]/export/builders';
 import { generatePlainText } from '@/app/api/resume/[id]/export/plain-text';
 import { generateDocxBuffer } from '@/app/api/resume/[id]/export/docx';
 import { generatePdf } from '@/lib/pdf/generate-pdf';
-import { hashPassword } from '@/lib/utils/share';
+import { verifyPassword } from '@/lib/utils/share';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { sanitizeResumeForShare } from '@/lib/share/review';
 import {
@@ -36,7 +36,7 @@ export async function GET(
 
     if (share.password) {
       if (!password) return NextResponse.json({ error: 'Password required', passwordRequired: true }, { status: 401 });
-      if (await hashPassword(password) !== share.password) {
+      if (!await verifyPassword(password, share.password)) {
         return NextResponse.json({ error: 'Invalid password', passwordRequired: true }, { status: 401 });
       }
     }

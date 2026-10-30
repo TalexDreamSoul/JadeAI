@@ -8,7 +8,7 @@ import { aiReviewRepository } from '@/lib/db/repositories/ai-review.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { getReviewerDisplay, sanitizeResumeForShare } from '@/lib/share/review';
-import { hashPassword } from '@/lib/utils/share';
+import { verifyPassword } from '@/lib/utils/share';
 import { safeParseJson } from '@/lib/safe-json';
 import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
@@ -33,7 +33,7 @@ async function resolveShare(token: string, password: string | null) {
   if (!share.reviewEnabled) return { error: NextResponse.json({ error: 'Review is disabled' }, { status: 403 }) };
   if (share.password) {
     if (!password) return { error: NextResponse.json({ error: 'Password required', passwordRequired: true }, { status: 401 }) };
-    if (await hashPassword(password) !== share.password) {
+    if (!await verifyPassword(password, share.password)) {
       return { error: NextResponse.json({ error: 'Invalid password', passwordRequired: true }, { status: 401 }) };
     }
   }

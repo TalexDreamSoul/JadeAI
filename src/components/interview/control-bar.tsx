@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { SkipForward, Lightbulb, Bookmark, BookmarkCheck, StopCircle, Pause } from 'lucide-react';
+import { SkipForward, Lightbulb, Bookmark, BookmarkCheck, StopCircle, Pause, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useInterviewStore } from '@/stores/interview-store';
 import { getAIHeaders } from '@/stores/settings-store';
@@ -18,12 +19,14 @@ interface ControlBarProps {
 export function useInterviewControls({ sessionId, roundId, lastAssistantMessageId, isLoading, onTriggerAI, onEndRound }: ControlBarProps) {
   const t = useTranslations('interview.room');
   const locale = useLocale();
-  const { markedMessages, toggleMark, addHinted, addSkipped } = useInterviewStore();
+  const { markedMessages, toggleMark, addHinted, addSkipped, status, setStatus } = useInterviewStore();
   const isMarked = lastAssistantMessageId ? markedMessages.has(lastAssistantMessageId) : false;
+  const isPaused = status === 'paused';
+  const [isStatusChanging, setIsStatusChanging] = useState(false);
 
   const sendControl = async (action: string) => {
     const fp = localStorage.getItem('touchresume_fingerprint');
-    await fetch(`/api/interview/${sessionId}/control`, {
+    const response = await fetch(`/api/interview/${sessionId}/control`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -32,6 +35,9 @@ export function useInterviewControls({ sessionId, roundId, lastAssistantMessageI
       },
       body: JSON.stringify({ action, roundId, locale }),
     });
+    if (!response.ok) {
+      throw new Error(`Interview control failed with status ${response.status}`);
+    }
   };
 
   const handleSkip = async () => {
@@ -52,7 +58,17 @@ export function useInterviewControls({ sessionId, roundId, lastAssistantMessageI
   };
 
   const handlePause = async () => {
-    await sendControl('pause');
+    if (isStatusChanging || isLoading) return;
+    setIsStatusChanging(true);
+    try {
+      const nextStatus = isPaused ? 'in_progress' : 'paused';
+      await sendControl(isPaused ? 'resume' : 'pause');
+      setStatus(nextStatus);
+    } catch (error) {
+      console.error('Failed to update interview pause status:', error);
+    } finally {
+      setIsStatusChanging(false);
+    }
   };
 
   const handleMark = () => {
@@ -71,11 +87,11 @@ export function useInterviewControls({ sessionId, roundId, lastAssistantMessageI
 
   const controls = (
     <div className="flex items-center gap-1">
-      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={handleSkip} disabled={isLoading}>
+      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={handleSkip} disabled={isLoading || isPaused}>
         <SkipForward className="h-3 w-3" />
         <span className="hidden sm:inline">{t('skip')}</span>
       </Button>
-      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={handleHint} disabled={isLoading}>
+      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={handleHint} disabled={isLoading || isPaused}>
         <Lightbulb className="h-3 w-3" />
         <span className="hidden sm:inline">{t('hint')}</span>
       </Button>
@@ -84,13 +100,13 @@ export function useInterviewControls({ sessionId, roundId, lastAssistantMessageI
         <span className="hidden sm:inline">{isMarked ? t('unmark') : t('mark')}</span>
       </Button>
       <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
-      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950" onClick={handleEndRound} disabled={isLoading}>
+      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950" onClick={handleEndRound} disabled={isLoading || isPaused}>
         <StopCircle className="h-3 w-3" />
         <span className="hidden sm:inline">{t('endRound')}</span>
       </Button>
-      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={handlePause}>
-        <Pause className="h-3 w-3" />
-        <span className="hidden sm:inline">{t('pause')}</span>
+      <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg px-2 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={handlePause} disabled={isLoading || isStatusChanging}>
+        {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+        <span className="hidden sm:inline">{isPaused ? t('resume') : t('pause')}</span>
       </Button>
     </div>
   );

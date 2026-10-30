@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
-import { hashPassword } from '@/lib/utils/share';
+import { hashPassword, isLegacyPasswordHash, verifyPassword } from '@/lib/utils/share';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { sanitizeResumeForShare } from '@/lib/share/review';
 import { normalizeThemeConfig } from '@/lib/theme-config';
@@ -30,12 +30,14 @@ export async function GET(
             { status: 401 }
           );
         }
-        const hashedInput = await hashPassword(password);
-        if (hashedInput !== share.password) {
+        if (!await verifyPassword(password, share.password)) {
           return NextResponse.json(
             { error: 'Invalid password', passwordRequired: true },
             { status: 401 }
           );
+        }
+        if (isLegacyPasswordHash(share.password)) {
+          await shareRepository.update(share.id, { password: await hashPassword(password) });
         }
       }
 
@@ -90,12 +92,14 @@ export async function GET(
           { status: 401 }
         );
       }
-      const hashedInput = await hashPassword(password);
-      if (hashedInput !== resume.sharePassword) {
+      if (!await verifyPassword(password, resume.sharePassword)) {
         return NextResponse.json(
           { error: 'Invalid password', passwordRequired: true },
           { status: 401 }
         );
+      }
+      if (isLegacyPasswordHash(resume.sharePassword)) {
+        await resumeRepository.updateShareSettings(resume.id, { sharePassword: await hashPassword(password) });
       }
     }
 

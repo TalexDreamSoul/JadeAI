@@ -11,6 +11,7 @@ import {
   commercialFeatureLockedResponse,
   CommercialFeatureLockedError,
 } from '@/lib/commercial/feature-gate-service';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 type ResumeRecord = NonNullable<Awaited<ReturnType<typeof resumeRepository.findById>>>;
 
@@ -132,6 +133,18 @@ export async function POST(
         metadata: { sourceResumeId: resume.id, targetCompany, targetJobTitle, tailored: !!jobDescription },
       });
       await resumeRepository.createVersion(derived.id, 'jd-v1', derived, 'jd');
+
+      if (!refreshed) {
+        await recordProductEventSafely({
+          eventName: 'tailored_resume_created',
+          userId: user.id,
+          metadata: {
+            sourceResumeId: resume.id,
+            derivedResumeId: derived.id,
+            tailored: !!jobDescription,
+          },
+        });
+      }
 
       return {
         resume: derived,

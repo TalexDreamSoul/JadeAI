@@ -47,6 +47,7 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
   const currentRound = rounds[currentRoundIndex];
   const interviewerConfig = currentRound?.interviewerConfig as InterviewerConfig;
   const isRoundDone = isRoundViewOnly(currentRound?.status, sessionStatus);
+  const isPaused = sessionStatus === 'paused';
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, resetMessages, sendMessage, setMessages } =
     useInterviewChat({
@@ -74,12 +75,13 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
       !loadedRef.current &&
       !isViewingHistory &&
       !isRoundDone &&
+      !isPaused &&
       sentInitRef.current !== currentRound.id
     ) {
       sentInitRef.current = currentRound.id;
       sendMessage({ text: INIT_TRIGGER });
     }
-  }, [currentRound?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentRound?.id, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-set viewing history if round is already done
   useEffect(() => {
@@ -205,10 +207,16 @@ export function InterviewRoom({ sessionId, initialMessages }: InterviewRoomProps
         </div>
       ) : (
         <div className="space-y-2 border-t border-zinc-100 pt-2 pb-2 dark:border-zinc-800">
+          {isPaused && (
+            <div role="status" className="rounded-lg bg-zinc-100 px-3 py-2 text-center text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              {t('paused')}
+            </div>
+          )}
           {controls}
           <MessageInput
             input={input}
             isLoading={isLoading}
+            disabled={isPaused}
             onChange={handleInputChange}
             onSubmit={handleSubmit}
           />

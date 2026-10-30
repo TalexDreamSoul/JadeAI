@@ -11,6 +11,7 @@ import { hashJdText } from '@/lib/jd-analysis-utils';
 import { normalizeResumeSnapshotForUse } from '@/lib/resume-snapshot';
 import type { Resume } from '@/types/resume';
 import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 const JD_ANALYSIS_PROMPT = `You are an expert resume analyst and career coach. Analyze the match between the provided resume and job description.
 
@@ -172,6 +173,19 @@ export async function POST(request: NextRequest) {
           }
         })).then((items) => items.filter(Boolean))
         : [];
+
+      await recordProductEventSafely({
+        eventName: 'jd_analyzed',
+        userId: user?.id,
+        fingerprint,
+        metadata: {
+          resumeId,
+          ...(historyId ? { analysisId: historyId } : {}),
+          source: localResume ? 'local' : 'cloud',
+          overallScore: analysisData.overallScore,
+          atsScore: analysisData.atsScore,
+        },
+      });
 
       return NextResponse.json({
         ...analysisData,

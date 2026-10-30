@@ -4,7 +4,7 @@ import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { getUserIdFromRequest, resolveUser } from '@/lib/auth/helpers';
 import { anonymizeDisplayName, getReviewerDisplay, isReviewLoginRequired } from '@/lib/share/review';
-import { hashPassword } from '@/lib/utils/share';
+import { verifyPassword } from '@/lib/utils/share';
 
 type AuthenticatedUser = NonNullable<Awaited<ReturnType<typeof resolveUser>>>;
 
@@ -14,7 +14,7 @@ async function resolveShare(token: string, password: string | null) {
   if (!share.reviewEnabled) return { error: NextResponse.json({ error: 'Review is disabled' }, { status: 403 }) };
   if (share.password) {
     if (!password) return { error: NextResponse.json({ error: 'Password required', passwordRequired: true }, { status: 401 }) };
-    if (await hashPassword(password) !== share.password) {
+    if (!await verifyPassword(password, share.password)) {
       return { error: NextResponse.json({ error: 'Invalid password', passwordRequired: true }, { status: 401 }) };
     }
   }

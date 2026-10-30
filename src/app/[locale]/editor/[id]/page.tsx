@@ -294,10 +294,16 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         </div>
       </div>
 
+      {/* Keep mobile editing content clear of the floating actions. */}
+      <div
+        aria-hidden="true"
+        className="relative z-30 h-[calc(6rem+env(safe-area-inset-bottom))] shrink-0 border-t bg-background md:hidden"
+      />
+
       {/* Mobile sidebar FAB */}
       <button
         onClick={() => setSidebarOpen(true)}
-        className="fixed bottom-20 left-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg transition-transform hover:scale-105 active:scale-95 md:hidden"
+        className="fixed bottom-7 left-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg transition-transform hover:scale-105 active:scale-95 md:hidden"
         aria-label="Open sections"
       >
         <List className="h-5 w-5" />

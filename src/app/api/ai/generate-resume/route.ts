@@ -11,6 +11,7 @@ import {
   commercialFeatureLockedResponse,
   CommercialFeatureLockedError,
 } from '@/lib/commercial/feature-gate-service';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 const SECTION_TITLES: Record<string, Record<string, string>> = {
   zh: {
@@ -148,6 +149,15 @@ Respond with JSON only.`;
     const sectionTypes = ['personal_info', 'summary', 'work_experience', 'education', 'skills', 'projects'] as const;
 
     if (!user) {
+      await recordProductEventSafely({
+        eventName: 'resume_created',
+        fingerprint,
+        metadata: {
+          source: 'generated',
+          template: template || DEFAULT_TEMPLATE,
+          language: lang,
+        },
+      });
       return NextResponse.json({
         resumeId: null,
         title: resumeTitle,
@@ -189,6 +199,16 @@ Respond with JSON only.`;
     }
 
     const completeResume = await resumeRepository.findById(newResume.id);
+    await recordProductEventSafely({
+      eventName: 'resume_created',
+      userId: user.id,
+      metadata: {
+        resumeId: newResume.id,
+        source: 'generated',
+        template: template || DEFAULT_TEMPLATE,
+        language: lang,
+      },
+    });
 
     return NextResponse.json({
       resumeId: newResume.id,

@@ -153,6 +153,10 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
     <>
       {/* Floating chat window — always mounted to preserve state, toggled via CSS */}
       <div
+        role="dialog"
+        aria-label={t('panelTitle')}
+        aria-hidden={!showAiChat}
+        inert={!showAiChat}
         className="fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl transition-opacity duration-200"
         style={{
           width: winSize.w,
@@ -170,11 +174,14 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
         >
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-brand-foreground" />
-            <span className="text-sm font-semibold text-brand-foreground">AI Assistant</span>
+            <span className="text-sm font-semibold text-brand-foreground">{t('panelTitle')}</span>
           </div>
           <button
+            type="button"
             className="rounded p-1 text-brand-foreground/80 hover:bg-brand-foreground/15 hover:text-brand-foreground"
             onClick={toggleAiChat}
+            aria-label={t('minimize')}
+            title={t('minimize')}
           >
             <Minus className="h-4 w-4" />
           </button>
@@ -201,10 +208,13 @@ export function AIChatBubble({ resumeId }: AIChatBubbleProps) {
           </div>
         )}
         <button
+          type="button"
           data-tour="ai-chat"
           className="relative flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-hover text-brand-foreground shadow-lg transition-transform hover:scale-110 active:cursor-grabbing active:scale-95"
           onMouseDown={onBubbleMouseDown}
           onClick={onBubbleClick}
+          aria-label={hasAIConfig ? t('bubbleTooltip') : t('apiKeyMissingBubble')}
+          title={hasAIConfig ? t('bubbleTooltip') : t('apiKeyMissingBubble')}
         >
           <MessageSquare className="h-6 w-6" />
           {!hasAIConfig && (

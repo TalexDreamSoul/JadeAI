@@ -4,7 +4,7 @@ import { analysisRepository } from '@/lib/db/repositories/analysis.repository';
 import { jobTemplateRepository, toJobTemplate, type JobTemplateRecord } from '@/lib/db/repositories/job-template.repository';
 import { resumeRepository } from '@/lib/db/repositories/resume.repository';
 import { shareRepository } from '@/lib/db/repositories/share.repository';
-import { hashPassword } from '@/lib/utils/share';
+import { verifyPassword } from '@/lib/utils/share';
 
 type JdSource = {
   id: string;
@@ -34,7 +34,7 @@ async function resolveSharedResume(token: string, password: string | null) {
   if (share) {
     if (!share.isActive) return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
     if (share.password) {
-      if (!password || await hashPassword(password) !== share.password) {
+      if (!password || !await verifyPassword(password, share.password)) {
         return { error: NextResponse.json({ error: 'Invalid password' }, { status: 401 }) };
       }
     }
@@ -46,7 +46,7 @@ async function resolveSharedResume(token: string, password: string | null) {
   const resume = await resumeRepository.findByShareToken(token);
   if (!resume || !resume.isPublic) return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
   if (resume.sharePassword) {
-    if (!password || await hashPassword(password) !== resume.sharePassword) {
+    if (!password || !await verifyPassword(password, resume.sharePassword)) {
       return { error: NextResponse.json({ error: 'Invalid password' }, { status: 401 }) };
     }
   }

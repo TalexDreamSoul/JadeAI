@@ -32,6 +32,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { md } from '@/components/preview/utils';
 import { getAIHeaders, useIsLocalOnly, useSettingsStore } from '@/stores/settings-store';
 import type { Resume } from '@/types/resume';
+import { APP_NAME } from '@/lib/constants';
 
 interface ShareMeta {
   reviewEnabled: boolean;
@@ -241,7 +242,7 @@ export function PublicResumeReview({
   const passwordQuery = password ? `?password=${encodeURIComponent(password)}` : '';
   const ownerName = shareMeta.ownerName || safeCopy(t('resumeOwner'), 'Resume owner');
   const visitorName = user?.name || user?.email || safeCopy(t('visitorFallback'), 'Visitor');
-  const copyright = safeCopy(t('copyright', { owner: ownerName }), `© TouchResume & ${ownerName}`);
+  const copyright = safeCopy(t('copyright', { owner: ownerName }), `© ${APP_NAME} & ${ownerName}`);
   const visitorWatermark = `${safeCopy(t('visitor'), 'Visitor')}: ${visitorName} · ${copyright}`;
   const sensitiveWatermark = `${safeCopy(t('sensitiveWatermark'), 'Sensitive content - do not share')} · ${safeCopy(t('antiCrawlerWatermark'), 'No AI crawler / training collection')}`;
   const aiAvailable = isAuthenticated && serverAIAvailable;

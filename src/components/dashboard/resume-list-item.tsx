@@ -1,9 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/routing';
+import { Link, useRouter } from '@/i18n/routing';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Copy, Loader2, Trash2, MoreVertical, Pencil, RefreshCw, Network } from 'lucide-react';
+import { Copy, Loader2, Trash2, MoreVertical, Pencil, RefreshCw, Network, Share2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,9 +21,10 @@ interface ResumeListItemProps {
   onDuplicate: () => void;
   onRename: (title: string) => void;
   onRetryAnalysis?: (jobId: string) => void;
+  onShare?: () => void;
 }
 
-export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetryAnalysis }: ResumeListItemProps) {
+export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetryAnalysis, onShare }: ResumeListItemProps) {
   const t = useTranslations();
   const router = useRouter();
   const [isRenaming, setIsRenaming] = useState(false);
@@ -92,10 +93,22 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
   const analysisProgress = Math.max(0, Math.min(100, analysis?.progress || 0));
   const analysisMessage = analysis?.message || (analysis?.status === 'retrying' ? '等待系统自动重试' : '正在分析简历内容');
 
+  const openResume = () => {
+    if (!renamingRef.current && !isAnalysisActive) {
+      router.push(`/editor/${resume.id}`);
+    }
+  };
+
+  const handleDelete = () => {
+    if (window.confirm(t('dashboard.deleteConfirm', { title: resume.title }))) {
+      onDelete();
+    }
+  };
+
   return (
     <div
-      className={`group flex items-center gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 transition-all duration-200 dark:border-zinc-700/60 dark:bg-card ${isRenaming || isAnalysisActive ? '' : 'cursor-pointer hover:shadow-md hover:-translate-y-0.5'}`}
-      onClick={() => { if (!renamingRef.current && !isAnalysisActive) router.push(`/editor/${resume.id}`); }}
+      className={`group flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-3 transition-all duration-200 motion-reduce:transition-none sm:gap-4 sm:px-4 dark:border-zinc-700/60 dark:bg-card ${isRenaming || isAnalysisActive ? '' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0'}`}
+      onClick={openResume}
     >
       {/* Title */}
       <div className="min-w-0 flex-1">
@@ -115,7 +128,16 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
           />
         ) : (
           <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            {resume.title}
+            {isAnalysisActive ? resume.title : (
+              <Link
+                href={`/editor/${resume.id}`}
+                aria-label={t('dashboard.openResume', { title: resume.title })}
+                onClick={(event) => event.stopPropagation()}
+                className="block truncate rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                {resume.title}
+              </Link>
+            )}
           </h3>
         )}
       </div>
@@ -154,7 +176,8 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
       {/* Actions */}
       <DropdownMenu>
         <DropdownMenuTrigger
-          className={`cursor-pointer rounded-md p-1 transition-opacity hover:bg-zinc-100 dark:hover:bg-zinc-800 ${analysis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+          aria-label={t('dashboard.resumeActions', { title: resume.title })}
+          className={`inline-flex size-11 cursor-pointer items-center justify-center rounded-md transition-[opacity,background-color] hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand md:size-7 dark:hover:bg-zinc-800 ${analysis ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100'}`}
           onClick={(e) => e.stopPropagation()}
         >
           <MoreVertical className="h-4 w-4 text-zinc-400" />
@@ -196,6 +219,18 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
               {t('common.duplicate')}
             </DropdownMenuItem>
           )}
+          {onShare && !analysis && (
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              {t('share.title')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="cursor-pointer"
             onClick={(e) => {
@@ -210,7 +245,7 @@ export function ResumeListItem({ resume, onDelete, onDuplicate, onRename, onRetr
             className="cursor-pointer text-red-600"
             onClick={(e) => {
               e.stopPropagation();
-              onDelete();
+              handleDelete();
             }}
           >
             <Trash2 className="mr-2 h-4 w-4" />

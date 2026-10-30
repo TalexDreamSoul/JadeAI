@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ResumeAnalysisWorker } from '@/lib/resume-analysis/worker';
+import { isResumeAnalysisWorkerAuthorized } from '@/lib/resume-analysis/worker-auth';
 
 export const maxDuration = 300;
 
 function isAuthorized(request: NextRequest) {
-  const token = process.env.RESUME_ANALYSIS_WORKER_TOKEN;
-  if (!token) return true;
-  return request.headers.get('x-worker-token') === token;
+  return isResumeAnalysisWorkerAuthorized(
+    process.env.RESUME_ANALYSIS_WORKER_TOKEN,
+    request.headers.get('x-worker-token'),
+  );
 }
 
 export async function POST(request: NextRequest) {

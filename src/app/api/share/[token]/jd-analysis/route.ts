@@ -6,7 +6,7 @@ import { shareRepository } from '@/lib/db/repositories/share.repository';
 import { jdAnalysisOutputSchema } from '@/lib/ai/jd-analysis-schema';
 import { generateJsonWithRetry, getAIJsonErrorMessage } from '@/lib/ai/generate-json';
 import { sanitizeResumeForShare } from '@/lib/share/review';
-import { hashPassword } from '@/lib/utils/share';
+import { verifyPassword } from '@/lib/utils/share';
 import { AIUsageInsufficientCreditsError, withMeteredAIUsage } from '@/lib/commercial/ai-route-metering';
 
 const JD_ANALYSIS_PROMPT = `You are an expert resume analyst and career coach. Analyze the match between the provided resume and job description.
@@ -29,7 +29,7 @@ async function resolveShare(token: string, password: string | null) {
   if (!share.reviewEnabled) return { error: NextResponse.json({ error: 'Review is disabled' }, { status: 403 }) };
   if (share.password) {
     if (!password) return { error: NextResponse.json({ error: 'Password required', passwordRequired: true }, { status: 401 }) };
-    if (await hashPassword(password) !== share.password) {
+    if (!await verifyPassword(password, share.password)) {
       return { error: NextResponse.json({ error: 'Invalid password', passwordRequired: true }, { status: 401 }) };
     }
   }

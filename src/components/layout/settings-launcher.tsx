@@ -88,7 +88,7 @@ export function SettingsLauncher({ variant = 'icon' }: SettingsLauncherProps) {
   ) : (
     <button
       type="button"
-      className="fixed bottom-4 left-4 z-50 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border bg-white text-zinc-600 shadow-lg transition-colors hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      className="fixed bottom-4 left-4 z-50 hidden h-11 w-11 cursor-pointer items-center justify-center rounded-full border bg-white text-zinc-600 shadow-lg transition-colors hover:bg-zinc-50 md:flex dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
       aria-label={t('settings.title')}
       title={t('settings.title')}
     >

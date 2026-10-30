@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, Eye, Loader2, Store, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { ResumePreview } from '@/components/preview/resume-preview';
 import { TourOverlay, type TourStepConfig } from '@/components/tour/tour-overlay';
 import { useTourStore, hasCompletedTour } from '@/stores/tour-store';
 import { getTemplateLabel } from '@/lib/template-labels';
-import { purchaseProductWithMockPayment } from '@/lib/commercial/client-payments';
+import { purchaseProduct } from '@/lib/commercial/client-payments';
 import type { Resume } from '@/types/resume';
 
 interface MarketTemplate {
@@ -55,6 +55,92 @@ const TEMPLATES_TOUR_STEPS: TourStepConfig[] = [
 
 // Stable date to avoid SSR/client hydration mismatch
 const MOCK_DATE = new Date('2025-01-01T00:00:00Z');
+const A4_PREVIEW_WIDTH_PX = 794;
+const A4_PREVIEW_HEIGHT_PX = 1123;
+
+function TemplatePreview({
+  resume,
+  eager = false,
+  thumbnail = false,
+}: {
+  resume: Resume;
+  eager?: boolean;
+  thumbnail?: boolean;
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+  const [shouldRender, setShouldRender] = useState(eager);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const updateScale = (width: number) => {
+      const nextScale = width / A4_PREVIEW_WIDTH_PX;
+      setScale((currentScale) => (
+        Math.abs(currentScale - nextScale) < 0.001 ? currentScale : nextScale
+      ));
+    };
+
+    updateScale(viewport.getBoundingClientRect().width);
+
+    if (typeof ResizeObserver === 'undefined') {
+      const handleResize = () => updateScale(viewport.getBoundingClientRect().width);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      updateScale(entry.contentRect.width);
+    });
+    resizeObserver.observe(viewport);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (eager) return;
+
+    const viewport = viewportRef.current;
+    if (!viewport || typeof IntersectionObserver === 'undefined') {
+      const frame = requestAnimationFrame(() => setShouldRender(true));
+      return () => cancelAnimationFrame(frame);
+    }
+
+    const intersectionObserver = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setShouldRender(true);
+      intersectionObserver.disconnect();
+    }, { rootMargin: '600px 0px' });
+    intersectionObserver.observe(viewport);
+    return () => intersectionObserver.disconnect();
+  }, [eager]);
+
+  return (
+    <div
+      ref={viewportRef}
+      data-template-preview
+      className={`relative aspect-[210/297] overflow-hidden bg-zinc-50 dark:bg-zinc-950 ${
+        thumbnail ? 'mx-auto w-full sm:h-[320px] sm:w-auto' : 'w-full'
+      }`}
+    >
+      {!shouldRender && (
+        <div aria-hidden="true" className="absolute inset-0 animate-pulse bg-zinc-100 dark:bg-zinc-900" />
+      )}
+      {shouldRender && scale > 0 && (
+        <div
+          className="absolute left-0 top-0 origin-top-left"
+          style={{
+            width: `${A4_PREVIEW_WIDTH_PX}px`,
+            minHeight: `${A4_PREVIEW_HEIGHT_PX}px`,
+            transform: `scale(${scale})`,
+          }}
+        >
+          <ResumePreview resume={resume} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function money(cents: number, currency = 'CNY') {
   const amount = Number(cents || 0) / 100;
@@ -267,6 +353,7 @@ export default function TemplatesPage() {
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null);
   const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null);
   const [marketTemplates, setMarketTemplates] = useState<MarketTemplate[]>([]);
+  const [marketError, setMarketError] = useState('');
   const [publishForm, setPublishForm] = useState({
     name: '',
     description: '',
@@ -306,6 +393,7 @@ export default function TemplatesPage() {
 
   const handleUseMarketTemplate = async (item: MarketTemplate) => {
     setCreatingTemplate(item.id);
+    setMarketError('');
     try {
       const headers: Record<string, string> = {};
       if (fingerprint) headers['x-fingerprint'] = fingerprint;
@@ -317,11 +405,13 @@ export default function TemplatesPage() {
         const payload = await installRes.json().catch(() => ({}));
         const product = payload.product || item.product;
         if (!product?.id) throw new Error('模板需要先解锁');
-        await purchaseProductWithMockPayment({
+        const payment = await purchaseProduct({
           productId: product.id,
           headers,
+          returnUrl: window.location.href,
           clientContext: { source: 'resume_template', templateId: item.id },
         });
+        if (payment.status !== 'completed') return;
         const retry = await fetch(`/api/templates/${item.id}/install`, {
           method: 'POST',
           headers,
@@ -355,6 +445,8 @@ export default function TemplatesPage() {
         )));
         router.push(`/editor/${resume.id}`);
       }
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : '模板解锁失败，请稍后重试');
     } finally {
       setCreatingTemplate(null);
     }
@@ -442,6 +534,11 @@ export default function TemplatesPage() {
             className="md:col-span-4"
           />
         </div>
+        {marketError && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {marketError}
+          </p>
+        )}
         {marketTemplates.length > 0 && (
           <div className="grid gap-3 md:grid-cols-3">
             {marketTemplates.map((item) => (
@@ -476,7 +573,7 @@ export default function TemplatesPage() {
         )}
       </section>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
         {TEMPLATES.map((template, idx) => {
           const mockResume = buildMockResume(template);
           const label = getTemplateLabel(template, t);
@@ -489,56 +586,50 @@ export default function TemplatesPage() {
               className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white transition-shadow hover:shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
             >
               {/* Template name */}
-              <div className="flex items-center justify-center gap-2 border-b border-zinc-100 px-4 py-3 text-center dark:border-zinc-800">
-                <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+              <div className="flex items-center justify-center gap-2 border-b border-zinc-100 px-2 py-2 text-center dark:border-zinc-800 sm:px-4 sm:py-3">
+                <h3 className="min-w-0 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                   {label}
                 </h3>
                 {RECOMMENDED_TEMPLATES.has(template) && (
-                  <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">
+                  <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">
                     {t('templates.recommended')}
                   </span>
                 )}
               </div>
 
               {/* Scaled preview */}
-              <div className="relative h-[320px] overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-                <div
-                  className="absolute left-1/2 top-0 origin-top"
-                  style={{
-                    width: '794px',
-                    transform: 'translateX(-50%) scale(0.28)',
-                  }}
-                >
-                  <ResumePreview resume={mockResume} />
-                </div>
+              <div className="bg-zinc-50 dark:bg-zinc-950">
+                <TemplatePreview resume={mockResume} thumbnail />
               </div>
 
               {/* Buttons */}
-              <div className="flex gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+              <div className="flex gap-2 border-t border-zinc-100 px-2 py-2 dark:border-zinc-800 sm:px-4 sm:py-3">
                 <Button
                   {...(isFirst ? { 'data-tour': 'tpl-preview' } : {})}
                   variant="outline"
                   size="sm"
-                  className="flex-1 cursor-pointer gap-1.5"
+                  aria-label={t('templates.preview')}
+                  title={t('templates.preview')}
+                  className="w-8 shrink-0 cursor-pointer gap-1.5 px-0 sm:w-auto sm:flex-1 sm:px-3"
                   onClick={() => setPreviewTemplate(template)}
                 >
                   <Eye className="h-3.5 w-3.5" />
-                  {t('templates.preview')}
+                  <span className="hidden sm:inline">{t('templates.preview')}</span>
                 </Button>
                 <Button
                   {...(isFirst ? { 'data-tour': 'tpl-use' } : {})}
                   size="sm"
-                  className="flex-1 cursor-pointer gap-1.5 bg-brand hover:bg-brand-hover"
+                  className="min-w-0 flex-1 cursor-pointer gap-1.5 bg-brand px-2 hover:bg-brand-hover sm:px-3"
                   onClick={() => handleUseTemplate(template)}
                   disabled={isCreating}
                 >
                   {isCreating ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      {t('templates.creating')}
+                      <span className="truncate">{t('templates.creating')}</span>
                     </>
                   ) : (
-                    t('templates.useTemplate')
+                    <span className="truncate">{t('templates.useTemplate')}</span>
                   )}
                 </Button>
               </div>
@@ -562,8 +653,8 @@ export default function TemplatesPage() {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {previewTemplate && (
-              <div className="mx-auto w-full max-w-[794px] p-6">
-                <ResumePreview resume={buildMockResume(previewTemplate)} />
+              <div className="mx-auto w-full max-w-[842px] p-3 sm:p-6">
+                <TemplatePreview resume={buildMockResume(previewTemplate)} eager />
               </div>
             )}
           </div>

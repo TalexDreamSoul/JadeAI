@@ -15,6 +15,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { useAuth } from '@/hooks/use-auth';
 import { useIdlePrivacyLock } from '@/hooks/use-idle-privacy-lock';
 import type { Resume } from '@/types/resume';
+import { APP_NAME } from '@/lib/constants';
 
 interface ShareMeta {
   reviewEnabled: boolean;
@@ -339,7 +340,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
         <div className="flex h-full w-full flex-col overflow-hidden">
         <div className="z-30 flex shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 text-sm font-semibold text-brand">TouchResume</span>
+            <span className="shrink-0 text-sm font-semibold text-brand">{APP_NAME}</span>
             <span className="shrink-0 text-xs text-zinc-400">|</span>
             <span className="truncate text-sm text-zinc-600 dark:text-zinc-400">{resume.title}</span>
             {refreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-300" />}

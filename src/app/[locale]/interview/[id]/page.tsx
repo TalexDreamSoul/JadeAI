@@ -5,15 +5,16 @@ import { InterviewRoom } from '@/components/interview/interview-room';
 import { useInterviewStore } from '@/stores/interview-store';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UIMessage } from 'ai';
+import type { InterviewMessage } from '@/types/interview';
 
 /** Convert DB interview messages to UIMessage format for useChat */
-function dbMessagesToUIMessages(dbMessages: any[]): UIMessage[] {
+function dbMessagesToUIMessages(dbMessages: InterviewMessage[]): UIMessage[] {
   return dbMessages
-    .filter((m: any) => m.role !== 'system') // system messages are for AI context only
-    .map((m: any) => ({
-      id: m.id,
-      role: m.role === 'interviewer' ? 'assistant' as const : 'user' as const,
-      parts: [{ type: 'text' as const, text: m.content }],
+    .filter((message) => message.role !== 'system') // system messages are for AI context only
+    .map((message) => ({
+      id: message.id,
+      role: message.role === 'interviewer' ? 'assistant' as const : 'user' as const,
+      parts: [{ type: 'text' as const, text: message.content }],
     }));
 }
 
@@ -21,7 +22,7 @@ export default function InterviewRoomPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const [loading, setLoading] = useState(true);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
-  const { setSession, setStatus } = useInterviewStore();
+  const setSession = useInterviewStore((state) => state.setSession);
 
   useEffect(() => {
     const fp = localStorage.getItem('touchresume_fingerprint');
@@ -31,9 +32,6 @@ export default function InterviewRoomPage({ params }: { params: Promise<{ id: st
       .then((r) => r.json())
       .then(({ session, rounds }) => {
         setSession(session, rounds);
-        if (session.status === 'paused') {
-          setStatus('in_progress');
-        }
 
         // Load messages for the current round
         const currentRound = rounds[session.currentRound];
@@ -43,7 +41,7 @@ export default function InterviewRoomPage({ params }: { params: Promise<{ id: st
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [id, setSession, setStatus]);
+  }, [id, setSession]);
 
   if (loading) {
     return (

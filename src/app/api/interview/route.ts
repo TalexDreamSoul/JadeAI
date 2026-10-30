@@ -8,6 +8,7 @@ import {
 } from '@/lib/commercial/interview-mock-quota-service';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { dbReady } from '@/lib/db';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 export async function GET(request: NextRequest) {
   await dbReady;
@@ -62,5 +63,14 @@ export async function POST(request: NextRequest) {
   }
 
   const rounds = await interviewRepository.findRoundsBySessionId(session!.id);
+  await recordProductEventSafely({
+    eventName: 'mock_interview_started',
+    userId: user.id,
+    metadata: {
+      interviewSessionId: session!.id,
+      ...(resumeId ? { resumeId: String(resumeId) } : {}),
+      interviewerCount: interviewers.length,
+    },
+  });
   return NextResponse.json({ session, rounds }, { status: 201 });
 }

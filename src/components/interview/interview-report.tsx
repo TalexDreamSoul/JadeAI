@@ -29,7 +29,7 @@ export function InterviewReportView({ report, session }: InterviewReportViewProp
             {t('backToLobby')}
           </Button>
         </Link>
-        <div className="hidden sm:flex">
+        <div className="w-full sm:w-auto">
           <ExportButtons report={report} session={session} />
         </div>
       </div>

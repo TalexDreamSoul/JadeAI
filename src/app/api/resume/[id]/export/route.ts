@@ -10,6 +10,7 @@ import {
   commercialFeatureLockedResponse,
   CommercialFeatureLockedError,
 } from '@/lib/commercial/feature-gate-service';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 // Chromium download + PDF render needs more time on Vercel serverless
 export const maxDuration = 60;
@@ -40,55 +41,67 @@ export async function GET(
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
     const filename = `${title}-${ts}`;
+    const exported = async <T extends Response>(response: T) => {
+      await recordProductEventSafely({
+        eventName: 'resume_exported',
+        userId: user.id,
+        metadata: {
+          resumeId: id,
+          format,
+          ...(format === 'pdf' ? { fitOnePage: request.nextUrl.searchParams.get('fitOnePage') === 'true' } : {}),
+        },
+      });
+      return response;
+    };
 
     switch (format) {
       case 'json': {
-        return NextResponse.json(resume);
+        return exported(NextResponse.json(resume));
       }
       case 'html': {
         // forPrint=true returns the print-optimized layout (used by the client-side
         // "print to PDF" fallback when server Chromium is unavailable, issue #85).
         const forPrint = request.nextUrl.searchParams.get('forPrint') === 'true';
         const html = await generateHtml(resume, forPrint);
-        return new NextResponse(html, {
+        return exported(new NextResponse(html, {
           status: 200,
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
             'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}.html"`,
           },
-        });
+        }));
       }
       case 'txt': {
         const text = generatePlainText(resume);
-        return new NextResponse(text, {
+        return exported(new NextResponse(text, {
           status: 200,
           headers: {
             'Content-Type': 'text/plain; charset=utf-8',
             'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}.txt"`,
           },
-        });
+        }));
       }
       case 'docx': {
         const docxBuffer = await generateDocxBuffer(resume);
-        return new NextResponse(new Uint8Array(docxBuffer), {
+        return exported(new NextResponse(new Uint8Array(docxBuffer), {
           status: 200,
           headers: {
             'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}.docx"`,
           },
-        });
+        }));
       }
       case 'pdf': {
         const fitOnePage = request.nextUrl.searchParams.get('fitOnePage') === 'true';
         const pdfHtml = await generateHtml(resume, true);
         const pdfBuffer = await generatePdf(pdfHtml, { fitOnePage });
-        return new NextResponse(new Uint8Array(pdfBuffer), {
+        return exported(new NextResponse(new Uint8Array(pdfBuffer), {
           status: 200,
           headers: {
             'Content-Type': 'application/pdf',
             'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}.pdf"`,
           },
-        });
+        }));
       }
       default: {
         return NextResponse.json(

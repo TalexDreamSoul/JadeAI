@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/routing';
+import { Link, useRouter } from '@/i18n/routing';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Copy, Loader2, Trash2, MoreVertical, Share2, Pencil, RefreshCw, Network } from 'lucide-react';
 import {
@@ -95,10 +95,22 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAna
   const analysisProgress = Math.max(0, Math.min(100, analysis?.progress || 0));
   const analysisMessage = analysis?.message || (analysis?.status === 'retrying' ? '等待系统自动重试' : '正在分析简历内容');
 
+  const openResume = () => {
+    if (!renamingRef.current && !isAnalysisActive) {
+      router.push(`/editor/${resume.id}`);
+    }
+  };
+
+  const handleDelete = () => {
+    if (window.confirm(t('dashboard.deleteConfirm', { title: resume.title }))) {
+      onDelete();
+    }
+  };
+
   return (
     <div
-      className={`group relative overflow-hidden rounded-xl border border-zinc-200 bg-white transition-all duration-200 dark:border-zinc-700/60 dark:bg-card ${isRenaming || isAnalysisActive ? '' : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'}`}
-      onClick={() => { if (!renamingRef.current && !isAnalysisActive) router.push(`/editor/${resume.id}`); }}
+      className={`group relative overflow-hidden rounded-xl border border-zinc-200 bg-white transition-all duration-200 motion-reduce:transition-none dark:border-zinc-700/60 dark:bg-card ${isRenaming || isAnalysisActive ? '' : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0'}`}
+      onClick={openResume}
     >
       {/* Template preview thumbnail */}
       <div className="relative border-b border-zinc-100 bg-zinc-50 p-2.5 dark:border-zinc-700/40 dark:bg-zinc-800/50">
@@ -139,7 +151,16 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAna
               />
             ) : (
               <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {resume.title}
+                {isAnalysisActive ? resume.title : (
+                  <Link
+                    href={`/editor/${resume.id}`}
+                    aria-label={t('dashboard.openResume', { title: resume.title })}
+                    onClick={(event) => event.stopPropagation()}
+                    className="block truncate rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    {resume.title}
+                  </Link>
+                )}
               </h3>
             )}
             <div className="mt-1.5 flex items-center gap-1.5">
@@ -170,7 +191,8 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAna
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger
-              className={`cursor-pointer rounded-md p-1 transition-opacity hover:bg-zinc-100 dark:hover:bg-zinc-800 ${analysis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              aria-label={t('dashboard.resumeActions', { title: resume.title })}
+              className={`inline-flex size-11 cursor-pointer items-center justify-center rounded-md transition-[opacity,background-color] hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand md:size-7 dark:hover:bg-zinc-800 ${analysis ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100'}`}
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-4 w-4 text-zinc-400" />
@@ -236,7 +258,7 @@ export function ResumeCard({ resume, onDelete, onDuplicate, onRename, onRetryAna
                 className="cursor-pointer text-red-600"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDelete();
+                  handleDelete();
                 }}
               >
                 <Trash2 className="mr-2 h-4 w-4" />

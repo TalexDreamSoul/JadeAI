@@ -3,6 +3,7 @@ import { resolveUser, getUserIdFromRequest } from '@/lib/auth/helpers';
 import { interviewRepository } from '@/lib/db/repositories/interview.repository';
 import { buildHintPrompt, buildSkipPrompt, buildEndRoundPrompt } from '@/lib/ai/interview-prompts';
 import { dbReady } from '@/lib/db';
+import { recordProductEventSafely } from '@/lib/analytics/product-event-service';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await dbReady;
@@ -39,6 +40,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await interviewRepository.updateSessionRound(sessionId, currentIndex + 1);
       } else {
         await interviewRepository.updateSessionStatus(sessionId, 'completed');
+        if (session.status !== 'completed') {
+          await recordProductEventSafely({
+            eventName: 'mock_interview_completed',
+            userId: user.id,
+            metadata: {
+              interviewSessionId: sessionId,
+              roundCount: rounds.length,
+            },
+          });
+        }
       }
       return NextResponse.json({ success: true });
     }

@@ -8,12 +8,14 @@ import { Textarea } from '@/components/ui/textarea';
 interface MessageInputProps {
   input: string;
   isLoading: boolean;
+  disabled?: boolean;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
-export function MessageInput({ input, isLoading, onChange, onSubmit }: MessageInputProps) {
+export function MessageInput({ input, isLoading, disabled = false, onChange, onSubmit }: MessageInputProps) {
   const t = useTranslations('interview.room');
+  const isDisabled = isLoading || disabled;
 
   return (
     <form onSubmit={onSubmit} className="flex items-end gap-2">
@@ -21,20 +23,20 @@ export function MessageInput({ input, isLoading, onChange, onSubmit }: MessageIn
         <Textarea
           value={input}
           onChange={onChange}
-          placeholder={t('inputPlaceholder')}
-          disabled={isLoading}
+          placeholder={disabled ? t('pausedInputPlaceholder') : t('inputPlaceholder')}
+          disabled={isDisabled}
           className="min-h-[44px] resize-none rounded-xl pr-12"
           rows={1}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
-              onSubmit(e as any);
+              e.currentTarget.form?.requestSubmit();
             }
           }}
         />
         <Button
           type="submit"
-          disabled={!input.trim() || isLoading}
+          disabled={!input.trim() || isDisabled}
           size="icon"
           className="absolute bottom-1.5 right-1.5 h-8 w-8 rounded-lg bg-brand hover:bg-brand-hover"
         >
